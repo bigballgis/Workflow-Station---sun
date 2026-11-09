@@ -6,7 +6,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
-    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -27,7 +27,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         jdbc:
-          time_zone: Asia/Shanghai
+          time_zone: Asia/Hong_Kong
 
   # 库表主要由 deploy/init-scripts 初始化；此处仅补齐与 JDBC 查询一致的增量（如 V405 submitted_by_user_id）。
   # baseline-on-migrate + baseline-version=404：跳过 V400–V404，避免与已有 Docker 初始化脚本重复执行破坏性语句。
@@ -42,7 +42,7 @@ spring:
     serialization:
       write-dates-as-timestamps: false
     date-format: yyyy-MM-dd'T'HH:mm:ss
-    time-zone: Asia/Shanghai
+    time-zone: Asia/Hong_Kong
 
   messages:
     basename: i18n/messages
@@ -53,7 +53,7 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
-      password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
+      password: ${SPRING_REDIS_PASSWORD}
       database: 2
       timeout: 5000ms
       lettuce:
@@ -85,7 +85,7 @@ admin-center:
 # C-3 (docs/ap-integration/DECISIONS.md#d6): 调用 admin-center 时附带的可信服务密钥，
 # 使 admin-center 信任转发的 X-User-Id。须与 admin-center service.internal-token 一致。
 service:
-  internal-token: ${SERVICE_INTERNAL_TOKEN:}
+  internal-token: ${SERVICE_INTERNAL_TOKEN}  # required: every Admin Center call is authorized (platform access model WP2)
 
 # Workflow Engine Core URL for API calls
 workflow-engine:
@@ -111,9 +111,9 @@ portal:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:?JWT_SECRET is required}
-  expiration: ${JWT_EXPIRATION:86400000}
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION}
 
 # Platform Security JWT Configuration (used by platform-security JwtProperties)
 # SSO internal-token：与 admin-center 一致，用于 /internal/sso/redeem
@@ -122,9 +122,9 @@ platform:
     internal-token: ${SSO_INTERNAL_TOKEN:}
   security:
     jwt:
-      secret: ${JWT_SECRET:?JWT_SECRET is required}
-      expiration-ms: ${JWT_EXPIRATION:86400000}
-      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      secret: ${JWT_SECRET}
+      expiration-ms: ${JWT_EXPIRATION}
+      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION}
       # 服务自有 cookie 名，避免与 admin-center / developer-workstation 在同源 localhost:3000 下互相覆盖工作台 claim。
       # 列表首项是本服务写出 Cookie 的名字；其它项用于读取（兼容老客户端 / 转发场景）。
       cookie-names:
@@ -134,7 +134,7 @@ platform:
       issuer: platform
       validate-issuer: false
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:?ENCRYPTION_SECRET_KEY is required}
+    secret-key: ${ENCRYPTION_SECRET_KEY}
 
 springdoc:
   api-docs:

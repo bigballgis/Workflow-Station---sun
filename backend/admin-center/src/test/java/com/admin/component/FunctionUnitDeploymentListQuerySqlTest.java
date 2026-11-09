@@ -2,6 +2,7 @@ package com.admin.component;
 
 import com.admin.dto.request.FunctionUnitDeploymentListQueryRequest;
 import com.admin.repository.FunctionUnitDeploymentRepository;
+import com.admin.security.AdminTeamScope;
 import com.admin.service.UserReferenceResolver;
 import com.platform.common.list.ListColumnFilter;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +21,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,6 +37,7 @@ class FunctionUnitDeploymentListQuerySqlTest {
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private FunctionUnitDeploymentRepository deploymentRepository;
     @Mock private UserReferenceResolver userReferenceResolver;
+    @Mock private AdminTeamScope teamScope;
 
     private FunctionUnitDeploymentListQueryComponent component;
     private final List<String> preparedSql = new ArrayList<>();
@@ -42,7 +45,7 @@ class FunctionUnitDeploymentListQuerySqlTest {
     @BeforeEach
     void setUp() throws Exception {
         component = new FunctionUnitDeploymentListQueryComponent(
-                jdbcTemplate, deploymentRepository, userReferenceResolver);
+                jdbcTemplate, deploymentRepository, userReferenceResolver, teamScope);
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {
@@ -56,6 +59,15 @@ class FunctionUnitDeploymentListQuerySqlTest {
                     when(rs.next()).thenReturn(false);
                     return call.<ResultSetExtractor<?>>getArgument(1).extractData(rs);
                 });
+    }
+
+    @Test
+    void aTechnicalLeadSeesTheDeploymentsOfTheTeamsTheyLead() {
+        when(teamScope.visibleFunctionUnitCodes()).thenReturn(Set.of("FU_A"));
+        component.query(request(List.of()));
+
+        assertThat(preparedSql.get(0)).contains("AND fu.code IN (?)");
+        assertThat(pageSql()).contains("AND fu.code IN (?)");
     }
 
     @Test

@@ -28,9 +28,10 @@ import static org.mockito.Mockito.when;
 /**
  * Automation workspace = DW 开发组 → AP project 的映射与准入。
  *
- * <p>钉住三条不可回退的性质：非成员 <b>403 而不是回落 Public</b>；Public 对非 SYS_ADMIN
+ * <p>钉住不可回退的性质：不在名单上 <b>403 而不是回落 Public</b>；Public 对非 SYS_ADMIN
  * 以只读角色签会话（AP 侧 rbac 据此真的拒写）；团队 workspace 落到独立的
- * {@code externalProjectId}（隔离由 AP 的 project 成员判定兜底）。</p>
+ * {@code externalProjectId}（隔离由 AP 的 project 成员判定兜底）；与 DW 同一口径（平台访问模型 D-20）：
+ * 团队名单上的人可写、Auditor 只读、只有 DEVELOPER 团队是 workspace。</p>
  */
 class ApWorkspaceResolverTest {
 
@@ -52,8 +53,7 @@ class ApWorkspaceResolverTest {
     void memberGetsTheirTeamProjectAndCanWrite() {
         authenticate(List.of("DEVELOPER"));
         stubTeam("ACTIVE", "DEVELOPER");
-        when(memberRepository.findByGroupIdAndUserId(TEAM_ID, USER_ID))
-                .thenReturn(Optional.of(new VirtualGroupMember()));
+        onTeamList(true);
 
         ApWorkspaceResolver.ApWorkspace workspace = resolver.resolve(USER_ID, TEAM_ID);
 
@@ -70,7 +70,7 @@ class ApWorkspaceResolverTest {
     void nonMemberIsDeniedInsteadOfFallingBackToPublic() {
         authenticate(List.of("DEVELOPER"));
         stubTeam("ACTIVE", "DEVELOPER");
-        when(memberRepository.findByGroupIdAndUserId(TEAM_ID, USER_ID)).thenReturn(Optional.empty());
+        onTeamList(false);
 
         ApWorkspaceAccessDeniedException e = assertThrows(ApWorkspaceAccessDeniedException.class,
                 () -> resolver.resolve(USER_ID, TEAM_ID));
@@ -82,7 +82,7 @@ class ApWorkspaceResolverTest {
     void sysAdminMayEnterAnyTeamWorkspace() {
         authenticate(List.of("SYS_ADMIN"));
         stubTeam("ACTIVE", "DEVELOPER");
-        when(memberRepository.findByGroupIdAndUserId(TEAM_ID, USER_ID)).thenReturn(Optional.empty());
+        onTeamList(false);
 
         ApWorkspaceResolver.ApWorkspace workspace = resolver.resolve(USER_ID, TEAM_ID);
 
@@ -95,8 +95,7 @@ class ApWorkspaceResolverTest {
     void inactiveTeamIsDenied() {
         authenticate(List.of("DEVELOPER"));
         stubTeam("INACTIVE", "DEVELOPER");
-        when(memberRepository.findByGroupIdAndUserId(TEAM_ID, USER_ID))
-                .thenReturn(Optional.of(new VirtualGroupMember()));
+        onTeamList(true);
 
         assertThrows(ApWorkspaceAccessDeniedException.class, () -> resolver.resolve(USER_ID, TEAM_ID));
     }
@@ -106,8 +105,7 @@ class ApWorkspaceResolverTest {
     void nonTeamGroupIsDenied() {
         authenticate(List.of("DEVELOPER"));
         stubTeam("ACTIVE", "SYSTEM");
-        when(memberRepository.findByGroupIdAndUserId(TEAM_ID, USER_ID))
-                .thenReturn(Optional.of(new VirtualGroupMember()));
+        onTeamList(true);
 
         assertThrows(ApWorkspaceAccessDeniedException.class, () -> resolver.resolve(USER_ID, TEAM_ID));
     }
@@ -128,7 +126,7 @@ class ApWorkspaceResolverTest {
     /** Public 与 FU 的 Public 组同规则：仅 SYS_ADMIN 可改，其余人拿只读角色（AP 侧真拒写）。 */
     @Test
     void publicWorkspaceIsReadOnlyExceptForSysAdmin() {
-        authenticate(List.of("TEAM_LEAD"));
+        authenticate(List.of("TECH_LEAD"));
         when(groupRepository.findById(eq("vg-dev-public"))).thenReturn(Optional.empty());
         ApWorkspaceResolver.ApWorkspace readOnly = resolver.resolve(USER_ID, null);
         assertEquals("Viewer", readOnly.projectRole());
@@ -145,15 +143,14 @@ class ApWorkspaceResolverTest {
     }
 
     /**
-     * FR-B23：团队成员身份决定"看得见"，能力角色才决定"改得动"。纯成员必须拿只读角色
-     * ——只读进入若只靠前端收按钮，直接打 AP API 就能写。
+     * An Auditor reads every team workspace (D-20) and gets a read-only session — read-only by AP itself, not only by
+     * hidden buttons.
      */
     @Test
-    void teamMemberWithoutCapabilityRoleGetsAReadOnlySession() {
-        authenticate(List.of("FU_VIEWER"));
+    void anAuditorEntersAnyTeamWorkspaceReadOnly() {
+        authenticate(List.of("AUDITOR"));
         stubTeam("ACTIVE", "DEVELOPER");
-        when(memberRepository.findByGroupIdAndUserId(TEAM_ID, USER_ID))
-                .thenReturn(Optional.of(new VirtualGroupMember()));
+        onTeamList(false);
 
         ApWorkspaceResolver.ApWorkspace workspace = resolver.resolve(USER_ID, TEAM_ID);
 
@@ -163,17 +160,24 @@ class ApWorkspaceResolverTest {
         assertEquals("MEMBER", workspace.platformRole());
     }
 
+    /** A global TECH_LEAD role from another team writes nothing here: only this team's lists count (§4.4). */
     @Test
-    void teamLeadKeepsWriteAccessInTheirTeamWorkspace() {
-        authenticate(List.of("TEAM_LEAD"));
+    void aRoleHeldInAnotherTeamDoesNotOpenThisOne() {
+        authenticate(List.of("TECH_LEAD"));
+        stubTeam("ACTIVE", "DEVELOPER");
+        onTeamList(false);
+
+        assertThrows(ApWorkspaceAccessDeniedException.class, () -> resolver.resolve(USER_ID, TEAM_ID));
+    }
+
+    /** A CUSTOM group is a Portal access group, not a workspace, even for its members. */
+    @Test
+    void aCustomGroupIsNotAWorkspace() {
+        authenticate(List.of("DEVELOPER"));
         stubTeam("ACTIVE", "CUSTOM");
-        when(memberRepository.findByGroupIdAndUserId(TEAM_ID, USER_ID))
-                .thenReturn(Optional.of(new VirtualGroupMember()));
+        onTeamList(true);
 
-        ApWorkspaceResolver.ApWorkspace workspace = resolver.resolve(USER_ID, TEAM_ID);
-
-        assertTrue(workspace.canWrite());
-        assertEquals("Admin", workspace.projectRole());
+        assertThrows(ApWorkspaceAccessDeniedException.class, () -> resolver.resolve(USER_ID, TEAM_ID));
     }
 
     /** 管理面对既有 flow 动作时的反查：externalProjectId → workspace，判据与正向解析同一套。 */
@@ -200,6 +204,11 @@ class ApWorkspaceResolverTest {
                 () -> resolver.resolveByExternalProjectId(USER_ID, null));
         assertThrows(ApWorkspaceAccessDeniedException.class,
                 () -> resolver.resolveByExternalProjectId(USER_ID, "some-other-project"));
+    }
+
+    private void onTeamList(boolean onList) {
+        when(memberRepository.isActiveUserOnLists(TEAM_ID, USER_ID,
+                List.of(VirtualGroupMember.LIST_TECH_LEAD, VirtualGroupMember.LIST_DEVELOPER))).thenReturn(onList);
     }
 
     private void stubTeam(String status, String type) {

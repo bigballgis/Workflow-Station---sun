@@ -39,7 +39,7 @@ class FunctionUnitContentLegacyRelationTest {
     private final FunctionUnitContentRepository contents = mock(FunctionUnitContentRepository.class);
     private final FunctionUnitLookup lookup = mock(FunctionUnitLookup.class);
     private final FunctionUnitContentComponent component = new FunctionUnitContentComponent(
-            contents, jdbc, lookup, mock(FormTableBindingLoader.class), new ObjectMapper());
+            contents, jdbc, lookup, new ObjectMapper());
 
     @BeforeEach
     void legacyRelease() {

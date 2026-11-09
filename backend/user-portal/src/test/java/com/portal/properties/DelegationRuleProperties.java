@@ -47,7 +47,8 @@ class DelegationRuleProperties {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         when(i18nService.getMessage(any(String.class))).thenReturn("test message");
-        delegationComponent = new DelegationComponent(delegationRuleRepository, delegationAuditRepository, i18nService);
+        delegationComponent = new DelegationComponent(delegationRuleRepository, delegationAuditRepository, i18nService,
+                com.portal.testsupport.PortalEntryStubs.delegationRules(delegationRuleRepository));
         random = new Random();
 
         // 默认返回空列表

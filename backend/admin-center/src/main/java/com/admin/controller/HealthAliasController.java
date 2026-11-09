@@ -9,6 +9,8 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Health probe standardization endpoints.
@@ -16,6 +18,7 @@ import java.util.Optional;
  * This controller keeps existing business APIs unchanged, and only proxies to Spring Boot Actuator health groups.
  */
 @RestController
+@AdminAccess(AdminAudience.PUBLIC)
 public class HealthAliasController {
 
     private final RestTemplate restTemplate;

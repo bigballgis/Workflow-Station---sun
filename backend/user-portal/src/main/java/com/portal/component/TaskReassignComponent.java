@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.platform.common.i18n.I18nService;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskInfo;
 import com.portal.enums.ChangeType;
@@ -14,7 +15,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Leader / Approver / SYS_ADMIN reassignment of a BU Role claim-pool hold.
+ * Reassigning a pool task to another pool member, or taking it over (target = the caller): the BU Approver or a
+ * Leader of the BU + Role while the holder has Portal entry, any pool member with entry once the holder lost it
+ * (platform access model §7.3, D-07, D-17). No System Administrator exception. The engine checks both again.
  */
 @Slf4j
 @Component
@@ -27,6 +30,7 @@ public class TaskReassignComponent {
     private final ClaimForceUnclaimAnnotator claimForceUnclaimAnnotator;
     private final ProcessInstanceSyncComponent processInstanceSyncComponent;
     private final TaskAssignmentHistoryRecorder taskAssignmentHistoryRecorder;
+    private final I18nService i18nService;
 
     @Transactional
     public TaskInfo reassign(String taskId, String userId, String targetUserId, String portalUsername) {
@@ -39,8 +43,8 @@ public class TaskReassignComponent {
         }
         TaskInfo taskBefore = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new PortalException("404", "Task not found: " + taskId));
-        if (!BuRolePoolTasks.isClaimPoolTask(taskBefore)) {
-            throw new PortalException("400", "Only business-unit role requests can be reassigned");
+        if (!BuRolePoolTasks.hasPool(taskBefore)) {
+            throw new PortalException("400", "Only pool tasks can be reassigned");
         }
         if (!claimForceUnclaimAnnotator.canReassign(taskBefore, userId)) {
             throw new PortalException("403", "You are not allowed to reassign this task");
@@ -48,6 +52,9 @@ public class TaskReassignComponent {
         String target = targetUserId.trim();
         if (taskPermissionEvaluator.isHeldByUser(taskBefore, target, null)) {
             throw new PortalException("400", "Task is already held by the selected user");
+        }
+        if (taskBefore.getReassignTargetUserIds() == null || !taskBefore.getReassignTargetUserIds().contains(target)) {
+            throw new PortalException("400", i18nService.getMessage("portal.reassign_target_not_allowed"));
         }
         String enginePrincipal = TaskPermissionEvaluator.resolveEnginePrincipalForWorkflow(
                 taskBefore, userId, portalUsername);
@@ -65,7 +72,7 @@ public class TaskReassignComponent {
         processInstanceSyncComponent.updateProcessInstanceAssignee(task.getProcessInstanceId(), target, null,
                 task.getTaskName(), OwnerFieldComponent.taskScopedCurrentItem(task.getVariables()));
         taskQueryComponent.invalidateMineTaskListCache();
-        taskAssignmentHistoryRecorder.record(taskBefore, userId, ChangeType.REASSIGN, target);
+        taskAssignmentHistoryRecorder.record(taskBefore, task, userId, ChangeType.REASSIGN, target);
         log.info("Task {} reassigned by {} to {}", taskId, userId, target);
         return task;
     }

@@ -21,6 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Dashboard assignment management controller
@@ -30,6 +32,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Dashboard Assignment Management", description = "Dashboard assignment CRUD and user effective dashboard listing")
+@AdminAccess(AdminAudience.SHARED_READ)
 public class BiDashboardAssignmentController {
 
     private final BiDashboardAssignmentService assignmentService;
@@ -37,6 +40,7 @@ public class BiDashboardAssignmentController {
     private final BiAdminAccessGuard adminAccessGuard;
     private final com.admin.bi.component.BiAssignmentConfigurationComponent configuration;
 
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PutMapping("/{id}/enabled")
     public ResponseEntity<com.platform.common.dto.ApiResponse<DashboardAssignmentResponse>> setEnabled(
             @PathVariable String id,
@@ -45,6 +49,7 @@ public class BiDashboardAssignmentController {
                 configuration.setAudienceEnabled(id, request.enabled())));
     }
 
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PostMapping
     @Operation(summary = "Create assignment record", description = "Assign a Dashboard to a User, Role, or Business Unit")
     public ResponseEntity<DashboardAssignmentResponse> createAssignment(
@@ -66,6 +71,7 @@ public class BiDashboardAssignmentController {
         return ResponseEntity.ok(page);
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/query")
     @Operation(summary = "Query assignments (true paging; column filters and sort)")
     public ResponseEntity<AdminListPage<DashboardAssignmentResponse>> queryAssignments(
@@ -74,6 +80,7 @@ public class BiDashboardAssignmentController {
         return ResponseEntity.ok(assignmentListQueryComponent.query(request));
     }
 
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PutMapping("/{id}")
     @Operation(summary = "Update assignment record", description = "Update fields of a specified assignment record")
     public ResponseEntity<DashboardAssignmentResponse> updateAssignment(
@@ -85,6 +92,7 @@ public class BiDashboardAssignmentController {
         return ResponseEntity.ok(response);
     }
 
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete assignment record", description = "Delete a specified assignment record")
     public ResponseEntity<Void> deleteAssignment(
@@ -95,6 +103,7 @@ public class BiDashboardAssignmentController {
         return ResponseEntity.noContent().build();
     }
 
+    @AdminAccess(AdminAudience.ADMIN_READ)
     @GetMapping("/user/{userId}")
     @Operation(
         summary = "Get user's effective Dashboard list",

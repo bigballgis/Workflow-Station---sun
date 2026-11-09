@@ -503,7 +503,7 @@ try {
   await shot(PORTAL_OUT, 'delegations-action-buttons')
   await page.setViewportSize({ width: 1440, height: 900 })
 
-  await loginViaAdminPassword(page, { user: 'admin', pass: 'admin123' })
+  await loginViaAdminPassword(page)
   await page.goto(`${ORIGIN}/admin/user/list`, { waitUntil: 'domcontentloaded' })
   await waitGrid()
   await assertNoSpacer('Admin users')

@@ -1,19 +1,8 @@
-/** Optional login refresh used when {@code /upload} returns 401. */
-type UploadAuthRefresher = () => Promise<boolean>
+import { refreshSession } from '../auth/sessionRefresh'
 
-let refresher: UploadAuthRefresher | null = null
-
-export function setUploadAuthRefresher(fn: UploadAuthRefresher | null): void {
-  refresher = fn
-}
-
-export async function refreshUploadAuth(): Promise<boolean> {
-  if (!refresher) return false
-  try {
-    return await refresher()
-  } catch {
-    return false
-  }
+/** Login refresh used when {@code /upload} returns 401 — the app-wide single refresh, see sessionRefresh.ts. */
+export function refreshUploadAuth(): Promise<boolean> {
+  return refreshSession()
 }
 
 export const UPLOAD_HTTP_UNAUTHORIZED = 'UPLOAD_HTTP_401'

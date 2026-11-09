@@ -6,6 +6,7 @@
           <el-icon><Download /></el-icon>{{ t('common.export') }}
         </el-button>
         <el-button
+          v-if="writable"
           type="primary"
           :loading="syncing"
           @click="handleSync"
@@ -165,6 +166,7 @@
               </template>
             </el-table-column>
             <el-table-column
+              v-if="writable"
               :label="t('bi.dashboard.colActions')"
               :width="ACTIONS_COL_WIDTH"
               fixed="right"
@@ -301,6 +303,7 @@ const {
   clearFilter,
   applySort,
   clearSort,
+  writable,
 } = useBiDashboard()
 
 function onSort(field: string, direction: 'ASC' | 'DESC') {

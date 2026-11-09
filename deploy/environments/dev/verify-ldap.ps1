@@ -2,8 +2,8 @@ $ErrorActionPreference = 'Stop'
 $baseUrl = 'http://localhost:8090/api/v1/admin'
 $outputDir = $PSScriptRoot
 $loginBody = @{
-    username = 'admin'
-    password = 'admin123'
+    username = 'developer'
+    password = 'password'
 } | ConvertTo-Json
 $loginResponse = Invoke-RestMethod `
     -Method Post `

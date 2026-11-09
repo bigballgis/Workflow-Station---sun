@@ -10,9 +10,11 @@ public interface LinkFormComponentService {
     
     List<LinkFormComponentResponse> getComponentsByFunctionUnit(Long functionUnitId);
     
-    LinkFormDataResponse saveFormData(LinkFormDataRequest request);
-    
-    LinkFormDataResponse getFormData(Long componentId, Long subTableRowId);
+    /** The request's component must belong to {@code functionUnitId} (404 otherwise). */
+    LinkFormDataResponse saveFormData(Long functionUnitId, LinkFormDataRequest request);
+
+    /** The component must belong to {@code functionUnitId} (404 otherwise). */
+    LinkFormDataResponse getFormData(Long functionUnitId, Long componentId, Long subTableRowId);
     
     List<LinkFormDataResponse> getFormDataBySubTableRow(Long subTableRowId);
 }

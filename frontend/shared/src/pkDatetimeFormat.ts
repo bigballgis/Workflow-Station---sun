@@ -1,5 +1,5 @@
 /**
- * Asia/Shanghai date-token formatting used by custom PK DATETIME previews.
+ * Asia/Hong_Kong date-token formatting used by custom PK DATETIME previews.
  */
 
 const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

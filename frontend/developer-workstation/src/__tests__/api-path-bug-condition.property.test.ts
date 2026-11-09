@@ -86,7 +86,6 @@ describe('C6: developer-workstation adminCenter.ts adminCenterAxios baseURL', ()
       '/business-units',
       '/roles',
       '/task-assignment/roles/bu-bounded',
-      '/task-assignment/roles/bu-unbounded',
     ]
 
     fc.assert(

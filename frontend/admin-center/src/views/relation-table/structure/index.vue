@@ -1,17 +1,23 @@
 <template>
   <div class="page-container">
-    <PageHeader title="Table Structure">
+    <PageHeader :title="t('menu.tableStructure')">
       <template #actions>
+        <DesignerHelpLink
+          path="/relation-table-structure"
+          v-bind="{ ariaLabel: t('relationTable.structure.guideLinkAria') }"
+          test-id="rt-structure-guide-link"
+        />
         <el-button
           @click="router.push('/relation-tables/structure/er-diagram')"
         >
-          <el-icon><Share /></el-icon>View ER Diagram
+          <el-icon><Share /></el-icon>{{ t('relationTable.structure.viewErDiagram') }}
         </el-button>
         <el-button
+          v-if="canWrite('relationTables')"
           type="primary"
           @click="router.push('/relation-tables/structure/create')"
         >
-          <el-icon><Plus /></el-icon>Create Table
+          <el-icon><Plus /></el-icon>{{ t('form.createTable') }}
         </el-button>
       </template>
     </PageHeader>
@@ -52,7 +58,7 @@
           <el-input
             v-model="structureKeyword"
             clearable
-            placeholder="Search..."
+            :placeholder="t('form.placeholderSearchTables')"
             style="width: 240px"
             @keyup.enter="runStructureSearch"
             @clear="runStructureSearch"
@@ -130,6 +136,7 @@
                   <el-switch
                     v-else-if="col.field === 'enabled'"
                     v-model="row.enabled"
+                    :disabled="!row.canWrite"
                     :loading="enableLoadingMap[row.id]"
                     @change="(val: string | number | boolean) => handleToggleEnabled(row, val as boolean)"
                   />
@@ -137,7 +144,7 @@
                     v-else-if="col.field === 'portalVisible'"
                     v-model="row.portalVisible"
                     :loading="portalLoadingMap[row.id]"
-                    :disabled="!row.enabled"
+                    :disabled="!row.enabled || !row.canWrite"
                     @change="(val: string | number | boolean) => handleTogglePortalVisibility(row, val as boolean)"
                   />
                   <span v-else-if="col.field === 'createdAt'">{{ formatDate(row.createdAt) }}</span>
@@ -148,34 +155,36 @@
                 </template>
               </el-table-column>
               <el-table-column
-                label="Actions"
+                :label="t('common.actions')"
                 :width="ACTIONS_COL_WIDTH"
                 fixed="right"
                 align="center"
               >
                 <template #header>
-                  Actions
+                  {{ t('common.actions') }}
                 </template>
                 <template #default="{ row }">
                   <div
                     
                     class="action-cell"
                   >
+                    <!-- A table the user may not change opens read-only (D-47). -->
                     <el-button
                       link
                       type="warning"
                       size="small"
                       @click="handleEdit(row)"
                     >
-                      Edit
+                      {{ row.canWrite ? t('common.edit') : t('common.view') }}
                     </el-button>
                     <el-button
+                      v-if="row.canWrite"
                       link
                       type="primary"
                       size="small"
                       @click="handleDeploy(row)"
                     >
-                      Deploy
+                      {{ t('relationTable.structure.deploy') }}
                     </el-button>
                     <el-button
                       link
@@ -183,7 +192,7 @@
                       size="small"
                       @click="handleVersions(row)"
                     >
-                      Version
+                      {{ t('form.labelVersion') }}
                     </el-button>
                     <el-dropdown
                       trigger="click"
@@ -194,27 +203,31 @@
                         type="primary"
                         size="small"
                       >
-                        More<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                        {{ t('relationTable.structure.more') }}<el-icon class="el-icon--right"><ArrowDown /></el-icon>
                       </el-button>
                       <template #dropdown>
                         <el-dropdown-menu>
                           <el-dropdown-item command="erDiagram">
-                            ER Diagram
+                            {{ t('relationTable.structure.erDiagram') }}
                           </el-dropdown-item>
                           <el-dropdown-item command="compare">
-                            Compare
-                          </el-dropdown-item>
-                          <el-dropdown-item command="rollback">
-                            Rollback
-                          </el-dropdown-item>
-                          <el-dropdown-item command="access">
-                            Access
+                            {{ t('relationTable.structure.compare') }}
                           </el-dropdown-item>
                           <el-dropdown-item
+                            v-if="row.canWrite"
+                            command="rollback"
+                          >
+                            {{ t('relationTable.structure.rollback') }}
+                          </el-dropdown-item>
+                          <el-dropdown-item command="access">
+                            {{ t('relationTable.structure.access') }}
+                          </el-dropdown-item>
+                          <el-dropdown-item
+                            v-if="row.canWrite"
                             command="delete"
                             divided
                           >
-                            <span class="danger-item">Delete</span>
+                            <span class="danger-item">{{ t('common.delete') }}</span>
                           </el-dropdown-item>
                         </el-dropdown-menu>
                       </template>
@@ -240,6 +253,7 @@
       v-model="showVersionDialog"
       :table-id="currentTable?.id"
       :table-name="currentTable?.tableName"
+      :read-only="!currentTable?.canWrite"
       @rollback-success="fetchTableList"
     />
 
@@ -247,6 +261,7 @@
       v-model="showAccessDialog"
       :table-id="currentTable?.id"
       :table-name="currentTable?.tableName"
+      :read-only="!currentTable?.canWrite"
     />
 
     <VersionCompareDialog
@@ -271,6 +286,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown, Download, Plus, Search, Share } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
+import DesignerHelpLink from '@/components/relation-table/DesignerHelpLink.vue'
 import { relationTableStatusType as statusTagType, formatDate } from '@/utils/format'
 import VersionDialog from './components/VersionDialog.vue'
 import AccessConfigDialog from './components/AccessConfigDialog.vue'
@@ -281,6 +297,7 @@ import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 import type { RelationTableResponse } from '@/api/relationTable'
+import { canWrite } from '@/utils/permission'
 
 const router = useRouter()
 const { t } = useI18n()

@@ -29,13 +29,6 @@ public class RoleAccessComponent {
     private String adminCenterUrl;
 
     /**
-     * C-3 (docs/ap-integration/DECISIONS.md#d6): shared secret marking this as a trusted
-     * first-party service call, required for admin-center to honor the forwarded X-User-Id.
-     */
-    @Value("${service.internal-token:}")
-    private String serviceInternalToken;
-
-    /**
      * 获取所有业务角色列表
      */
     public List<Map<String, Object>> getBusinessRoles() {
@@ -96,45 +89,6 @@ public class RoleAccessComponent {
         } catch (Exception e) {
             log.error("Failed to get user business roles for user {}: {}", userId, e.getMessage());
             return Collections.emptyList();
-        }
-    }
-    
-    /**
-     * 分配角色给用户
-     * @param userId 用户ID
-     * @param roleId 角色ID
-     * @param operatedBy 操作人ID（通常是系统自动操作，使用 userId）
-     * @param reason 分配原因
-     * @return 是否成功
-     */
-    public boolean assignRoleToUser(String userId, String roleId, String operatedBy, String reason) {
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/roles/" + SafeUrlInput.requirePathToken(roleId)
-                    + "/members/" + SafeUrlInput.requirePathToken(userId);
-            if (reason != null && !reason.isEmpty()) {
-                url += "?reason=" + SafeUrlInput.encodeQueryValue(reason);
-            }
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("X-User-Id", operatedBy != null ? operatedBy : userId);
-            if (serviceInternalToken != null && !serviceInternalToken.isBlank()) {
-                headers.set(com.platform.common.constant.PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
-            }
-
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-            
-            ResponseEntity<Void> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.POST,
-                    entity,
-                    Void.class
-            );
-            
-            return response.getStatusCode().is2xxSuccessful();
-            
-        } catch (Exception e) {
-            log.error("Failed to assign role {} to user {}: {}", roleId, userId, e.getMessage());
-            return false;
         }
     }
     

@@ -82,19 +82,19 @@
                     <template #dropdown>
                       <el-dropdown-menu>
                         <el-dropdown-item
-                          v-if="!isItemReadOnly(item) && permissions.canEdit()"
+                          v-if="!isItemReadOnly(item)"
                           command="settings"
                         >
                           <el-icon><Setting /></el-icon>{{ t('functionUnit.setting') }}
                         </el-dropdown-item>
                         <el-dropdown-item
-                          v-if="!isItemReadOnly(item) && permissions.canClone()"
+                          v-if="canClone"
                           command="clone"
                         >
                           <el-icon><CopyDocument /></el-icon>{{ t('functionUnit.clone') }}
                         </el-dropdown-item>
                         <el-dropdown-item
-                          v-if="!isItemReadOnly(item) && item.status === 'ARCHIVED' && permissions.canEdit()"
+                          v-if="item.status === 'ARCHIVED' && canManageFunctionUnit(item)"
                           command="restore"
                         >
                           <el-icon><RefreshLeft /></el-icon>{{ t('functionUnit.restore') }}
@@ -106,7 +106,7 @@
                           <el-icon><Remove /></el-icon>{{ t('functionUnit.removeFromGroup') }}
                         </el-dropdown-item>
                         <el-dropdown-item
-                          v-if="!isItemReadOnly(item) && permissions.canDelete()"
+                          v-if="canManageFunctionUnit(item)"
                           command="delete"
                           divided
                         >
@@ -132,13 +132,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Setting, CopyDocument, Delete, Box, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import type { LaunchpadFolderEntry } from '@/composables/functionUnitList/useLaunchpadLayout'
-import { permissions, isFunctionUnitReadOnly } from '@/utils/permission'
+import { canCloneFunctionUnits, canManageFunctionUnit, isFunctionUnitReadOnly } from '@/utils/permission'
 
 const { t } = useI18n()
 
@@ -165,6 +165,8 @@ const emit = defineEmits<{
 }>()
 
 // 描述气泡与操作菜单挂在同一张卡上，菜单打开时会被气泡盖住，故开菜单即禁用该卡气泡
+// Cloning needs a workspace to land in, not rights on the source (D-35).
+const canClone = computed(() => canCloneFunctionUnits())
 const menuOpenId = ref<number | null>(null)
 
 function isItemReadOnly(item: FunctionUnitResponse): boolean {

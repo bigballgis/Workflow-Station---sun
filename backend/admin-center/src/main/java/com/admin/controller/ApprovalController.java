@@ -21,6 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Approval workflow controller for managing permission request approvals.
@@ -34,6 +36,7 @@ import jakarta.validation.Valid;
 @RequestMapping("/approvals")
 @RequiredArgsConstructor
 @Tag(name = "审批工作流", description = "权限申请审批工作流管理")
+@AdminAccess(AdminAudience.ADMIN_READ)
 public class ApprovalController {
     
     private final PermissionRequestService permissionRequestService;

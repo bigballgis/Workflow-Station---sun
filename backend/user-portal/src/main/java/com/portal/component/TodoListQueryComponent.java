@@ -191,6 +191,7 @@ public class TodoListQueryComponent {
                 converted.add(EngineTaskMapper.convertMapToTaskInfo(taskMap));
             }
             out.addAll(BuRolePoolTasks.retainClaimPoolTasks(converted));
+            out.addAll(claimForceUnclaimAnnotator.heldByUsersWithoutEntry(converted, userId));
             if (tasks.size() < batch) {
                 break;
             }

@@ -31,7 +31,7 @@ import java.util.Optional;
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.service\\.impl\\.(?!UserRoleServiceImpl|JwtTokenServiceImpl).*"),
-        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.config\\.(?!JwtProperties).*"),
+        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.config\\.(?!JwtProperties|RequiredConnectionSecrets).*"),
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.controller\\..*")
     }
 )
@@ -41,7 +41,7 @@ import java.util.Optional;
 public class DeveloperWorkstationApplication {
     
     public static void main(String[] args) {
-        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Hong_Kong"));
         SpringApplication.run(DeveloperWorkstationApplication.class, args);
     }
     

@@ -21,10 +21,10 @@
     >
       <el-form-item
         :label="t('bi.dataViewAssignment.formTarget')"
-        prop="functionUnitId"
+        prop="functionUnitCode"
       >
         <el-select
-          v-model="form.functionUnitId"
+          v-model="form.functionUnitCode"
           filterable
           :loading="functionUnitsLoading"
           :placeholder="t('bi.dataViewAssignment.placeholderTarget')"
@@ -33,37 +33,37 @@
         >
           <el-option
             v-for="unit in functionUnits"
-            :key="unit.id"
+            :key="unit.code"
             :label="`${unit.name} (${unit.code})`"
-            :value="unit.id"
+            :value="unit.code"
           />
         </el-select>
       </el-form-item>
 
       <el-form-item
         :label="t('bi.dataViewAssignment.formTable')"
-        prop="tableId"
+        prop="tableName"
       >
         <el-select
-          v-model="form.tableId"
+          v-model="form.tableName"
           filterable
           @change="handleTableChange"
-          :disabled="!form.functionUnitId"
+          :disabled="!form.functionUnitCode"
           :loading="tablesLoading"
           :placeholder="t('bi.dataViewAssignment.placeholderTable')"
           style="width: 100%"
         >
           <el-option
             v-for="table in tables"
-            :key="table.id"
+            :key="table.tableName"
             :label="tableOptionLabel(table)"
-            :value="table.id"
+            :value="table.tableName"
           />
         </el-select>
       </el-form-item>
-      <el-form-item :label="t('bi.dataViewAssignment.formView')" prop="viewId">
-        <el-select v-model="form.viewId" filterable :disabled="!form.tableId" :loading="viewsLoading" style="width: 100%">
-          <el-option v-for="view in views" :key="view.id" :label="view.viewName" :value="view.id" />
+      <el-form-item :label="t('bi.dataViewAssignment.formView')" prop="viewName">
+        <el-select v-model="form.viewName" filterable :disabled="!form.tableName" :loading="viewsLoading" style="width: 100%">
+          <el-option v-for="view in views" :key="view.viewName" :label="view.viewName" :value="view.viewName" />
         </el-select>
         <div class="field-help">{{ t('bi.dataViewAssignment.viewHint') }}</div>
       </el-form-item>
@@ -176,9 +176,9 @@ let initializationSequence = 0
 const form = reactive({
   dashboardId: '',
   dashboardIds: [] as string[],
-  functionUnitId: null as number | null,
-  tableId: null as number | null,
-  viewId: null as number | null,
+  functionUnitCode: null as string | null,
+  tableName: null as string | null,
+  viewName: null as string | null,
   enabled: true,
 })
 
@@ -191,9 +191,9 @@ const rules = computed(() => ({
     message: t('bi.dataViewAssignment.ruleDashboard'),
     trigger: 'change',
   }],
-  functionUnitId: [{ required: true, message: t('bi.dataViewAssignment.ruleTarget'), trigger: 'change' }],
-  viewId: [{ required: true, message: t('bi.dataViewAssignment.ruleView'), trigger: 'change' }],
-  tableId: [{ required: true, message: t('bi.dataViewAssignment.ruleTable'), trigger: 'change' }],
+  functionUnitCode: [{ required: true, message: t('bi.dataViewAssignment.ruleTarget'), trigger: 'change' }],
+  viewName: [{ required: true, message: t('bi.dataViewAssignment.ruleView'), trigger: 'change' }],
+  tableName: [{ required: true, message: t('bi.dataViewAssignment.ruleTable'), trigger: 'change' }],
 }))
 
 function tableOptionLabel(table: DataViewTableOption) {
@@ -201,11 +201,11 @@ function tableOptionLabel(table: DataViewTableOption) {
   return `${name} · ${t(`bi.dataViewAssignment.tableType${table.tableType}`)}`
 }
 
-async function loadTables(functionUnitId: number) {
+async function loadTables(functionUnitCode: string) {
   const seq = ++contextSequence
   tablesLoading.value = true
   try {
-    const result = await biManagementApi.dataViewAssignment.listTables(functionUnitId)
+    const result = await biManagementApi.dataViewAssignment.listTables(functionUnitCode)
     if (seq === contextSequence) tables.value = result
     return seq === contextSequence
   } catch {
@@ -218,10 +218,10 @@ async function loadTables(functionUnitId: number) {
   }
 }
 
-async function handleFunctionUnitChange(value: number) {
+async function handleFunctionUnitChange(value: string) {
   contextSequence++
-  form.tableId = null
-  form.viewId = null
+  form.tableName = null
+  form.viewName = null
   views.value = []
   viewsLoading.value = false
   tables.value = []
@@ -229,7 +229,7 @@ async function handleFunctionUnitChange(value: number) {
 }
 
 async function handleTableChange(): Promise<void> {
-  form.viewId = null
+  form.viewName = null
   views.value = []
   await loadViews()
 }
@@ -238,8 +238,8 @@ async function loadViews(): Promise<boolean> {
   const seq = ++contextSequence
   viewsLoading.value = true
   try {
-    if (!form.functionUnitId || !form.tableId) return true
-    const result = await biManagementApi.dataViewAssignment.listViews(form.functionUnitId, form.tableId)
+    if (!form.functionUnitCode || !form.tableName) return true
+    const result = await biManagementApi.dataViewAssignment.listViews(form.functionUnitCode, form.tableName)
     if (seq === contextSequence) views.value = result
     return seq === contextSequence
   } catch {
@@ -259,8 +259,9 @@ async function initialize() {
   // Clear the previous session before any request can fail or complete late.
   Object.assign(form, {
     dashboardId: row?.dashboardId || '', dashboardIds: [],
-    functionUnitId: row?.functionUnitId || null, tableId: row?.tableId || null,
-    viewId: row?.viewAvailable ? row.viewId : null, enabled: row?.enabled ?? true,
+    // An unavailable View (gone from the unit's active release) must be picked again.
+    functionUnitCode: row?.functionUnitCode || null, tableName: row?.viewAvailable ? row.tableName : null,
+    viewName: row?.viewAvailable ? row.viewName : null, enabled: row?.enabled ?? true,
   })
   dashboards.value = []
   functionUnits.value = []
@@ -278,8 +279,8 @@ async function initialize() {
     dashboards.value = dashboardPage.content || []
     functionUnits.value = units || []
 
-    if (form.functionUnitId) {
-      const loadedTables = await loadTables(form.functionUnitId)
+    if (form.functionUnitCode) {
+      const loadedTables = await loadTables(form.functionUnitCode)
       if (seq !== initializationSequence) return
       if (!loadedTables || !await loadViews()) {
         if (seq === initializationSequence) initializationFailed.value = true
@@ -308,15 +309,14 @@ async function submit() {
   } catch {
     return
   }
-  if (seq !== initializationSequence || !form.functionUnitId || !form.tableId || !form.viewId) return
+  if (seq !== initializationSequence || !form.functionUnitCode || !form.viewName) return
 
   submitting.value = true
   try {
     const payload = {
       dashboardId: form.dashboardId,
-      functionUnitId: form.functionUnitId,
-      tableId: form.tableId,
-      viewId: form.viewId,
+      functionUnitCode: form.functionUnitCode,
+      viewName: form.viewName,
       // Omitted on unchanged edits so another administrator's status change survives.
       ...(form.enabled !== props.initialRow?.enabled ? { enabled: form.enabled } : {}),
     }
@@ -326,9 +326,8 @@ async function submit() {
     } else {
       const created = await biManagementApi.dataViewAssignment.createBatch({
         dashboardIds: form.dashboardIds,
-        functionUnitId: form.functionUnitId,
-        tableId: form.tableId,
-        viewId: form.viewId,
+        functionUnitCode: form.functionUnitCode,
+        viewName: form.viewName,
         enabled: form.enabled,
       })
       notifySuccess(t('bi.dataViewAssignment.createSuccess', { count: created.length }))

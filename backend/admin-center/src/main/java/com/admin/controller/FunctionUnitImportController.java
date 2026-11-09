@@ -11,6 +11,7 @@ import com.admin.entity.FunctionUnitDeployment;
 import com.admin.enums.DeploymentEnvironment;
 import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
+import com.admin.service.FunctionUnitTeamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +30,8 @@ import java.util.Base64;
 
 import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.i18n.I18nService;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Accepts workstation-exported ZIP archives and exposes fast-path deployment hooks for admins.
@@ -38,6 +41,7 @@ import com.platform.common.i18n.I18nService;
 @RequestMapping("/function-units-import")
 @RequiredArgsConstructor
 @Tag(name = "Function unit import", description = "ZIP-based import bundles and streamlined deployment endpoints")
+@AdminAccess(AdminAudience.ADMIN_READ)
 public class FunctionUnitImportController {
     
     private final FunctionUnitManagerComponent functionUnitManager;
@@ -46,10 +50,12 @@ public class FunctionUnitImportController {
     private com.admin.component.FunctionUnitLifecycleComponent releaseReadiness;
     private final ProcessDeploymentComponent processDeploymentComponent;
     private final I18nService i18nService;
-    
+    private final FunctionUnitTeamService teamService;
+
     /**
      * Import a workstation ZIP artifact into repository metadata/content tables.
      */
+    @AdminAccess(AdminAudience.DEPLOYER)
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Import a function unit", description = "Upload a workstation ZIP archive")
     public ResponseEntity<Map<String, Object>> importFunctionUnit(
@@ -68,7 +74,8 @@ public class FunctionUnitImportController {
                     .fileContent(Base64.getEncoder().encodeToString(zipBytes))
                     .build();
 
-            ImportResult importResult = functionUnitManager.importFunctionPackage(importRequest, userId);
+            ImportResult importResult = functionUnitManager.importFunctionPackage(importRequest, userId,
+                    FunctionUnitTeamService.ImportChannel.DEPLOYMENT);
 
             if (importResult.isSuccess()) {
                 result.put("status", "SUCCESS");
@@ -88,7 +95,8 @@ public class FunctionUnitImportController {
             result.put("status", "FAILED");
             result.put("message", e.getErrorMessage());
             return ResponseEntity.badRequest().body(result);
-        } catch (com.platform.common.functionunit.FunctionUnitVersionException e) {
+        } catch (com.platform.common.functionunit.FunctionUnitVersionException
+                 | com.admin.exception.FunctionUnitTeamForbiddenException e) {
             throw e;
         } catch (Exception e) {
             log.error("Failed to import function unit", e);
@@ -101,6 +109,7 @@ public class FunctionUnitImportController {
     /**
      * Promote/import flow into an environment optionally wiring Flowable and auto-enable shortcuts.
      */
+    @AdminAccess(AdminAudience.DEPLOYER)
     @PostMapping("/{id}/deploy")
     @Operation(summary = "Deploy a function unit", description = "Deploy to a target environment and optionally push BPMN to Flowable")
     public ResponseEntity<Map<String, Object>> deployFunctionUnit(
@@ -110,9 +119,11 @@ public class FunctionUnitImportController {
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         
         log.info("Deploying function unit: {}", id);
-        
+        // A DW deployment reaches here as the deploying user: they deploy in the unit's team (§8.1).
+        teamService.assertMayDeploy(functionUnitManager.getFunctionUnitById(id).getCode(), userId);
+
         Map<String, Object> result = new HashMap<>();
-        
+
         try {
             FunctionUnit functionUnit = functionUnitManager.getFunctionUnitById(id);
 

@@ -9,6 +9,7 @@ import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceRouteOwnership;
 import com.developer.service.AiWriteService;
 import net.jqwik.api.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -48,7 +49,7 @@ class AiGenerationComponentImplPropertyTest {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService, workspaceAccessService,
-                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
+                mock(WorkspaceRouteOwnership.class), (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -98,7 +99,7 @@ class AiGenerationComponentImplPropertyTest {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService, workspaceAccessService,
-                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
+                mock(WorkspaceRouteOwnership.class), (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -151,7 +152,7 @@ class AiGenerationComponentImplPropertyTest {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService, workspaceAccessService,
-                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
+                mock(WorkspaceRouteOwnership.class), (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()

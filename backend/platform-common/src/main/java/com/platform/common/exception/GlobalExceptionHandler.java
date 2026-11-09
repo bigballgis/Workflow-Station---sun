@@ -4,6 +4,7 @@ import com.platform.common.dto.ApiResponse;
 import com.platform.common.enums.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -11,6 +12,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -23,6 +25,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -45,6 +48,30 @@ public class GlobalExceptionHandler {
                 .path(getPath(request))
                 .build();
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(errorResponse));
+    }
+
+    /**
+     * An existing path called with a method it does not map (e.g. {@code PATCH /business-units}) is a
+     * client error: 405 with the {@code Allow} header, not the {@link Exception} fallback's 500.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<?>> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex, WebRequest request) {
+        String traceId = generateTraceId();
+        log.debug("Method not supported [{}]: {} {}", traceId, ex.getMethod(), getPath(request));
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code("METHOD_NOT_ALLOWED")
+                .message("Request method '" + ex.getMethod() + "' is not supported for this resource")
+                .timestamp(Instant.now())
+                .traceId(traceId)
+                .path(getPath(request))
+                .build();
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        Set<HttpMethod> supported = ex.getSupportedHttpMethods();
+        if (supported != null && !supported.isEmpty()) {
+            builder.allow(supported.toArray(HttpMethod[]::new));
+        }
+        return builder.body(ApiResponse.error(errorResponse));
     }
 
     @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)

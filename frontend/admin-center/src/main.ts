@@ -8,8 +8,17 @@ import App from "./App.vue";
 import router from "./router";
 import i18n from "./i18n";
 import "./styles/index.scss";
-import { setOnLogout } from "@/api/auth";
+import { refreshToken, saveUser, setOnLogout } from "@/api/auth";
 import { redirectToUnifiedLogin } from "@/utils/sso";
+import { setSessionRefresher } from "@platform-shared/auth/sessionRefresh";
+
+// Before app.use(router): the first navigation's /me check may already need a refresh.
+// A refresh recomputes adminAccess from the user's current roles; store it so menus and buttons follow.
+setSessionRefresher(async () => {
+  const response = await refreshToken();
+  if (response?.user) saveUser(response.user);
+  return response;
+});
 
 const app = createApp(App);
 

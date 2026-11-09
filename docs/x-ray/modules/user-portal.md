@@ -42,7 +42,7 @@ All controllers return `com.platform.common.dto.ApiResponse<T>` unless noted. To
 
 **Auth/session** — `AuthController /auth`: `POST /login`, `/logout`, `/refresh`, `/change-password`, `GET /me`, `/workspace-contexts`, `POST /switch-workspace`, `GET /validate`. Access mode claim `portalAccessMode` = `FULL` vs `PERMISSION_SELF_SERVICE_ONLY`. `AuthSsoExchangeController /auth/sso`: `POST /exchange` (redeem admin-center code; deferred workspace via in-memory `pendingRedeems` 300s TTL).
 
-**Process catalog + start** — `ProcessController /processes`: `GET /definitions`, `/startable`, `/function-units/{id}/content`, `/function-units/{id}/contents`, `POST /function-units/{id}/tables/primary-keys/allocate`, `GET /fu-data/{id}` (@Deprecated), `/function-unit-contents/{id}` (@Deprecated), `GET /actions`, `POST /{key}/start`, `GET /my-applications`, `GET /{id}`, `POST /{id}/withdraw|urge|return-to-first`, `POST /{key}/favorite|draft`, draft GET/DELETE, `GET /{id}/history`, `POST /{id}/complete` (**internal callback, `X-Internal-Service-Token`, called by engine `ProcessCompletionListener`**). `ApiDataController /data-api/fu-contents/{id}` (alt path to dodge static handler; **no frontend caller**). `ProcessFormController`: `GET/PUT /processes/{id}/form`.
+**Process catalog + start** — `ProcessController /processes`: `GET /definitions`, `/startable`, `/function-units/{id}/content`, `/function-units/{id}/contents`, `POST /function-units/{id}/tables/primary-keys/allocate`, `GET /fu-data/{id}` (@Deprecated), `/function-unit-contents/{id}` (@Deprecated), `GET /actions`, `POST /{key}/start`, `GET /my-applications`, `GET /{id}`, `POST /{id}/withdraw|urge|return-to-first`, `POST /{key}/favorite|draft`, draft GET/DELETE, `GET /{id}/history`, `POST /{id}/complete` (**internal callback, `X-Service-Token = service.internal-token`, called by engine `ProcessCompletionListener`**). `ApiDataController /data-api/fu-contents/{id}` (alt path to dodge static handler; **no frontend caller**). `ProcessFormController`: `GET/PUT /processes/{id}/form`.
 
 **Tasks/approvals** — `TaskController /tasks`: `POST /query`, `GET /{id}`, `/{id}/history`, `POST /{id}/claim|unclaim|complete|delegate|transfer|urge`, `POST /batch/urge`, `GET /statistics`, `POST /completed/query`, `GET /users/search` (**direct admin-center call**), `POST /{id}/sub-table-rows/{rowId}/assign`, `/sub-table-rows/assign-by-identity`, `GET /{id}/sub-table-data/all`. `TaskFormController /tasks`: `GET /{id}/form-data`, `POST /{id}/submit`, `GET /{id}/completed-form`. `ApprovalController /approvals`: proxy to admin-center (pending/approve/reject/is-approver/history).
 
@@ -94,7 +94,7 @@ All controllers return `com.platform.common.dto.ApiResponse<T>` unless noted. To
 
 **Task completion** (`TaskProcessComponent.completeTask`, `@Transactional`): dispatches by action. Form-save merges editable fields into a **new HashMap** of `variables` (in-place edits defeat Hibernate JSON dirty detection), strips deep-nested sub-tables, saves, records change history after commit. Approval path hydrates `__subTables__` from TaskInfo, `preserveEngineSubTablesOnComplete` guards against a bare approval overwriting engine service-task output with `[]`.
 
-**PK allocation:** `JdbcPrimaryKeyAllocationService` on `dw_pk_sequences` / `rt_pk_sequences` (perTable scope, shared by all users), config from `dw_field_definitions.pk_generation_json`.
+**PK allocation:** `JdbcPrimaryKeyAllocationService` on `up_pk_sequences` / `rt_pk_sequences` (perTable scope, shared by all users), config from `dw_field_definitions.pk_generation_json`.
 
 **Optimistic locking:** `@Version lock_version` on `ProcessInstance`, `up_delegation_rule`, `up_process_draft`, `RecordNote`. **No retry loop** — relies on single-write-txn discipline + last-write-wins. `up_change_history` is append-only (no `@Version`), written in `REQUIRES_NEW` txn so history failures never roll back the main flow.
 
@@ -143,7 +143,7 @@ sequenceDiagram
   Note over U,WE: later — task handling
   U->>UP: POST /tasks/{id}/submit (editable fields + subTableData)
   UP->>WE: POST /tasks/{id}/complete
-  WE-->>UP: (callback) POST /processes/{id}/complete [X-Internal-Service-Token]
+  WE-->>UP: (callback) POST /processes/{id}/complete [X-Service-Token = service.internal-token]
   UP->>DB: merge vars (new HashMap), change history
   WE--)UP: Kafka platform.notification.events
   UP--)U: STOMP /user/queue/notifications
@@ -165,4 +165,4 @@ sequenceDiagram
 | 10 | Silent fallbacks: `evaluateFormula`→0 on error, RecordNote CRUD `catch {}`, user-search catch→`[]` | Confirmed (governance) | `formula.ts:64`, `RecordNoteField.vue:309`, `FormRenderer.vue:373` |
 | 11 | Debug `console.log('[PERF-FR]')` + change-history `console.warn` left in production hot path | Confirmed (minor) | `FormRenderer.vue:92,625`, `api/processForm.ts:108` |
 
-**Loop closure:** the core end-user journey (discover → start → fill form → submit → approve → complete → notify) is **Confirmed closed** end-to-end. The permission self-service journey is live but littered with 403-blocked legacy endpoints (VG concept removed from portal). Involved-users-only Main Table View access is Confirmed with SYS_ADMIN bypass.
+**Loop closure:** the core end-user journey (discover → start → fill form → submit → approve → complete → notify) is **Confirmed closed** end-to-end. The permission self-service journey is live but littered with 403-blocked legacy endpoints (VG concept removed from portal). Involved-users-only Main Table View access is Confirmed; since the platform access model (D-05) SYS_ADMIN has no bypass and sees only the rows they took part in.

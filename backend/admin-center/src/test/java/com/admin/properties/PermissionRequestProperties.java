@@ -202,36 +202,6 @@ public class PermissionRequestProperties {
     
     /**
      * Feature: permission-request-approval, Property 17: BU-Bounded Role Restriction
-     * User with only BU_UNBOUNDED role should not be able to apply for business unit
-     */
-    @Property(tries = 100)
-    @Label("Feature: permission-request-approval, Property 17: User with only BU_UNBOUNDED role cannot apply for BU")
-    void userWithOnlyBuUnboundedRoleCannotApplyForBusinessUnit(
-            @ForAll("validUserIds") String applicantId,
-            @ForAll("validTargetIds") String businessUnitId) {
-        
-        // Given: Business unit exists and has approver
-        when(businessUnitRepository.existsById(businessUnitId)).thenReturn(true);
-        when(approverService.hasApprover(ApproverTargetType.BUSINESS_UNIT, businessUnitId)).thenReturn(true);
-        
-        // Given: User has virtual group with BU_UNBOUNDED role only
-        when(virtualGroupMemberRepository.findVirtualGroupIdsByUserId(applicantId))
-                .thenReturn(List.of("vg-1"));
-        Role buUnboundedRole = createRole("role-1", RoleType.BU_UNBOUNDED);
-        when(virtualGroupRoleService.getBoundRole("vg-1")).thenReturn(Optional.of(buUnboundedRole));
-        
-        // When & Then: Creating request should throw exception
-        assertThatThrownBy(() -> 
-                permissionRequestService.createBusinessUnitRequest(applicantId, businessUnitId, "Test reason"))
-                .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("BU-Bounded");
-        
-        // Then: No request should be saved
-        verify(permissionRequestRepository, never()).save(any(PermissionRequest.class));
-    }
-    
-    /**
-     * Feature: permission-request-approval, Property 17: BU-Bounded Role Restriction
      * User with BU_BOUNDED role should be able to apply for business unit
      */
     @Property(tries = 100)

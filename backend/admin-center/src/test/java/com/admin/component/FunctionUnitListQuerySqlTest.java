@@ -2,6 +2,7 @@ package com.admin.component;
 
 import com.admin.dto.request.FunctionUnitListQueryRequest;
 import com.admin.repository.FunctionUnitRepository;
+import com.admin.security.AdminTeamScope;
 import com.admin.service.UserReferenceResolver;
 import com.platform.common.list.ListColumnFilter;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +21,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,6 +37,7 @@ class FunctionUnitListQuerySqlTest {
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private FunctionUnitRepository functionUnitRepository;
     @Mock private UserReferenceResolver userReferenceResolver;
+    @Mock private AdminTeamScope teamScope;
 
     private FunctionUnitListQueryComponent component;
     private final List<String> preparedSql = new ArrayList<>();
@@ -42,7 +45,7 @@ class FunctionUnitListQuerySqlTest {
     @BeforeEach
     void setUp() throws Exception {
         component = new FunctionUnitListQueryComponent(
-                jdbcTemplate, functionUnitRepository, userReferenceResolver);
+                jdbcTemplate, functionUnitRepository, userReferenceResolver, teamScope);
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {
@@ -83,6 +86,27 @@ class FunctionUnitListQuerySqlTest {
         assertThat(preparedSql.get(0)).contains("fu.name ILIKE ?");
         assertThat(preparedSql.get(0)).contains("fu.code ILIKE ?");
         assertThat(preparedSql.get(0)).contains("fu.description");
+    }
+
+    @Test
+    void everyCodeIsListedWhenTheCallerReadsEveryTeam() {
+        when(teamScope.visibleFunctionUnitCodes()).thenReturn(null);
+        component.queryList(request(null, List.of()));
+
+        assertThat(preparedSql.get(0)).doesNotContain("fu.code IN (");
+    }
+
+    @Test
+    void aTechnicalLeadListsOnlyTheCodesOfTheTeamsTheyLead() {
+        when(teamScope.visibleFunctionUnitCodes()).thenReturn(Set.of("FU_A"));
+        component.queryList(request(null, List.of()));
+        assertThat(preparedSql.get(0)).contains("AND fu.code IN (?)");
+        assertThat(pageSql()).contains("AND fu.code IN (?)");
+
+        preparedSql.clear();
+        when(teamScope.visibleFunctionUnitCodes()).thenReturn(Set.of());
+        component.queryArchived(request(null, List.of()));
+        assertThat(preparedSql.get(0)).contains("AND 1 = 0");
     }
 
     @Test

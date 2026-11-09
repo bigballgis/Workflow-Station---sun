@@ -23,7 +23,7 @@ import java.util.Optional;
 @Slf4j
 public class DeploymentJobServiceImpl implements DeploymentJobService {
 
-    private static final ZoneId UI_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId UI_ZONE = ZoneId.of("Asia/Hong_Kong");
 
     private final DeploymentJobRepository repository;
     private final ObjectMapper objectMapper;

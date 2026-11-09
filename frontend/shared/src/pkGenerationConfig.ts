@@ -199,7 +199,7 @@ export function pkStrategyAllocatesString(strategy?: PkGenerationStrategy | stri
 
 /**
  * Designer preview for calendar-period PK strategies.
- * Day/month boundary is Asia/Shanghai (UTC+8), matching table-design audit fields ({@code created_at}).
+ * Day/month boundary is Asia/Hong_Kong (UTC+8), matching table-design audit fields ({@code created_at}).
  */
 export function formatCalendarDateSequencePreview(
   period: CalendarDateSequencePeriod,

@@ -43,9 +43,9 @@ public class TableBindingDTO {
      * The columns that identify a row of this table, for portals to merge / identify sub-table rows
      * without hardcoding {@code id} / {@code rowId}.
      *
-     * <p>Normally the designer's primary key from {@code dw_field_definitions} ({@code is_primary_key},
-     * ordered by {@code sort_order}). When the table declares none — the majority of them, including
-     * every RELATED binding — {@code FormTableBindingLoader} substitutes the platform's generated
+     * <p>Normally the primary key declared on the released table ({@code isPrimaryKey}, in field order). When the
+     * table declares none — the majority of them, including every RELATED binding — {@code CatalogSnapshotReader}
+     * substitutes the platform's generated
      * identity key ({@code SubTableRowIdentity.CANONICAL_FIELD}), since rows of a PK-less table each
      * still receive a UUID on persist. Empty only when the table is genuinely unidentifiable.
      *

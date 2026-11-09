@@ -55,6 +55,7 @@ class FunctionUnitImportControllerMultipartTest {
     @Mock private DeploymentManagerComponent deploymentManager;
     @Mock private ProcessDeploymentComponent processDeploymentComponent;
     @Mock private I18nService i18nService;
+    @Mock private com.admin.service.FunctionUnitTeamService teamService;
 
     private MockMvc mockMvc;
 
@@ -74,7 +75,8 @@ class FunctionUnitImportControllerMultipartTest {
                 functionUnitManager,
                 deploymentManager,
                 processDeploymentComponent,
-                i18nService);
+                i18nService,
+                teamService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -102,7 +104,8 @@ class FunctionUnitImportControllerMultipartTest {
                 "computedField":{"source":"qty * price","scope":"row"}}]}]
                 """.getBytes(StandardCharsets.UTF_8));
 
-        when(functionUnitManager.importFunctionPackage(any(), eq("test-user-id")))
+        when(functionUnitManager.importFunctionPackage(any(), eq("test-user-id"),
+                eq(com.admin.service.FunctionUnitTeamService.ImportChannel.DEPLOYMENT)))
                 .thenReturn(ImportResult.success(FunctionUnitInfo.builder()
                         .id("fu-1")
                         .name("Orders")
@@ -118,7 +121,8 @@ class FunctionUnitImportControllerMultipartTest {
 
         ArgumentCaptor<FunctionUnitImportRequest> captor =
                 ArgumentCaptor.forClass(FunctionUnitImportRequest.class);
-        verify(functionUnitManager).importFunctionPackage(captor.capture(), eq("test-user-id"));
+        verify(functionUnitManager).importFunctionPackage(captor.capture(), eq("test-user-id"),
+                eq(com.admin.service.FunctionUnitTeamService.ImportChannel.DEPLOYMENT));
         FunctionUnitImportRequest sent = captor.getValue();
         assertThat(sent.getFileName()).isEqualTo("orders.zip");
         byte[] decoded = Base64.getDecoder().decode(sent.getFileContent());
@@ -132,7 +136,8 @@ class FunctionUnitImportControllerMultipartTest {
 
     @Test
     void import_adminBusinessException_returns400() throws Exception {
-        when(functionUnitManager.importFunctionPackage(any(), eq("test-user-id")))
+        when(functionUnitManager.importFunctionPackage(any(), eq("test-user-id"),
+                eq(com.admin.service.FunctionUnitTeamService.ImportChannel.DEPLOYMENT)))
                 .thenThrow(new AdminBusinessException("FU_IMPORT_BPMN_START_EVENTS", "exactly one none start"));
 
         mockMvc.perform(multipart("/function-units-import/import")

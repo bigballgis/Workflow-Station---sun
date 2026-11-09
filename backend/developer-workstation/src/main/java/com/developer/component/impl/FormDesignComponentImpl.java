@@ -2,6 +2,7 @@ package com.developer.component.impl;
 
 import com.developer.component.FormDesignComponent;
 import com.developer.dto.FormConfigPasteRepairRequest;
+import com.developer.dto.FkFillSource;
 import com.developer.dto.FormConfigPasteRepairResponse;
 import com.developer.dto.FormDefinitionRequest;
 import com.developer.dto.FormTableBindingRequest;
@@ -28,6 +29,8 @@ import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.developer.service.SubTableViewService;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.FormFieldPermissionBindingIdRewriter;
@@ -86,6 +89,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private final JdbcTemplate jdbcTemplate;
     private final SubTableViewService subTableViewService;
     private final FormTableBindingUniquenessGuard formTableBindingUniquenessGuard;
+    private final WorkspaceRouteOwnership routeOwnership;
     
     /**
      * Suffix that distinguishes the My Requests row of a scene pair. Form names are unique per
@@ -168,6 +172,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .build();
 
         if (request.getBoundTableId() != null) {
+            routeOwnership.requireInUnit(Owned.TABLE, request.getBoundTableId(), functionUnit.getId());
             TableDefinition boundTable = tableDefinitionRepository.findById(request.getBoundTableId())
                     .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getBoundTableId()));
             formDefinition.setBoundTable(boundTable);
@@ -267,6 +272,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         }
 
         if (request.getBoundTableId() != null) {
+            routeOwnership.requireInUnit(Owned.TABLE, request.getBoundTableId(),
+                    formDefinition.getFunctionUnit().getId());
             TableDefinition boundTable = tableDefinitionRepository.findById(request.getBoundTableId())
                     .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getBoundTableId()));
             formDefinition.setBoundTable(boundTable);
@@ -429,11 +436,14 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         boolean isRelationTable = request.getBindingType() == BindingType.RELATED 
                 && request.getRelationTableId() != null;
         
+        Long functionUnitId = form.getFunctionUnit().getId();
         TableDefinition table = null;
         if (!isRelationTable) {
+            routeOwnership.requireInUnit(Owned.TABLE, request.getTableId(), functionUnitId);
             table = tableDefinitionRepository.findById(request.getTableId())
                     .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getTableId()));
         }
+        requireBindingReferencesInUnit(request, functionUnitId);
         
         // PRIMARY binding must be unique per form.
         if (request.getBindingType() == BindingType.PRIMARY) {
@@ -523,6 +533,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .orElseThrow(() -> new ResourceNotFoundException("FormTableBinding", bindingId));
 
         FormDefinition form = getById(binding.getFormId());
+        requireBindingReferencesInUnit(request, form.getFunctionUnit().getId());
         boolean isRelationTable = request.getBindingType() == BindingType.RELATED
                 && request.getRelationTableId() != null;
         TableDefinition tableForRules = binding.getTable();
@@ -580,6 +591,23 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         return formTableBindingRepository.findByIdWithTable(binding.getId()).orElse(binding);
     }
     
+    /**
+     * The field and binding ids a binding request carries must name objects of the form's unit (§6.1, §6.2): the
+     * path only proves the caller may edit this form, not what the body points at.
+     */
+    private void requireBindingReferencesInUnit(FormTableBindingRequest request, Long functionUnitId) {
+        routeOwnership.requireInUnit(Owned.FIELD, request.getFilterFkFieldId(), functionUnitId);
+        if (request.getFkFillSources() == null) {
+            return;
+        }
+        for (FkFillSource source : request.getFkFillSources()) {
+            if (source != null) {
+                routeOwnership.requireInUnit(Owned.FIELD, source.getFieldId(), functionUnitId);
+                routeOwnership.requireInUnit(Owned.FORM_BINDING, source.getAncestorBindingId(), functionUnitId);
+            }
+        }
+    }
+
     @Override
     @Transactional
     public void deleteBinding(Long bindingId) {

@@ -10,8 +10,10 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.MainTableViewConfigRepository;
 import com.developer.service.impl.MainTableViewServiceImpl;
 import com.developer.util.MainTableViewAccessRulesValidator;
+import com.developer.util.MainTableViewNameValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -28,7 +30,8 @@ import java.util.Map;
  * <p>Export serializes each view by its main table's NAME (ids don't survive across packages).
  * Access rules carry {@code targetCode} for cross-environment remap and {@code targetId} as fallback
  * for same-DB version rollback. Import validates paired BU+Role rules (see
- * {@link MainTableViewAccessRulesValidator}).
+ * {@link MainTableViewAccessRulesValidator}). Export and import both require View names unique within
+ * the function unit ({@link MainTableViewNameValidator}).
  */
 @Slf4j
 @Component
@@ -69,6 +72,12 @@ public class MainTableViewPortability {
     private List<Map<String, Object>> serialize(Long functionUnitId, Map<Long, String> tableIdToName,
                                                 Map<Long, String> formIdToName, boolean savedIdentity) {
         List<MainTableViewConfig> views = mainTableViewConfigRepository.findByFunctionUnitIdWithFields(functionUnitId);
+        // A package leaves this environment: the target resolves Views by name and access rules by
+        // code. A same-database snapshot needs neither, so a rollback backup is never blocked here.
+        boolean leavesEnvironment = !savedIdentity;
+        if (leavesEnvironment) {
+            MainTableViewNameValidator.assertUnique(views.stream().map(MainTableViewConfig::getViewName).toList());
+        }
         List<Map<String, Object>> out = new ArrayList<>();
         for (MainTableViewConfig view : views) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -83,7 +92,7 @@ public class MainTableViewPortability {
             m.put("filterConfig", view.getFilterConfig());
             m.put("restrictToInvolvedUsers", Boolean.TRUE.equals(view.getRestrictToInvolvedUsers()));
             // Access rules are not JOIN FETCHed on the entity — load via JDBC (same as designer Save path).
-            m.put("accessRules", exportAccessRules(view.getId()));
+            m.put("accessRules", exportAccessRules(view, leavesEnvironment));
             List<Map<String, Object>> fields = new ArrayList<>();
             if (view.getViewFields() != null) {
                 for (MainTableViewField f : view.getViewFields()) {
@@ -133,6 +142,8 @@ public class MainTableViewPortability {
         if (mainTableViews == null || mainTableViews.isEmpty()) {
             return;
         }
+        MainTableViewNameValidator.assertUnique(
+                mainTableViews.stream().map(v -> stringVal(v.get("viewName"))).toList());
         mainTableViewConfigRepository.deleteByFunctionUnitId(functionUnit.getId());
         mainTableViewConfigRepository.flush();
 
@@ -240,7 +251,12 @@ public class MainTableViewPortability {
         return v instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
     }
 
-    private List<Map<String, Object>> exportAccessRules(Long viewConfigId) {
+    /**
+     * @param requireCode the package leaves this environment, where only the BU/Role code can be
+     *                    remapped: a rule without one fails the export instead of arriving as a dead id
+     */
+    private List<Map<String, Object>> exportAccessRules(MainTableViewConfig view, boolean requireCode) {
+        Long viewConfigId = view.getId();
         if (viewConfigId == null) {
             return List.of();
         }
@@ -278,6 +294,8 @@ public class MainTableViewPortability {
             String targetCode = resolveTargetCode(type, targetId);
             if (targetCode != null && !targetCode.isBlank()) {
                 m.put("targetCode", targetCode);
+            } else if (requireCode) {
+                throw MainTableViewAccessRulesValidator.exportUnresolved(view.getViewName(), type.name(), targetId);
             }
             out.add(m);
         }
@@ -315,8 +333,8 @@ public class MainTableViewPortability {
             }
             return jdbcTemplate.queryForObject(
                     "SELECT code FROM sys_business_units WHERE id = ?", String.class, targetId);
-        } catch (Exception e) {
-            log.warn("Could not resolve {} code for id {}: {}", type, targetId, e.getMessage());
+        } catch (EmptyResultDataAccessException e) {
+            // Deleted BU/Role: the caller decides whether a missing code is acceptable.
             return null;
         }
     }

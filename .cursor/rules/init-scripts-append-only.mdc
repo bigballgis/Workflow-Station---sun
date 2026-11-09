@@ -50,8 +50,10 @@ COMMENT ON COLUMN dw_foo.bar IS '…';
 - [ ] 新脚本可重复执行不报错（幂等）
 - [ ] `00-schema` 编号未与现有文件冲突
 - [ ] 需要自动 init 时已更新 `00-init-all.sh`
+- [ ] 已运行生成器 `node deploy/k8s/init-data/build-all-in-one.mjs` 并提交两个 k8s 包（`deploy/k8s/init-data/init-platform-schema/all-in-one-for-gui.sql`、`init-platform-seed/all-in-one-for-gui.sql`）；新 `01-admin` / `90-post-seed` 脚本 k8s 不该带的，在生成器 `K8S_SEED_EXCLUDED` 写明原因。CI `init-scripts-check.yml` 跑 `--check`，漏了会红
 
 ## 参考
 
 - Schema 单一来源：`deployment-infra.mdc` §Schema 管理
 - 编排入口：`deploy/init-scripts/00-init-all.sh`
+- k8s 离线包生成与一致性校验：`deploy/k8s/init-data/README.md`

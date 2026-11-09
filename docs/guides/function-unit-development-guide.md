@@ -1,7 +1,7 @@
 # 功能单元 (Function Unit) 完整开发文档
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
-> **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../design/developer-workstation-workspace-rbac.md)；数据库 **schema 单一来源 = init-scripts（Flyway 已清退）** 见 [docs/schema-and-migration.md](../schema-and-migration.md)。  
+> **关联**：工作区访问控制（团队 = Workspace、按名单授权）见 [平台访问模型 PRD](../design/platform-access-model-requirements.md) §6；数据库 **schema 单一来源 = init-scripts（Flyway 已清退）** 见 [docs/schema-and-migration.md](../schema-and-migration.md)。  
 > 最后更新: 2026-04-10（含 §7 各控制器表格路径统一为“接在基础路径后”的相对片段）
 
 ---
@@ -545,7 +545,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | `FormDefinitionRequest` | 创建/更新表单 | formName, formType, configJson, boundTableId |
 | `FormTableBindingRequest` | 创建/更新表绑定 | tableId, bindingType, bindingMode, foreignKeyField |
 | `ActionDefinitionRequest` | 创建/更新动作 | actionName, actionType, configJson, icon, buttonColor |
-| `DeployRequest` | 部署请求 | targetUrl, changeLog, conflictStrategy, environment (DeployEnvironment 枚举: DEVELOPMENT/TESTING/PRODUCTION), autoEnable |
+| `DeployRequest` | 部署请求 | targetUrl（只允许空或本环境 Admin 地址）, changeLog, environment (DeployEnvironment 枚举: DEVELOPMENT/TESTING/PRODUCTION), autoEnable |
 | `AiChatRequest` | AI 对话请求 | functionUnitId, message, sessionId, phase (@NotNull AiPhase), mode (@NotNull AiMode) |
 | `ApplyGeneratedDataRequest` | 应用 AI 生成数据 | sessionId, tables[], forms[], actions[], processXml |
 | `SaveDocumentRequest` | 保存 AI 文档 | functionUnitId, documentType, content |
@@ -598,8 +598,8 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | POST | `/{id}/clone` | FUNCTION_UNIT_CREATE | 克隆功能单元，query: `newName` |
 | GET | `/{id}/validate` | FUNCTION_UNIT_VIEW | 完整性校验 |
 | GET | `/{id}/versions` | FUNCTION_UNIT_VIEW | 版本历史 |
-| GET | `/{id}/dev-groups` | FUNCTION_UNIT_VIEW | 已分配虚拟开发组 ID 列表 |
-| PUT | `/{id}/dev-groups` | FUNCTION_UNIT_ASSIGN_DEV_GROUP | 替换功能单元—虚拟开发组映射 |
+| GET | `/{id}/dev-groups` | FUNCTION_UNIT_VIEW | 所属团队（Workspace）id，恰好一个 |
+| PUT | `/{id}/dev-groups` | FUNCTION_UNIT_ASSIGN_DEV_GROUP | 移到另一个 Workspace：`virtualGroupIds` 只收一个目标，见 §8.5 |
 
 ### 7.2 表设计 — TableDesignController
 
@@ -708,7 +708,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
 | GET | `/function-units/{id}/export` | 导出功能单元 ZIP |
-| POST | `/import` | 导入功能单元 (multipart, conflictStrategy: SKIP/OVERWRITE) |
+| POST | `/import` | 导入功能单元（multipart `file`，可选 `changeLog`、`targetGroupId`；落位规则见下文“导入落位”） |
 | POST | `/validate` | 校验导入包 |
 | POST | `/check-conflicts` | 检查导入冲突 |
 
@@ -774,22 +774,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | GET | `/me` | 获取当前用户信息 (需 Authorization header) |
 | GET | `/validate` | 验证 token 有效性 |
 
-### 7.14 成员管理 — MemberController
-
-基础路径: `/members`
-继承: `BaseController` ✅
-
-| 方法 | 路径（接在基础路径后） | 说明 |
-|------|------|------|
-| POST | `/` | 创建成员 |
-| GET | `/{id}` | 按 ID 获取成员 |
-| GET | `/username/{username}` | 按用户名获取成员 |
-| PUT | `/{id}` | 更新成员 |
-| DELETE | `/{id}` | 删除成员 (软删除) |
-| GET | `/` | 分页列表 (支持搜索) |
-| GET | `/business-unit/{businessUnitId}` | 按业务单元获取成员 |
-
-### 7.15 弹性管理 — ResilienceController
+### 7.14 弹性管理 — ResilienceController
 
 基础路径: `/api/resilience`（完整 URL 前缀：`/api/v1` + 本路径，见本节开头说明）
 继承: `BaseController` ✅
@@ -802,7 +787,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | POST | `/emergency-mode/enter` | 进入紧急模式 |
 | POST | `/emergency-mode/exit` | 退出紧急模式 |
 
-### 7.16 决策（DMN）设计 — DecisionDesignController
+### 7.15 决策（DMN）设计 — DecisionDesignController
 
 基础路径: `/function-units/{functionUnitId}/decisions`  
 继承: `BaseController` ✅
@@ -818,7 +803,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | GET | `/{decisionId}/model` | 结构化 **`DecisionTableModel`**（JSON） |
 | POST | `/{decisionId}/model` | 由模型回写 **`DecisionDefinition`**（`updateFromModel`） |
 
-### 7.17 表关系 — TableRelationController
+### 7.16 表关系 — TableRelationController
 
 基础路径: `/function-units/{functionUnitId}/table-relations`  
 继承: `BaseController` ✅
@@ -829,7 +814,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | POST | `/` | 批量保存（替换已有） |
 | DELETE | `/` | 删除该功能单元下全部表关系 |
 
-### 7.18 Relation Table 绑定 — RelationTableBindingController
+### 7.17 Relation Table 绑定 — RelationTableBindingController
 
 无类级 `@RequestMapping`，路径均为自 context-path 起的绝对片段。
 
@@ -840,7 +825,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | POST | `/api/forms/{formId}/relation-bindings` | 绑定（body 含 `tableId`） |
 | DELETE | `/api/forms/{formId}/relation-bindings/{bindingId}` | 解除绑定 |
 
-### 7.19 主表视图 — MainTableViewController
+### 7.18 主表视图 — MainTableViewController
 
 基础路径: `/api/v1/function-units/{functionUnitId}/main-table-views`
 
@@ -860,7 +845,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 
 持久化表：`dw_main_table_view_configs`、`dw_main_table_view_fields`。
 
-### 7.20 关联视图 — RelationTableViewController
+### 7.19 关联视图 — RelationTableViewController
 
 基础路径: `/api/forms/{formId}/relation-views`（见本节开头「双前缀」说明）
 
@@ -927,10 +912,13 @@ handleRequest(() -> functionUnitComponent.create(request))
     ▼
 FunctionUnitComponentImpl.create()
     │ @Transactional
-    │ @PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    │ @PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD')")
     │
     ├── 1. 检查名称唯一性 (existsByName)
     │   └── 重复 → throw DeveloperBusinessException("CONFLICT_NAME_EXISTS", ...)
+    │
+    ├── 1a. resolveTargetWorkspace(virtualGroupIds) → 正好一个可新建的 workspace
+    │   └── 本团队 Technical Lead，或 Public（只有 SYS_ADMIN）；否则拒绝，不写任何数据
     │
     ├── 2. 生成唯一编码 generateUniqueCode()
     │   └── 格式: fu-{yyyyMMdd}-{6位随机hex}
@@ -941,7 +929,7 @@ FunctionUnitComponentImpl.create()
     ├── 4. 如果有 iconId → 查找 Icon 实体
     │   └── 不存在 → throw ResourceNotFoundException
     │
-    └── 5. functionUnitRepository.save()
+    └── 5. functionUnitRepository.save()，再写入唯一一行 workspace 归属
          └── 返回持久化的 FunctionUnit
 ```
 
@@ -953,7 +941,7 @@ POST /function-units/{id}/publish  (query: changeLog=xxx)
     ▼
 FunctionUnitComponentImpl.publish(id, changeLog)
     │ @Transactional
-    │ @PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
+    │ @PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'DEVELOPER')")
     │
     ├── 0. functionUnitWorkspaceAccessService.assertCanAccess(id, MODIFY)
     │
@@ -987,14 +975,15 @@ FunctionUnitComponentImpl.publish(id, changeLog)
 ### 8.3 克隆功能单元
 
 ```
-POST /function-units/{id}/clone  (query: newName=xxx)
+POST /function-units/{id}/clone  (query: newName=xxx, targetGroupId=xxx)
     │
     ▼
-FunctionUnitComponentImpl.clone(id, newName)
+FunctionUnitComponentImpl.clone(id, newName, targetGroupId)
     │ @Transactional
-    │ @PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    │ @PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD')")
     │
-    ├── 0. functionUnitWorkspaceAccessService.assertCanAccess(id, MODIFY)
+    ├── 0. functionUnitWorkspaceAccessService.assertCanAccess(id, VIEW)  // 能看到源即可（D-35）
+    │   └── resolveTargetWorkspace([targetGroupId]) → 克隆体只落在这一个 workspace（不复制源的归属）
     │
     ├── 1. 检查新名称唯一性
     │
@@ -1054,23 +1043,25 @@ FunctionUnitComponentImpl.validate(id)
     （仅 **errors** 会令 valid=false；**warnings** 单独存在时仍可 valid=true，但发布前仍会再跑同一套 validate 并拒绝 valid=false）
 ```
 
-### 8.5 虚拟开发组分配（工作区）
+### 8.5 移动到其他 Workspace
+
+每个功能单元恰好属于一个 Workspace（团队或 Public），`dw_function_unit_dev_groups.function_unit_id` 唯一（PRD §6.3）。
 
 ```
-PUT /function-units/{id}/dev-groups  + body DevGroupAssignmentRequest { virtualGroupIds }
+PUT /function-units/{id}/dev-groups  + body DevGroupAssignmentRequest { virtualGroupIds: [目标] }
     │
     ▼
 FunctionUnitComponentImpl.replaceDevGroupAssignments
-    ├── assertCanAccess(id, ASSIGN_DEV_GROUPS)
-    ├── 删除该功能单元既有 dw_function_unit_dev_groups 行
-    └── 按请求重建 FunctionUnitDevGroupAssignment（createdBy / createdAt 审计）
+    ├── assertCanAccess(id, ASSIGN_DEV_GROUPS)       源：SYS_ADMIN，或源团队的 Technical Lead
+    ├── resolveTargetWorkspace(virtualGroupIds)      正好一个目标；有效团队须是调用者的 TL 团队，Public 只有 SYS_ADMIN
+    └── 原地改那一行的 virtual_group_id（createdBy / createdAt 记移动人和时间）
 
 GET /function-units/{id}/dev-groups
     ├── assertCanAccess(id, VIEW)
-    └── 返回 virtualGroupId 列表
+    └── 返回所属 Workspace 的 id（一个）
 ```
 
-详见 [docs/developer-workstation-workspace-rbac.md](../design/developer-workstation-workspace-rbac.md)。
+规则见 [平台访问模型 PRD](../design/platform-access-model-requirements.md) §6.2、§6.3。
 
 ---
 
@@ -1193,11 +1184,14 @@ DeploymentComponentImpl.deployToAdminCenter(id, request)
          ├── Step 2: 上传到 admin-center (→60%)
          │   ├── POST {targetUrl}/api/v1/admin/function-units-import/import
          │   ├── Content-Type: multipart/form-data
-         │   ├── file: {name}.zip
-         │   └── conflictStrategy: OVERWRITE (默认)
+         │   ├── file: {name}.zip（同名 FU 记为新版本，否则新建）
+         │   ├── 团队门禁：包里的团队必须在本环境存在且启用（否则 400，提示带团队名与 code）；
+         │   │   部署人须在该团队的 Technical Lead / Developer 名单上，SYS_ADMIN 不限。
+         │   │   是已有 FU 的新版本且团队变了时，还须在原团队的名单上（D-34）。不满足 → 403 FU_TEAM_FORBIDDEN
+         │   └── POST {targetUrl}/api/v1/admin/function-units/{importedId}/validate（只许该 FU 所在团队的名单）
          │
          └── Step 3: 触发部署 (→100%)
-             ├── POST {targetUrl}/api/v1/admin/function-units-import/{importedId}/deploy
+             ├── POST {targetUrl}/api/v1/admin/function-units-import/{importedId}/deploy（同上团队门禁）
              ├── body: { environment, autoEnable }
              └── 成功 → status=SUCCESS, progress=100
 
@@ -1316,7 +1310,7 @@ ZIP 包典型结构（与 `exportFunctionUnit` 一致）:
 
 | 条目 | 说明 |
 |------|------|
-| `manifest.json` | `ExportManifest`：name, code, version, description, exportedAt, exportedBy, platformVersion, **components**（process / tables / forms / actions / **decisions** 文件路径列表）, icon 等 |
+| `manifest.json` | `ExportManifest`：name, code, version, description, exportedAt, exportedBy, platformVersion, **components**（process / tables / forms / actions / **decisions** 文件路径列表）, icon, **team**（所属团队 `{code, name}`）等 |
 | `process/process.bpmn` | BPMN（XML 为 **解码后**明文，非 Base64 包一层再导出） |
 | `tables/table_0.json`, … | 各表定义 JSON |
 | `forms/form_0.json`, … | 各表单定义 JSON |
@@ -1329,19 +1323,21 @@ ZIP 包典型结构（与 `exportFunctionUnit` 一致）:
 - `GET /export-import/function-units/{id}/export` — `Content-Disposition` 附件名为 `function-unit-{id}.zip`  
 - `GET /function-units/{id}/export` — `DeploymentController`，媒体类型 `APPLICATION_OCTET_STREAM`
 
-### 导入策略
+### 导入落位（平台访问模型 §6.3）
 
-| 策略 | 说明 |
+| 情形 | 结果 |
 |------|------|
-| `SKIP` | 遇冲突跳过（**`ExportImportController` 默认 `conflictStrategy=SKIP`**） |
-| `OVERWRITE` | 覆盖已有数据 |
+| 同名 FU 已存在 | 作为新版本导入，留在原 workspace；须是该团队的 Technical Lead（或 SYS_ADMIN），否则 403 |
+| 新 FU，包里有 `team` | 按 code 落到本环境的同一团队：团队不存在 → 400 `IMPORT_TEAM_NOT_FOUND`，已停用 → 400 `IMPORT_TEAM_INACTIVE`（提示带团队名与 code）；同时传了另一个 `targetGroupId` → 400 `IMPORT_WORKSPACE_CONFLICT` |
+| 新 FU，旧包没有 `team` | 必须传 `targetGroupId`（前端弹出选择），否则 400 `IMPORT_WORKSPACE_REQUIRED` |
+| 落位的 workspace | 须是调用者能新建 FU 的地方：团队的 Technical Lead；Public 只有 SYS_ADMIN |
 
 ### 导入流程
 
 ```
 1. POST /export-import/validate   — multipart 字段名 file；校验包格式
 2. POST /export-import/check-conflicts — 同上，检查与现有库冲突
-3. POST /export-import/import — multipart file，query: conflictStrategy=SKIP|OVERWRITE
+3. POST /export-import/import — multipart file，可选 changeLog、targetGroupId（旧包没有 team 时必填）
 ```
 
 **兼容**: 解析时 **优先 `manifest.json`**，兼容旧包 **`metadata.json`**（见 `importFunctionUnit` 实现）。
@@ -1367,18 +1363,20 @@ ZIP 包典型结构（与 `exportFunctionUnit` 一致）:
 
 ### 角色权限 (Spring Security @PreAuthorize)
 
-| 操作 | 允许角色 |
-|------|----------|
-| 创建功能单元 | TECH_LEAD, TEAM_LEAD |
-| 更新功能单元 | (由 @RequireDeveloperPermission 控制) |
-| 发布版本 | TECH_LEAD, TEAM_LEAD, DEVELOPER |
-| 克隆功能单元 | TECH_LEAD, TEAM_LEAD |
+`@PreAuthorize` 只是粗门禁；在哪个团队能做什么由 `FunctionUnitWorkspaceAccessService` 按该团队的 Technical Lead / Developer 名单判断（SYS_ADMIN 全部、AUDITOR 只读、Public 只有 SYS_ADMIN 可写）。
+
+| 操作 | 允许角色 | 团队内判断 |
+|------|----------|------------|
+| 创建功能单元 | SYS_ADMIN, TECH_LEAD | 目标团队的 Technical Lead |
+| 更新功能单元 | (由 @RequireDeveloperPermission 控制) | 所在团队的 Technical Lead / Developer |
+| 发布版本 | SYS_ADMIN, TECH_LEAD, DEVELOPER | 所在团队的 Technical Lead / Developer |
+| 克隆功能单元 | SYS_ADMIN, TECH_LEAD | 能看到源；目标团队的 Technical Lead |
 
 ### JWT 认证
 
 - Token 通过 `Authorization: Bearer {token}` 传递（生产路径常经 **Kong** 注入/校验，见部署文档）。
 - **`X-User-Id`**：在 **`AiGenerationController`** 多个方法上为可选头；**`DeveloperPermissionInterceptor`** 在无法从 SecurityContext 解析用户时亦可回退读取该头（测试与部分网关场景）。
-- JWT secret：`JWT_SECRET`；过期时间等见各环境 `application*.yml`（默认 24h 量级，非硬编码唯一值）。
+- JWT secret：`JWT_SECRET`；access token 有效期 `JWT_EXPIRATION`（各环境 15 分钟）、续期凭证 `JWT_REFRESH_EXPIRATION`（8 小时空闲超时），都必填、代码里没有默认值，见下文“环境变量速查”。
 
 ### 乐观锁
 
@@ -1532,8 +1530,8 @@ file:
 # 安全配置 (单一 security: 键，包含所有子配置)
 security:
   jwt:
-    secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}  # 生产必须用环境变量覆盖
-    expiration: ${JWT_EXPIRATION:86400000}  # 24 小时（毫秒）
+    secret: ${JWT_SECRET}  # 必填，无默认值
+    expiration: ${JWT_EXPIRATION}  # 必填，无默认值（毫秒）
   max-login-attempts: ${MAX_LOGIN_ATTEMPTS:5}
   lock-duration-minutes: ${LOCK_DURATION_MINUTES:30}
   # 权限缓存
@@ -1564,12 +1562,12 @@ workflow-engine:
   url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
   enabled: true
   jwt:
-    secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+    secret: ${JWT_SECRET}
 
 # JWT 配置 (顶层, AuthController 使用)
 jwt:
-  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
-  expiration: ${JWT_EXPIRATION:86400000}
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
 
 # platform-security JwtProperties / SSO（误部署到共享环境时可关 developer exchange）
 platform:
@@ -1578,13 +1576,13 @@ platform:
     internal-token: ${SSO_INTERNAL_TOKEN:}
   security:
     jwt:
-      secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
-      expiration-ms: ${JWT_EXPIRATION:86400000}
-      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      secret: ${JWT_SECRET}
+      expiration-ms: ${JWT_EXPIRATION}
+      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION}
       issuer: platform
       validate-issuer: false
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
+    secret-key: ${ENCRYPTION_SECRET_KEY}
 
 # AI 生成（直连集团 AI gateway）+ AI 编辑锁
 ai-generation:
@@ -1636,14 +1634,14 @@ management:
 | `ADMIN_CENTER_URL` | admin-center 地址 | http://localhost:8090 |
 | `SPRING_DATASOURCE_URL` | PostgreSQL 连接 | jdbc:postgresql://localhost:5432/workflow_platform |
 | `SPRING_DATASOURCE_USERNAME` | 数据库用户 | platform |
-| `SPRING_DATASOURCE_PASSWORD` | 数据库密码 | (环境变量注入) |
+| `SPRING_DATASOURCE_PASSWORD` | 数据库密码 | **必填**，无默认值；缺失即启动失败 |
 | `SPRING_REDIS_HOST` | Redis 主机 | localhost |
 | `SPRING_REDIS_PORT` | Redis 端口 | 6379 |
-| `SPRING_REDIS_PASSWORD` | Redis 密码 | (环境变量注入) |
-| `JWT_SECRET` | JWT 签名密钥 | 开发默认占位字符串；**生产须环境变量覆盖** |
-| `JWT_EXPIRATION` | JWT 有效期 (ms) | 86400000 (24h) |
-| `JWT_REFRESH_EXPIRATION` | Refresh 有效期 (ms)，`platform.security.jwt` | 604800000（约 7 天） |
-| `ENCRYPTION_SECRET_KEY` | AES 加密密钥（`platform.encryption`） | 开发默认占位；**生产须覆盖** |
+| `SPRING_REDIS_PASSWORD` | Redis 密码 | **必填**，无默认值（无密码的 Redis 显式设为空）；缺失即启动失败 |
+| `JWT_SECRET` | JWT 签名密钥（≥ 32 字节） | **必填**，无默认值；缺失即启动失败 |
+| `JWT_EXPIRATION` | access token 有效期 (ms) | **必填**，无默认值；各环境 900000（15 分钟） |
+| `JWT_REFRESH_EXPIRATION` | 续期凭证有效期 (ms) = 会话空闲超时，`platform.security.jwt` | **必填**，无默认值；各环境 28800000（8 小时） |
+| `ENCRYPTION_SECRET_KEY` | AES 加密密钥（`platform.encryption`） | **必填**，无默认值；缺失即启动失败 |
 | `DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH` | 部署到 admin-center 是否要求携带 admin JWT | true |
 | `SSO_DEVELOPER_EXCHANGE_ENABLED` | DEV SSO / developer exchange 是否启用 | true |
 | `SSO_INTERNAL_TOKEN` | 内部兑换用 token（可选） | 空 |
@@ -1737,10 +1735,10 @@ management:
 
 ### 控制器层
 
-当前 `controller` 包共 **22 个具体控制器类** + **`BaseController` 抽象基类**（**2026-04-04** 与 `*Controller.java` 目录复核）。其中 **7 个**继承 `BaseController`，**15 个**不继承；不继承者响应格式与异常处理各自实现，**并非**都是 `ApiResponse` 包装。
+当前 `controller` 包共 **21 个具体控制器类** + **`BaseController` 抽象基类**（**2026-04-04** 与 `*Controller.java` 目录复核；2026-11 删除无调用方的 `MemberController`）。其中 **6 个**继承 `BaseController`，**15 个**不继承；不继承者响应格式与异常处理各自实现，**并非**都是 `ApiResponse` 包装。
 
 **继承 `BaseController`（7）**  
-`FunctionUnitController`、`TableDesignController`、`TableRelationController`、`MemberController`、`DecisionDesignController`、`AiGenerationController`、`ResilienceController`。
+`FunctionUnitController`、`TableDesignController`、`TableRelationController`、`DecisionDesignController`、`AiGenerationController`、`ResilienceController`。
 
 **不继承 `BaseController`（15）**  
 `AuthController`、`AuthSsoExchangeController`、`FileUploadController`、`FormDesignController`、`FormStageBindingController`、`ProcessDesignController`、`ActionDesignController`、`ActionQueryController`、`DeploymentController`、`ExportImportController`、`IconLibraryController`、`LookupComponentController`、`RelationTableBindingController`、`RelationTableViewController`、`VersionController`。
@@ -1806,10 +1804,7 @@ management:
 | AiMessageRepository | AiMessage | findBySessionId |
 | AiDocumentRepository | AiDocument | findByFunctionUnitIdAndDocumentType |
 | FunctionUnitAccessRepository | FunctionUnitAccess | 访问控制 |
-| MemberRepository | Member | 成员管理 |
 | UserRepository | User | 用户查询 (实体来自 platform-security) |
-| RoleRepository | Role | 角色查询 (实体来自 platform-security) |
-| PermissionRepository | Permission | 权限查询 (实体来自 platform-security) |
 | OperationLogRepository | OperationLog | 操作日志 |
 | ProcessInstanceRepository | ProcessInstance | 流程实例 |
 | DeploymentJobRepository | DeploymentJob | 部署任务持久化 |
@@ -1820,13 +1815,13 @@ management:
 | RelationLookupConfigRepository | RelationLookupConfig | 关联表查找配置 |
 | RelationViewConfigRepository | RelationViewConfig | 关联视图配置 |
 | RelationViewFieldRepository | RelationViewField | 关联视图字段 |
-| VirtualGroupMembershipDao | —（查询 admin 库表） | 按 `user_id` 查所属虚拟组 ID 列表，供工作区 RBAC |
+| VirtualGroupMembershipDao | —（查询 admin 库表） | 用户在各团队两份名单里的身份（Technical Lead / Developer）、团队与 Public 的状态，供工作区授权 |
 
 ---
 
 ## 附录 B: Component 接口清单
 
-`com.developer.component` 包现有 **15** 个接口，与 `com.developer.component.impl` 下 **15** 个 `*Impl` 一一对应（数量以目录为准）。
+`com.developer.component` 包现有 **14** 个接口，与 `com.developer.component.impl` 下 **14** 个 `*Impl` 一一对应（数量以目录为准；2026-11 起 `SecurityComponent` 已删除）。
 
 | Component | 实现类 | 职责 |
 |-----------|--------|------|
@@ -1842,7 +1837,6 @@ management:
 | IconLibraryComponent | IconLibraryComponentImpl | 图标上传、搜索、使用检查 |
 | VersionComponent | VersionComponentImpl | 版本历史查询（**注意**：`VersionController` 主要直接注入 `DeploymentService` / `VersionService` / `RollbackService` / `UIService`，与此 Component 并存） |
 | AiGenerationComponent | AiGenerationComponentImpl | AI 对话、锁管理、文档、生成数据应用/撤销 |
-| SecurityComponent | SecurityComponentImpl | JWT 生成校验、登录失败/锁定等认证侧能力 |
 | AuditLogComponent | AuditLogComponentImpl | 操作日志写入与分页查询 |
 | HelpSystemComponent | HelpSystemComponentImpl | 帮助搜索、表达式建议、引导步骤等（多由设计器/辅助接口消费） |
 

@@ -1,7 +1,12 @@
 <template>
   <div class="page-container">
-    <PageHeader :title="isEdit ? t('form.titleEditTableStructure') : t('form.titleCreateTableStructure')">
+    <PageHeader :title="pageTitle">
       <template #actions>
+        <DesignerHelpLink
+          path="/relation-table-structure#form"
+          v-bind="{ ariaLabel: t('relationTable.structure.guideLinkAria') }"
+          test-id="rt-structure-form-guide-link"
+        />
         <el-button @click="router.back()">
           {{ t('form.back') }}
         </el-button>
@@ -15,6 +20,7 @@
       label-width="140px"
       label-position="left"
       style="max-width: 800px;"
+      :disabled="readOnly"
     >
       <el-form-item
         :label="t('form.labelDisplayName')"
@@ -57,13 +63,14 @@
       <el-form-item
         :label="t('form.labelFunctionUnit')"
         prop="functionUnitIds"
+        :required="teamScoped"
       >
         <el-select
           v-model="form.functionUnitIds"
           multiple
           clearable
           filterable
-          :placeholder="t('form.placeholderSelectFunctionUnit')"
+          :placeholder="teamScoped ? t('form.placeholderSelectFunctionUnitRequired') : t('form.placeholderSelectFunctionUnit')"
           style="width: 100%;"
           @change="onFunctionUnitSelectionChange"
         >
@@ -71,12 +78,14 @@
             :key="COMMON_OPTION_VALUE"
             :label="t('form.optionCommonFunctionUnit')"
             :value="COMMON_OPTION_VALUE"
+            :disabled="teamScoped"
           />
           <el-option
             v-for="fu in allFunctionUnitOptions"
             :key="fu.id"
             :label="fu.name || fu.code"
             :value="fu.id"
+            :disabled="fu.canManage === false"
           />
         </el-select>
       </el-form-item>
@@ -86,6 +95,7 @@
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <span style="font-size: 16px; font-weight: 600;">{{ t('form.labelFieldDefinitions') }}</span>
         <el-button
+          v-if="!readOnly"
           type="primary"
           size="small"
           @click="addField"
@@ -94,6 +104,9 @@
         </el-button>
       </div>
 
+      <!-- The field grid sits outside the main form; this form carries the read-only state to controls that do not set
+           their own `disabled` (an explicit `disabled` wins over the form's, hence fieldLocked below). -->
+      <el-form :disabled="readOnly">
       <el-table
         :data="form.fieldDefinitions"
         border
@@ -116,7 +129,7 @@
               v-model="row.displayName"
               :placeholder="t('form.placeholderDisplayName')"
               size="small"
-              :disabled="isAuditField(row)"
+              :disabled="fieldLocked(row)"
               @input="onFieldDisplayNameInput(row, $index)"
             />
           </template>
@@ -130,7 +143,7 @@
               v-model="row.fieldName"
               :placeholder="t('form.placeholderFieldName')"
               size="small"
-              :disabled="isAuditField(row)"
+              :disabled="fieldLocked(row)"
               @input="onFieldNameManualInput(row)"
             />
           </template>
@@ -145,7 +158,7 @@
               :placeholder="t('form.placeholderDataType')"
               size="small"
               style="width: 100%;"
-              :disabled="isAuditField(row)"
+              :disabled="fieldLocked(row)"
             >
               <el-option
                 v-for="dt in dataTypes"
@@ -167,7 +180,7 @@
               size="small"
               controls-position="right"
               style="width: 100%;"
-              :disabled="isAuditField(row)"
+              :disabled="fieldLocked(row)"
             />
           </template>
         </el-table-column>
@@ -180,7 +193,7 @@
             <el-switch
               v-model="row.nullable"
               size="small"
-              :disabled="isAuditField(row)"
+              :disabled="fieldLocked(row)"
             />
           </template>
         </el-table-column>
@@ -193,7 +206,7 @@
               <el-switch
                 v-model="row.isPrimaryKey"
                 size="small"
-                :disabled="isAuditField(row)"
+                :disabled="fieldLocked(row)"
                 @change="(val: boolean) => onPrimaryKeyChange(row, val)"
               />
               <PkGenerationEditor
@@ -215,7 +228,7 @@
               :ref-table-id="row.refTableId"
               :ref-primary-key-fields="row.refPrimaryKeyFields"
               :ref-tables="fkRefTables"
-              :disabled="isAuditField(row)"
+              :disabled="fieldLocked(row)"
               @update:is-foreign-key="row.isForeignKey = $event"
               @update:ref-table-id="row.refTableId = $event"
               @update:ref-primary-key-fields="row.refPrimaryKeyFields = $event"
@@ -234,6 +247,7 @@
               :ref-tables="fkRefTables"
               :all-fields="form.fieldDefinitions"
               :current-field-name="row.fieldName"
+              :disabled="readOnly"
               @update:model-value="row.lookupConfig = $event"
             />
             <span
@@ -252,6 +266,7 @@
               v-if="canBeComputed(row)"
               :is-computed="row.isComputed"
               :computed-field="row.computedField"
+              :disabled="readOnly"
               @update:is-computed="row.isComputed = $event"
               @update:computed-field="row.computedField = $event"
             />
@@ -270,7 +285,7 @@
               v-model="row.defaultValue"
               placeholder=""
               size="small"
-              :disabled="isAuditField(row)"
+              :disabled="fieldLocked(row)"
             />
           </template>
         </el-table-column>
@@ -281,7 +296,7 @@
         >
           <template #default="{ row, $index }">
             <el-button
-              v-if="!isAuditField(row)"
+              v-if="!readOnly && !isAuditField(row)"
               link
               type="danger"
               size="small"
@@ -292,10 +307,12 @@
           </template>
         </el-table-column>
       </el-table>
+      </el-form>
     </div>
 
     <div style="margin-top: 24px;">
       <el-button
+        v-if="!readOnly"
         type="primary"
         :loading="submitting"
         @click="handleSubmit"
@@ -316,6 +333,7 @@ import { useI18n } from 'vue-i18n'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
+import DesignerHelpLink from '@/components/relation-table/DesignerHelpLink.vue'
 import PkGenerationEditor from '@/components/relation-table/PkGenerationEditor.vue'
 import FieldForeignKeyEditor from '@/components/relation-table/FieldForeignKeyEditor.vue'
 import FieldLookupEditor from '@/components/relation-table/FieldLookupEditor.vue'
@@ -332,8 +350,16 @@ const formRef = ref<FormInstance>()
 
 const { form, rules, submitting, dataTypes, fkRefTables, allFunctionUnitOptions, isAuditField, canBeComputed, addField, removeField, loadTableData, submit,
   onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange,
-  COMMON_OPTION_VALUE, onFunctionUnitSelectionChange }
+  COMMON_OPTION_VALUE, onFunctionUnitSelectionChange, canWriteTable, teamScoped }
   = useTableStructureForm({ tableId, isEdit: toRef(isEdit) })
+
+/** Another team's table, one shared with another team, or a Common table for a Technical Lead (D-47). */
+const readOnly = computed(() => !canWriteTable.value)
+const fieldLocked = (row: Parameters<typeof isAuditField>[0]) => readOnly.value || isAuditField(row)
+const pageTitle = computed(() => {
+  if (!isEdit.value) return t('form.titleCreateTableStructure')
+  return readOnly.value ? t('form.titleViewTableStructure') : t('form.titleEditTableStructure')
+})
 
 const handleSubmit = async () => {
   if (!await formRef.value?.validate().catch(() => false)) return

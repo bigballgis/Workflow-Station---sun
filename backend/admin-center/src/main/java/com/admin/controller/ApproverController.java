@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 审批人配置控制器
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/approvers")
 @RequiredArgsConstructor
 @Tag(name = "审批人配置", description = "虚拟组和业务单元的审批人配置管理")
+@AdminAccess(value = AdminAudience.SHARED_READ, services = true)
 public class ApproverController {
     
     private final ApproverService approverService;

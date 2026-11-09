@@ -13,6 +13,8 @@ import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import { useOrganizationStore } from '@/stores/organization'
 import { type BusinessUnit, organizationApi } from '@/api/organization'
 import { businessUnitApi, type Approver } from '@/api/businessUnit'
+import { confirmMessageWithReferences } from '@/composables/useReferenceNotice'
+import type { ReferenceNotice } from '@/types/referenceNotice'
 import type Node from 'element-plus/es/components/tree/src/model/node'
 import type { AllowDropType } from 'element-plus/es/components/tree/src/tree.type'
 
@@ -35,6 +37,8 @@ export function useBusinessUnit() {
   const selectedUserId = ref('')
   const currentBusinessUnit = ref<BusinessUnit | null>(null)
   const parentBusinessUnit = ref<BusinessUnit | null>(null)
+  /** Where the unit being edited is used; the edit dialog shows it (§8.3, notice only). */
+  const currentReferences = ref<ReferenceNotice | null>(null)
 
   // ==================== Pure Functions ====================
 
@@ -119,8 +123,10 @@ export function useBusinessUnit() {
     const parentChanged = target.newParentId !== draggingNode.data.parentId
     if (parentChanged) {
       try {
+        const references = await businessUnitApi.getReferences(draggingNode.data.id)
         await notifyConfirm(
-          t('organization.moveConfirm', { name: draggingNode.data.name, target: target.parentName }),
+          confirmMessageWithReferences(
+            t('organization.moveConfirm', { name: draggingNode.data.name, target: target.parentName }), references),
           t('common.confirm'),
           { type: 'warning' },
         )
@@ -145,6 +151,7 @@ export function useBusinessUnit() {
 
   const showCreateDialog = (parent?: BusinessUnit) => {
     currentBusinessUnit.value = null
+    currentReferences.value = null
     parentBusinessUnit.value = parent || null
     dialogVisible.value = true
   }
@@ -156,6 +163,9 @@ export function useBusinessUnit() {
     } catch (e) {
       currentBusinessUnit.value = bu
     }
+    // Without the notice the operator would change a unit blind to the function units using it; a failed load is
+    // already reported by the request layer, so the dialog stays closed.
+    currentReferences.value = await businessUnitApi.getReferences(bu.id)
     parentBusinessUnit.value = null
     dialogVisible.value = true
   }
@@ -184,7 +194,9 @@ export function useBusinessUnit() {
   }
 
   const handleDelete = async (bu: BusinessUnit) => {
-    await notifyConfirm(t('organization.deleteConfirm'), t('common.confirm'), { type: 'warning' })
+    const references = await businessUnitApi.getReferences(bu.id)
+    await notifyConfirm(confirmMessageWithReferences(t('organization.deleteConfirm'), references),
+      t('common.confirm'), { type: 'warning' })
     try {
       await orgStore.deleteBusinessUnit(bu.id)
       notifySuccess(t('common.success'))
@@ -227,6 +239,7 @@ export function useBusinessUnit() {
     userDetailVisible,
     selectedUserId,
     currentBusinessUnit,
+    currentReferences,
     parentBusinessUnit,
     // Pure functions
     filterNode,

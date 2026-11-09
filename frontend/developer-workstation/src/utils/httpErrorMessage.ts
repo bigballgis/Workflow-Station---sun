@@ -79,6 +79,15 @@ export function pickHttpErrorBodyMessage(data: unknown): string | undefined {
   return undefined
 }
 
+/**
+ * A `responseType: 'blob'` request (file download) receives its error body as a Blob too, so the
+ * backend's message has to be read out of it first.
+ */
+export async function pickBlobHttpErrorMessage(error: unknown): Promise<string | undefined> {
+  const data = (error as { response?: { data?: unknown } } | undefined)?.response?.data
+  return pickHttpErrorBodyMessage(data instanceof Blob ? await data.text() : data)
+}
+
 /** Machine code from ApiResponse.error.code / errorCode, when the body is a platform error. */
 export function pickHttpErrorCode(data: unknown): string | undefined {
   if (data == null || typeof data !== 'object') return undefined

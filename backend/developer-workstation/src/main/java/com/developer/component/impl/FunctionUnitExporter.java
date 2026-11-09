@@ -469,6 +469,9 @@ public class FunctionUnitExporter {
                             .build())
                     .dependencies(new ArrayList<>())
                     .icon(iconInfo)
+                    .team(functionUnitWorkspaceAccessService.packageTeamOf(functionUnitId)
+                            .map(team -> new ExportManifest.TeamInfo(team.code(), team.name()))
+                            .orElse(null))
                     .build();
 
             ObjectMapper manifestMapper = new ObjectMapper();

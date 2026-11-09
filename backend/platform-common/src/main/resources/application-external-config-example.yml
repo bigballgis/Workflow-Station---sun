@@ -25,7 +25,7 @@ app:
     show-sql: ${DATABASE_SHOW_SQL:false}
     format-sql: ${DATABASE_FORMAT_SQL:true}
     dialect: ${DATABASE_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
-    timezone: ${DATABASE_TIMEZONE:Asia/Shanghai}
+    timezone: ${DATABASE_TIMEZONE:Asia/Hong_Kong}
 
   security:
     enable-input-validation: ${SECURITY_ENABLE_INPUT_VALIDATION:true}
@@ -50,7 +50,6 @@ app:
     enable-security-audit-logging: ${SECURITY_ENABLE_AUDIT_LOGGING:true}
     enable-security-event-notification: ${SECURITY_ENABLE_EVENT_NOTIFICATION:true}
     jwt-secret-key: ${SECURITY_JWT_SECRET_KEY:default-jwt-secret-key-change-in-production}
-    jwt-expiration-seconds: ${SECURITY_JWT_EXPIRATION:3600}
     # Secure configuration management settings
     enable-configuration-encryption: ${SECURITY_ENABLE_CONFIG_ENCRYPTION:true}
     enable-configuration-audit-logging: ${SECURITY_ENABLE_CONFIG_AUDIT_LOGGING:true}

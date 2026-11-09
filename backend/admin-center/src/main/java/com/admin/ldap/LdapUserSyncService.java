@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,8 +33,12 @@ public class LdapUserSyncService {
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
+    /** Some entries with an employee ID could not be stored; the rest were. */
+    private static final String STATUS_PARTIAL = "PARTIAL";
     private static final String TYPE_FULL = "FULL";
     private static final String TYPE_INCREMENTAL = "INCREMENTAL";
+    /** The syncs that read users: only these move the starting point of the next incremental user sync. */
+    private static final List<String> USER_SYNC_TYPES = List.of(TYPE_FULL, TYPE_INCREMENTAL);
     /** AD generalized time（UTC），用于 whenChanged 增量过滤。 */
     private static final DateTimeFormatter AD_TIME =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneOffset.UTC);
@@ -51,16 +56,19 @@ public class LdapUserSyncService {
         try {
             List<Map<String, String>> rows = ldapClient.fetchAllUsers();
             applyRows(rows, audit);
-            return finishSuccess(audit, rows.size());
+            return finishRead(audit, rows.size());
         } catch (Exception e) {
             return finishFailed(audit, e);
         }
     }
 
-    /** 增量同步：以最近成功记录的 snapshot 作为 whenChanged 水位；无基线则回退全量。 */
+    /**
+     * 增量同步：以最近一次成功的<b>用户</b>同步（全量或增量）的 snapshot 作为 whenChanged 水位；无基线则回退全量。
+     * 组同步只读映射组里的人，不能当起点，否则两次用户同步之间、不在任何映射组里的账号变化会被跳过。
+     */
     public LdapSyncAudit runIncrementalSync() {
         Optional<Instant> watermark = auditRepository
-                .findTopByStatusOrderByStartedAtDesc(STATUS_SUCCESS)
+                .findTopBySyncTypeInAndStatusOrderByStartedAtDesc(USER_SYNC_TYPES, STATUS_SUCCESS)
                 .map(LdapSyncAudit::getSnapshotAt);
         if (watermark.isEmpty()) {
             log.info("No successful LDAP sync baseline; incremental falls back to full");
@@ -71,31 +79,43 @@ public class LdapUserSyncService {
             String filter = buildWhenChangedFilter(watermark.get());
             List<Map<String, String>> rows = ldapClient.fetchUsersWithFilter(filter);
             applyRows(rows, audit);
-            return finishSuccess(audit, rows.size());
+            return finishRead(audit, rows.size());
         } catch (Exception e) {
             return finishFailed(audit, e);
         }
     }
 
-    /** 将一批 LDAP 行映射并逐个 upsert，统计成功/失败到审计对象。 */
+    /**
+     * 将一批 LDAP 行映射并逐个 upsert，计数写到审计对象。没有 employeeID 的条目按设计不入库，记为跳过
+     * （{@code skipped_missing_key}）；写库失败的才计入 {@code failed}。
+     */
     private void applyRows(List<Map<String, String>> rows, LdapSyncAudit audit) {
-        int ok = 0;
+        int inserted = 0;
+        int updated = 0;
+        int skipped = 0;
         int failed = 0;
         for (Map<String, String> row : rows) {
             Optional<LdapUserData> mapped = ldapUserMapper.mapToUser(row);
             if (mapped.isEmpty()) {
-                failed++;
+                skipped++;
                 continue;
             }
             try {
-                upsertUser(mapped.get());
-                ok++;
+                if (upsertUser(mapped.get()).isNew()) {
+                    inserted++;
+                } else {
+                    updated++;
+                }
             } catch (Exception e) {
                 failed++;
                 log.warn("LDAP upsert failed for id {}: {}", mapped.get().getId(), e.getMessage());
             }
         }
-        audit.setUpserted(ok);
+        audit.setUpserted(inserted + updated);
+        audit.setSuccessCount(inserted + updated);
+        audit.setInsertCount(inserted);
+        audit.setUpdateCount(updated);
+        audit.setSkippedMissingKey(skipped);
         audit.setFailed(failed);
     }
 
@@ -216,13 +236,40 @@ public class LdapUserSyncService {
         return auditRepository.save(audit);
     }
 
-    private LdapSyncAudit finishSuccess(LdapSyncAudit audit, int totalFetched) {
-        audit.setStatus(STATUS_SUCCESS);
+    /**
+     * The directory was read to the end. SUCCESS when every entry with an employee ID was stored, PARTIAL when some
+     * could not be, FAILED when none of those that had to be stored could be. Only a SUCCESS run is the starting point
+     * of the next incremental sync, so after a PARTIAL or FAILED one it starts from the last SUCCESS run again. Entries
+     * without an employee ID are skipped by design and do not change the status.
+     */
+    private LdapSyncAudit finishRead(LdapSyncAudit audit, int totalFetched) {
+        audit.setStatus(readStatus(audit.getSuccessCount(), audit.getFailed()));
         audit.setTotalFetched(totalFetched);
         audit.setFinishedAt(Instant.now());
-        log.info("LDAP {} sync done: fetched={}, upserted={}, failed={}",
-                audit.getSyncType(), totalFetched, audit.getUpserted(), audit.getFailed());
+        audit.setMessage(readMessage(audit.getSkippedMissingKey(), audit.getFailed()));
+        log.info("LDAP {} sync {}: fetched={}, inserted={}, updated={}, skipped={}, failed={}",
+                audit.getSyncType(), audit.getStatus(), totalFetched, audit.getInsertCount(),
+                audit.getUpdateCount(), audit.getSkippedMissingKey(), audit.getFailed());
         return auditRepository.save(audit);
+    }
+
+    private static String readStatus(int stored, int failed) {
+        if (failed == 0) {
+            return STATUS_SUCCESS;
+        }
+        return stored == 0 ? STATUS_FAILED : STATUS_PARTIAL;
+    }
+
+    /** What the record says beyond the counts; {@code null} when nothing was skipped or failed. */
+    private static String readMessage(int skipped, int failed) {
+        List<String> notes = new ArrayList<>();
+        if (failed > 0) {
+            notes.add("Could not be stored: " + failed + " (not the starting point of the next incremental sync)");
+        }
+        if (skipped > 0) {
+            notes.add(LdapConstants.SKIPPED_WITHOUT_EMPLOYEE_ID + skipped);
+        }
+        return notes.isEmpty() ? null : String.join("; ", notes);
     }
 
     private LdapSyncAudit finishFailed(LdapSyncAudit audit, Exception e) {

@@ -1,5 +1,6 @@
 package com.admin.component;
 
+import com.admin.audit.AuditSecrets;
 import com.admin.dto.response.DashboardStats;
 import com.admin.dto.response.RecentActivity;
 import com.admin.dto.response.UserTrend;
@@ -8,6 +9,7 @@ import com.admin.repository.AuditLogRepository;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +35,7 @@ public class DashboardComponent {
     private final BusinessUnitRepository businessUnitRepository;
     private final RoleRepository roleRepository;
     private final AuditLogRepository auditLogRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public DashboardStats getStats() {
@@ -127,8 +130,10 @@ public class DashboardComponent {
         return null;
     }
 
+    /** Every Admin reader sees this (SHARED_READ): a change detail is masked like the audit pages (AuditSecrets). */
     private RecentActivity toRecentActivity(AuditLog auditLog) {
-        String description = auditLog.getChangeDetails() != null ? auditLog.getChangeDetails() :
+        String description = auditLog.getChangeDetails() != null
+                ? AuditSecrets.maskJson(objectMapper, auditLog.getChangeDetails()) :
                 (auditLog.getAction() != null ? auditLog.getAction().name() + " " + auditLog.getResourceType() : "");
 
         return RecentActivity.builder()

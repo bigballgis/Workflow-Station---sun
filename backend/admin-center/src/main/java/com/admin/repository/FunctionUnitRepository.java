@@ -60,7 +60,30 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Stri
      */
     @Query("SELECT f FROM FunctionUnit f WHERE f.name = :name ORDER BY f.version DESC LIMIT 1")
     Optional<FunctionUnit> findLatestByName(@Param("name") String name);
-    
+
+    /**
+     * Order of the version rows of one code, latest import first: the first row decides the unit's team (platform
+     * access model §8.1). Every query that needs "the team of a unit" sorts with it, on {@code sys_function_units}
+     * alone.
+     */
+    String LATEST_IMPORT_ORDER = "imported_at DESC NULLS LAST, created_at DESC NULLS LAST";
+
+    /**
+     * Team of a function unit code: the {@code team_code} of its latest imported version row. Empty when that row has
+     * none (imported before teams).
+     */
+    @Query(value = "SELECT team_code FROM sys_function_units WHERE code = :code"
+            + " ORDER BY " + LATEST_IMPORT_ORDER + " LIMIT 1", nativeQuery = true)
+    Optional<String> findTeamCodeOfLatestImport(@Param("code") String code);
+
+    String CODES_OF_TEAMS_SQL = "SELECT DISTINCT fu.code FROM sys_function_units fu"
+            + " WHERE (SELECT t.team_code FROM sys_function_units t WHERE t.code = fu.code"
+            + " ORDER BY " + LATEST_IMPORT_ORDER + " LIMIT 1) IN (:teamCodes)";
+
+    /** Codes whose latest imported row belongs to one of these teams: what a Technical Lead's lists show (§8.2). */
+    @Query(value = CODES_OF_TEAMS_SQL, nativeQuery = true)
+    List<String> findCodesOfTeams(@Param("teamCodes") java.util.Collection<String> teamCodes);
+
     /**
      * Paged filter by code/name/status (nullable params = ignored).
      */

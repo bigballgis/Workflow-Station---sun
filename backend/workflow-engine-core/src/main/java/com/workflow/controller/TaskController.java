@@ -6,7 +6,6 @@ import com.platform.common.security.SecurityIntegrationService;
 import com.workflow.component.HistoryManagerComponent;
 import com.workflow.component.TaskManagerComponent;
 import com.workflow.dto.request.HistoryQueryRequest;
-import com.workflow.dto.request.TaskAssignmentRequest;
 import com.workflow.dto.request.TaskClaimRequest;
 import com.workflow.dto.request.TaskDelegationRequest;
 import com.workflow.dto.request.TaskReassignClaimRequest;
@@ -299,32 +298,6 @@ public class TaskController {
         List<Map<String, Object>> historyList =
                 taskHistoryAssembler.assembleProcessInstanceHistory(processInstanceId);
         return ResponseEntity.ok(ApiResponse.success(historyList));
-    }
-
-    /**
-     * Assign task.
-     */
-    @PostMapping("/{taskId}/assign")
-    @Operation(summary = "Assign Task", description = "Assign task to a user or group")
-    public ResponseEntity<ApiResponse<TaskAssignmentResult>> assignTask(
-            @Parameter(description = "Task ID", required = true)
-            @PathVariable String taskId,
-            @RequestBody @Valid TaskAssignmentRequest request) {
-
-        Optional<String> actor = WorkflowActorResolver.currentUserId();
-        if (actor.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
-        }
-        request.setOperatorUserId(actor.get());
-
-        log.info("Assigning task: {} to {} (type: {})", taskId, request.getAssignmentTarget(), request.getAssignmentType());
-        try {
-            TaskAssignmentResult result = taskManagerComponent.assignTask(taskId, request);
-            return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (WorkflowBusinessException e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getErrorCode(), e.getMessage()));
-        }
     }
 
     /**

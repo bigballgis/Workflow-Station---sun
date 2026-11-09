@@ -66,7 +66,7 @@
             :key="col.field"
             :prop="col.field"
             :width="widthOf(col.field)"
-            show-overflow-tooltip
+            :show-overflow-tooltip="col.field !== 'status'"
           >
             <template #header>
               <ListColumnHeader
@@ -87,13 +87,26 @@
               />
             </template>
             <template #default="{ row }">
-              <el-tag
-                v-if="col.field === 'status'"
-                :type="getStatusType(row.status)"
-                size="small"
-              >
-                {{ statusLabel(row.status) }}
-              </el-tag>
+              <template v-if="col.field === 'status'">
+                <el-tag
+                  :type="getStatusType(row.status)"
+                  size="small"
+                >
+                  {{ statusLabel(row.status) }}
+                </el-tag>
+                <el-tag
+                  v-if="row.inactiveReason"
+                  type="warning"
+                  size="small"
+                  class="rule-inactive-tag"
+                  data-test="delegation-inactive-tag"
+                >
+                  {{ inactiveReasonLabel(row.inactiveReason) }}
+                </el-tag>
+              </template>
+              <span v-else-if="col.field === 'delegateId'">
+                {{ row.delegateName || row.delegateId || '-' }}
+              </span>
               <span v-else-if="col.field === 'delegationType'">
                 {{ typeLabel(row.delegationType) }}
               </span>
@@ -173,14 +186,19 @@ import {
   suspendDelegationRule,
   resumeDelegationRule,
   deleteDelegationRule,
+  type DelegationInactiveReason,
   type DelegationRule,
 } from '@/api/delegation'
 import { usePortalListGrid } from '@/composables/list/usePortalListGrid'
 import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 import { formatDate } from '@/utils/dateFormat'
 
-
 const ACTIONS_COL_WIDTH = 200
+/** The rule keeps its status; this only says why it does not take effect right now. */
+const INACTIVE_REASON_KEYS: Record<DelegationInactiveReason, string> = {
+  DELEGATOR_LOST_PORTAL_ENTRY: 'delegation.inactiveDelegatorLostPortalEntry',
+  DELEGATE_LOST_PORTAL_ENTRY: 'delegation.inactiveDelegateLostPortalEntry',
+}
 
 const { t } = useI18n()
 const loading = ref(true)
@@ -237,6 +255,12 @@ function statusLabel(status: string | undefined): string {
   const key = `delegation.${status.toLowerCase()}`
   const translated = t(key)
   return translated === key ? status : translated
+}
+
+/** Like statusLabel: an unknown reason shows as sent rather than disappearing. */
+function inactiveReasonLabel(reason: string): string {
+  const key = INACTIVE_REASON_KEYS[reason as DelegationInactiveReason]
+  return key ? t(key) : reason
 }
 
 function typeLabel(type: string | undefined): string {
@@ -344,6 +368,15 @@ defineExpose({ reload: load })
   &__icon {
     font-size: 18px;
   }
+}
+
+.rule-inactive-tag {
+  /* The reason must stay readable in a narrow status column: let it wrap below the status tag. */
+  display: inline-flex;
+  height: auto;
+  margin-top: 4px;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .row-actions {

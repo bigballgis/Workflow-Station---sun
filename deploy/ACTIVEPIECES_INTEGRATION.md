@@ -474,7 +474,7 @@ Flowable 继续往下（失败则抛异常，可被 BPMN 错误边界捕获）
 - **纯自动化流程门户"卡 RUNNING"（已修，2026-06-26）**：无用户任务的流程（`Start → AP → End`）在 start 调用内**瞬间跑完**；
   门户申请状态靠引擎 `PROCESS_COMPLETED` 回调 user-portal `POST /api/portal/processes/{id}/complete` 翻 COMPLETED，但该端点要
   **非空 `X-Internal-Service-Token` 头**、引擎原来从不发（403 被拒）→ 申请永远 RUNNING。审批流靠"完成最后一个任务时置状态"
-  把这个潜伏 bug 遮住了，纯自动化流程才暴露。修复：`ProcessCompletionListener` 调用时带该头（`platform.internal.service-token`）。
+  把这个潜伏 bug 遮住了，纯自动化流程才暴露。修复：`ProcessCompletionListener` 调用时带该头（`platform.internal.service-token`）。2026-10-30（平台访问模型 WP2）起改为标准头 `X-Service-Token`，值为 `service.internal-token`（`SERVICE_INTERNAL_TOKEN`），门户做常量时间比对，令牌不对回真正的 403；旧头与默认值 `wf-internal-service-call` 已删除。
 - **想在门户里像"正常申请"（有待办/可交互）**：纯自动化流程没人工步骤、瞬间结束，门户看不到"下一步"。
   在 AP 节点前/后加一个**用户任务**（`assigneeType=INITIATOR` + 挂一个动作如 `PROCESS_SUBMIT`，动作存 `sys_action_definitions`），
   流程才会停在待办、走正常完成路径。**正经做法是在设计器里建表单+任务**；只想要"有个步骤"则加一个无表单的用户任务即可。

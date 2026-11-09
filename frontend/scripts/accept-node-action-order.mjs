@@ -86,7 +86,7 @@ async function showTask(task, expected, label) {
 async function deploy() {
   const validation = await design('GET', `/function-units/${unit.id}/validate`)
   assert.equal(validation.valid, true, `Invalid QA design: ${JSON.stringify(validation)}`)
-  const requested = await design('POST', `/function-units/${unit.id}/deploy`, { environment: 'DEVELOPMENT', autoEnable: true, conflictStrategy: 'OVERWRITE', changeLog: 'Isolated action order end-to-end acceptance' })
+  const requested = await design('POST', `/function-units/${unit.id}/deploy`, { environment: 'DEVELOPMENT', autoEnable: true, changeLog: 'Isolated action order end-to-end acceptance' })
   console.log(JSON.stringify({ step: 'deploy-requested', deploymentId: requested.deploymentId }))
   let deployed
   try { deployed = await waitForFixtureDeployment(design, requested.deploymentId) }

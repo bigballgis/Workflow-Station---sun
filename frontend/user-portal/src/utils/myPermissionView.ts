@@ -11,7 +11,6 @@ export interface PortalBuBoundedRow {
 export interface PortalPermissionLists {
   businessUnits: { id: string; name: string }[]
   buBoundedRoles: PortalBuBoundedRow[]
-  buUnboundedRoles: { id: string; name: string; code?: string }[]
 }
 
 /** @deprecated 门户不返回虚拟组，恒为空。保留字段避免旧代码解构报错 */
@@ -26,8 +25,6 @@ export function parseMyPermissionViewPayload(
 ): PortalPermissionListsLegacy {
   const businessUnits = (data.businessUnits as { id: string; name: string }[]) || []
   const buBoundedRoles = (data.buBoundedRoles as PortalBuBoundedRow[]) || []
-  const buUnboundedRoles =
-    (data.buUnboundedRoles as { id: string; name: string; code?: string }[]) || []
 
   const roles: { id: string; name: string; type?: string }[] = []
   buBoundedRoles.forEach((row) => {
@@ -35,14 +32,10 @@ export function parseMyPermissionViewPayload(
       roles.push({ id: row.role.id, name: row.role.name, type: 'BU_BOUNDED' })
     }
   })
-  buUnboundedRoles.forEach((r) => {
-    roles.push({ id: r.id, name: r.name, type: 'BU_UNBOUNDED' })
-  })
 
   return {
     businessUnits,
     buBoundedRoles,
-    buUnboundedRoles,
     virtualGroups: [],
     roles
   }

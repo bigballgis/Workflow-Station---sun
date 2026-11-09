@@ -10,6 +10,7 @@
         trigger="click"
         placement="bottom-end"
         popper-class="lookup-editor-popover"
+        :disabled="disabled"
       >
         <template #reference>
           <el-button
@@ -18,6 +19,7 @@
             class="lookup-config-btn"
             :type="isConfigured ? 'primary' : 'warning'"
             plain
+            :disabled="disabled"
           >
             <el-icon><Search /></el-icon>
           </el-button>
@@ -29,6 +31,7 @@
           <el-form
             label-position="top"
             size="small"
+            :disabled="disabled"
           >
             <!-- Referenced table -->
             <el-form-item :label="t('form.lookupRefTable')">
@@ -60,7 +63,7 @@
                 collapse-tags
                 collapse-tags-tooltip
                 style="width: 100%;"
-                :disabled="!cfg.refTableId"
+                :disabled="disabled || !cfg.refTableId"
                 :placeholder="t('form.lookupSearchFields')"
                 @change="emitChange"
               >
@@ -83,7 +86,7 @@
                 collapse-tags
                 collapse-tags-tooltip
                 style="width: 100%;"
-                :disabled="!cfg.refTableId"
+                :disabled="disabled || !cfg.refTableId"
                 :placeholder="t('form.lookupDisplayFields')"
                 @change="emitChange"
               >
@@ -104,7 +107,7 @@
                 clearable
                 filterable
                 style="width: 100%;"
-                :disabled="!cfg.refTableId"
+                :disabled="disabled || !cfg.refTableId"
                 :placeholder="t('form.lookupSelectedDisplayField')"
                 @change="emitChange"
               >
@@ -191,7 +194,7 @@
                   link
                   type="primary"
                   size="small"
-                  :disabled="!cfg.refTableId"
+                  :disabled="disabled || !cfg.refTableId"
                   @click="addFilter"
                 >
                   <el-icon><Plus /></el-icon>{{ t('form.lookupAddFilter') }}
@@ -362,6 +365,7 @@ const props = defineProps<{
   allFields: FieldLookupEditorRowLike[]
   /** The field name of the row this editor belongs to (excluded from parent options). */
   currentFieldName?: string
+  /** Read-only table: neither the entry button nor the settings open. */
   disabled?: boolean
 }>()
 

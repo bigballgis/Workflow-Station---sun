@@ -6,6 +6,9 @@ import com.developer.entity.FormStageBinding;
 import com.developer.entity.FunctionUnit;
 import com.developer.enums.FormScene;
 import com.developer.repository.FormStageBindingRepository;
+import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import com.platform.common.dto.ApiResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +21,11 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -36,6 +44,9 @@ class FormStageBindingControllerTest {
 
     @Mock
     private FormDesignComponent formDesignComponent;
+
+    @Mock
+    private FunctionUnitWorkspaceAccessService workspaceAccessService;
 
     @InjectMocks
     private FormStageBindingController controller;
@@ -148,6 +159,33 @@ class FormStageBindingControllerTest {
         stubFormDefinition(leaveBinding);
 
         assertThat(formName(controller.getByStageId(SHARED_STAGE, "   ", null))).isEqualTo("Leave Approval");
+    }
+
+    /** The route names no unit, so the form found is shown only to a caller who may see its unit. */
+    @Test
+    void getByStageId_formOfAUnitTheCallerCannotSee_isDenied() {
+        FormStageBinding leaveBinding = binding(11L, "fu-leave", "Leave Approval");
+        when(formStageBindingRepository
+                .findByFunctionUnitCodeAndStageIdAndScene("fu-leave", SHARED_STAGE, FormScene.TASK))
+                .thenReturn(List.of(leaveBinding));
+        doThrow(new FunctionUnitWorkspaceAccessDeniedException("denied"))
+                .when(workspaceAccessService).assertCanAccess(11L, WorkspaceAccessAction.VIEW);
+
+        assertThatThrownBy(() -> controller.getByStageId(SHARED_STAGE, "fu-leave", null))
+                .isInstanceOf(FunctionUnitWorkspaceAccessDeniedException.class);
+        verify(formDesignComponent, never()).getById(anyLong());
+    }
+
+    @Test
+    void getByStageId_withoutFunctionUnit_checksTheUnitOfTheFormFound() {
+        FormStageBinding newest = binding(22L, "fu-expense", "Expense Approval");
+        when(formStageBindingRepository.findByStageIdAndSceneOrderByFormIdDesc(SHARED_STAGE, FormScene.TASK))
+                .thenReturn(List.of(newest));
+        doThrow(new FunctionUnitWorkspaceAccessDeniedException("denied"))
+                .when(workspaceAccessService).assertCanAccess(22L, WorkspaceAccessAction.VIEW);
+
+        assertThatThrownBy(() -> controller.getByStageId(SHARED_STAGE, null, null))
+                .isInstanceOf(FunctionUnitWorkspaceAccessDeniedException.class);
     }
 
     private FormStageBinding binding(Long formId, String functionUnitCode, String formName) {

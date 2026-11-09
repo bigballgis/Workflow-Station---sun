@@ -25,7 +25,8 @@
 #   - Skip Maven when backend JARs are newer than sources/poms
 #   - Skip Vite when frontend dist is newer than sources/config
 #   - Skip Docker build when image is newer than Dockerfile + build inputs
-#   - Schema SQL runs only when file content SHA-256 changed (per Postgres volume)
+#   - No schema SQL is run here: deploy/init-scripts runs once, when the Postgres volume is created; the script
+#     only checks that this init finished (Assert-DatabaseInitialized) and stops on a half-initialized volume
 #
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
@@ -590,54 +591,28 @@ function Test-PostgresVolumeExists {
     return [bool]$volName
 }
 
-function Invoke-SchemaMigrations {
+# A new postgres_dev_data volume is initialized by the postgres entrypoint itself: it runs
+# deploy/init-scripts/00-init-all.sh (schema, seeds, the platform access model switch) before the
+# server accepts connections, and the healthcheck waits for that. Nothing is replayed here. This used
+# to apply every 00-schema/*.sql again, sorted by file name, after the init: 100- ran before 11-, and
+# 66- widened sys_roles.chk_role_type again after 90-post-seed/05 had narrowed it, so a new dev
+# environment failed switch assertion A-14. 00-init-all.sh is the one place that says what runs.
+function Assert-DatabaseInitialized {
     param(
         [Parameter(Mandatory = $true)][string]$PostgresContainerId,
         [Parameter(Mandatory = $true)][bool]$VolumeExistedBeforeUp
     )
 
     if ($VolumeExistedBeforeUp) {
-        Write-Host "  postgres_dev_data volume already existed — skipping schema SQL." -ForegroundColor DarkGray
+        Write-Host "  postgres_dev_data volume already existed — init scripts do not run again; apply new ones by hand." -ForegroundColor DarkGray
         return
     }
 
-    $InitScriptsDir = Join-Path $RootDir "deploy/init-scripts/00-schema"
-    if (-not (Test-Path $InitScriptsDir)) {
-        Write-Host "  No schema dir at $InitScriptsDir — skipping." -ForegroundColor DarkGray
-        return
+    $initLog = docker logs $PostgresContainerId 2>&1 | Out-String
+    if ($initLog -notmatch 'Database Initialization Complete!') {
+        throw "postgres_dev_data is new but 00-init-all.sh did not complete. See: docker logs $PostgresContainerId"
     }
-
-    Write-Host "  postgres_dev_data volume is new — running schema SQL." -ForegroundColor DarkGray
-
-    # Orchestrators use psql \i includes; they are for host-side `psql -f` only.
-    # This runner pipes SQL via stdin into docker exec, so \i cannot resolve paths —
-    # and the numbered 01-*.sql / 06-*.sql files are already applied individually below
-    # (same approach as 00-init-all.sh / init-database.ps1).
-    $orchestratorNames = @(
-        "00-init-all-schemas.sql",
-        "00-init-all-schemas-standalone.sql"
-    )
-
-    $files = Get-ChildItem -Path $InitScriptsDir -Filter "*.sql" | Sort-Object Name
-    foreach ($file in $files) {
-        if ($orchestratorNames -contains $file.Name) {
-            Write-Host "    skip (orchestrator) $($file.Name)" -ForegroundColor DarkGray
-            continue
-        }
-
-        Write-Host "    apply $($file.Name)" -ForegroundColor DarkGray
-        $prevEAP = $ErrorActionPreference
-        $ErrorActionPreference = "Continue"
-        $output = Get-Content -LiteralPath $file.FullName -Raw | docker exec -i $PostgresContainerId `
-            psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -v ON_ERROR_STOP=1 2>&1
-        $exit = $LASTEXITCODE
-        $ErrorActionPreference = $prevEAP
-        if ($exit -ne 0) {
-            Write-Host $output -ForegroundColor Red
-            throw "Schema migration failed: $($file.Name) (exit $exit). Aborting — will not treat as idempotent warning."
-        }
-    }
-    Write-Host "  Schema migrations complete." -ForegroundColor Green
+    Write-Host "  postgres_dev_data volume is new — initialized by 00-init-all.sh." -ForegroundColor DarkGray
 }
 
 function Invoke-SupersetBootstrap {
@@ -1129,8 +1104,7 @@ if (-not $SkipInfra) {
     # Healthcheck requires PID 1 = postgres AND pg_isready (init scripts finished).
     $postgresContainerId = Wait-ForContainerHealth -ServiceName "postgres" -DisplayName "PostgreSQL" -MaxRetries 180
 
-    Write-Host "  Running DB schema migrations (volume-existence-gated)..." -ForegroundColor DarkGray
-    Invoke-SchemaMigrations -PostgresContainerId $postgresContainerId -VolumeExistedBeforeUp $volumeExistedBeforeUp
+    Assert-DatabaseInitialized -PostgresContainerId $postgresContainerId -VolumeExistedBeforeUp $volumeExistedBeforeUp
 
     Wait-ForContainerHealth -ServiceName "redis" -DisplayName "Redis" -MaxRetries 20
     Wait-ForContainerHealth -ServiceName "kafka" -DisplayName "Kafka" -MaxRetries 30 -SleepSeconds 3

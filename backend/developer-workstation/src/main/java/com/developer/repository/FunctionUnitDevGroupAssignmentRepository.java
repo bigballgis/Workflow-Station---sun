@@ -15,6 +15,8 @@ public interface FunctionUnitDevGroupAssignmentRepository extends JpaRepository<
 
     List<FunctionUnitDevGroupAssignment> findByFunctionUnitId(Long functionUnitId);
 
+    List<FunctionUnitDevGroupAssignment> findByFunctionUnitIdIn(Collection<Long> functionUnitIds);
+
     @Modifying
     @Query("DELETE FROM FunctionUnitDevGroupAssignment a WHERE a.functionUnitId = :functionUnitId")
     void deleteByFunctionUnitId(@Param("functionUnitId") Long functionUnitId);

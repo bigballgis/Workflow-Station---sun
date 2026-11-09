@@ -40,14 +40,14 @@ import java.util.List;
  *   what stops enumeration; it is verified server-side, never taken on trust.
  * - New-Request drafts ("draft-" prefix): no instance exists yet; adoptDraftNotes
  *   re-anchors them onto the instance once the request starts.
- * - SYS_ADMIN bypasses all checks.
+ * - No role bypasses these checks, System Administrator included (platform access model D-05).
  *
  * Deliberately NOT a function unit role check: that would deny the very participants
  * working a row (e.g. an MI assignee whose task role was never granted FU access).
  *
  * Writing is gated separately and more tightly — see {@link #checkWriteAccess}: on a request
- * form, adding a note requires an audit grant on the user's currently selected role (or
- * SYS_ADMIN), and participation in the request grants nothing. Notes on a To Do task form are
+ * form, adding a note requires an audit grant on the user's currently selected role, and
+ * participation in the request grants nothing. Notes on a To Do task form are
  * comments by whoever works the task, not audit opinions, so holding the task grants the write
  * instead; the designer's Readonly switch decides whether that box is writable at all.
  */
@@ -175,21 +175,19 @@ public class RecordNoteComponent {
         if (detail == null) {
             throw new RecordNoteException("NOT_FOUND", "Process instance not found: " + processInstanceId);
         }
-        if (!functionUnitAccessComponent.isSystemAdministrator(userId)
-                && !processComponent.canAccessProcessDetail(userId, detail)) {
+        if (!processComponent.canAccessProcessDetail(userId, detail)) {
             throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
         }
         return recordNoteSubmissions.adopt(draftTargetId, processInstanceId, userId);
     }
 
-    /** Participant-or-admin gate for the per-instance archive download. */
+    /** Participant gate for the per-instance archive download. */
     public ProcessInstanceInfo requireArchiveAccess(String userId, String processInstanceId) {
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processInstanceId);
         if (detail == null) {
             throw new RecordNoteException("NOT_FOUND", "Process instance not found: " + processInstanceId);
         }
-        if (!functionUnitAccessComponent.isSystemAdministrator(userId)
-                && !processComponent.canAccessProcessDetail(userId, detail)) {
+        if (!processComponent.canAccessProcessDetail(userId, detail)) {
             throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
         }
         return detail;
@@ -227,11 +225,9 @@ public class RecordNoteComponent {
      * must also be able to anchor it, otherwise the note lands with no audit trail.
      *
      * <p>Stays on the read gate rather than {@code checkWriteAccess}, and must remain at least as
-     * permissive as it: every writer already clears this check (system administrators are exempt
-     * outright, and an active-role audit holder passes {@code canAuditProcessDetail} through
-     * {@code canAuditFunctionUnit}, which spans all of the user's roles and so is implied by a
-     * grant on the active one). Tightening this to the write gate would gain nothing and risk
-     * silently dropping an audit row.
+     * permissive as it: every writer already clears this check (an active-role audit holder passes
+     * {@code canAuditProcessDetail} through the same {@code canAuditFunctionUnit} grant).
+     * Tightening this to the write gate would gain nothing and risk silently dropping an audit row.
      */
     private String resolveAuditInstanceId(String userId, NoteTarget target, String claimedProcessInstanceId) {
         if (target != null && processComponent.getProcessDetail(target.getTargetId()) != null) {
@@ -244,8 +240,7 @@ public class RecordNoteComponent {
         if (detail == null) {
             return null;
         }
-        if (functionUnitAccessComponent.isSystemAdministrator(userId)
-                || processComponent.canAuditProcessDetail(userId, detail)) {
+        if (processComponent.canAuditProcessDetail(userId, detail)) {
             return claimedProcessInstanceId;
         }
         return null;
@@ -285,9 +280,6 @@ public class RecordNoteComponent {
             target.setProcessInstanceId(instanceId);
             recordNoteCatalog.requireTarget(recordNoteCatalog.request(instanceId, false), target);
         }
-        if (functionUnitAccessComponent.isSystemAdministrator(userId)) {
-            return;
-        }
         // Both scopes anchor on the process instance when one matches the target id
         // (TABLE = per-instance table stream; legacy RECORD-on-instance rows too).
         ProcessInstanceInfo detail = processComponent.getProcessDetail(target.getTargetId());
@@ -316,7 +308,6 @@ public class RecordNoteComponent {
      * <p>Reading a request and commenting on it are different acts. Anyone who can open the
      * request may read its notes; writing one needs one of:
      * <ul>
-     *   <li>system administrator;</li>
      *   <li>holding the To Do task the note is being written from ({@code taskId}) — see below;</li>
      *   <li>an audit grant on the function unit held by the user's <em>currently selected</em>
      *       role (admin-center → Function Unit → Access Config → Audit).</li>
@@ -335,9 +326,6 @@ public class RecordNoteComponent {
      */
     private void checkWriteAccess(String userId, NoteTarget target, String hostProcessInstanceId,
                                   String taskId) {
-        if (functionUnitAccessComponent.isSystemAdministrator(userId)) {
-            return;
-        }
         ProcessInstanceInfo detail = processComponent.getProcessDetail(target.getTargetId());
         if (detail == null) {
             // New-Request drafts have no instance yet; checkAccess already limited these to the
@@ -357,7 +345,7 @@ public class RecordNoteComponent {
         }
         String functionUnitCode = detail.getFunctionUnitCode();
         if (functionUnitCode != null && !functionUnitCode.isBlank()
-                && functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(userId, functionUnitCode)) {
+                && functionUnitAccessComponent.canAuditFunctionUnit(userId, functionUnitCode)) {
             return;
         }
         log.debug("Note write denied for user {} on process {}: active role holds no audit grant "

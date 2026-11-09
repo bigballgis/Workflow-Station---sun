@@ -92,9 +92,9 @@ class RelationTableStructureServiceTest {
                 computedFieldValidator, relationTableFieldMapper, jdbcTemplate);
     }
 
-    private void stubNoDwTableNameConflict() {
-        when(jdbcTemplate.queryForObject(contains("dw_table_definitions"), eq(Integer.class), anyString()))
-                .thenReturn(0);
+    private void stubNoReleasedTableNameConflict() {
+        when(jdbcTemplate.queryForObject(contains("sys_function_unit_contents"), eq(Boolean.class), anyString()))
+                .thenReturn(false);
     }
 
     private RelationTableDefinition buildTableDefinition(Long id, String tableName) {
@@ -143,7 +143,7 @@ class RelationTableStructureServiceTest {
             CreateRelationTableRequest request = buildCreateRequest("test_table");
 
             when(tableDefinitionRepository.existsByTableNameIgnoreCase("test_table")).thenReturn(false);
-            stubNoDwTableNameConflict();
+            stubNoReleasedTableNameConflict();
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> {
                         RelationTableDefinition saved = inv.getArgument(0);
@@ -214,7 +214,7 @@ class RelationTableStructureServiceTest {
                     .build();
 
             when(tableDefinitionRepository.existsByTableNameIgnoreCase("multi_field_table")).thenReturn(false);
-            stubNoDwTableNameConflict();
+            stubNoReleasedTableNameConflict();
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> {
                         RelationTableDefinition saved = inv.getArgument(0);
@@ -281,7 +281,7 @@ class RelationTableStructureServiceTest {
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
             when(tableDefinitionRepository.existsByTableNameIgnoreCaseAndIdNot("new_name", 1L)).thenReturn(false);
-            stubNoDwTableNameConflict();
+            stubNoReleasedTableNameConflict();
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
 
@@ -500,8 +500,7 @@ class RelationTableStructureServiceTest {
             RelationTableDefinition existing = buildTableDefinition(1L, "deletable_table");
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
-            when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq("deletable_table")))
-                    .thenReturn(0);
+            releaseReference(1L, false);
 
             service.deleteTable(1L);
 
@@ -514,8 +513,7 @@ class RelationTableStructureServiceTest {
             RelationTableDefinition existing = buildTableDefinition(1L, "bound_table");
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
-            when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq("bound_table")))
-                    .thenReturn(2);
+            releaseReference(1L, true);
 
             assertThatThrownBy(() -> service.deleteTable(1L))
                     .isInstanceOf(RelationTableBindingExistsException.class);
@@ -533,17 +531,31 @@ class RelationTableStructureServiceTest {
         }
 
         @Test
-        @DisplayName("Should allow delete when binding check query fails")
-        void shouldAllowDeleteWhenBindingCheckFails() {
+        @DisplayName("A failing reference check stops the delete instead of letting it through")
+        void failingReferenceCheckStopsTheDelete() {
             RelationTableDefinition existing = buildTableDefinition(1L, "error_table");
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
-            when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq("error_table")))
+            when(jdbcTemplate.queryForObject(eq(RelationTableStructureServiceImpl.RELEASE_REFERENCE_SQL),
+                    eq(Boolean.class), eq(1L), eq("1"), eq("1")))
                     .thenThrow(new RuntimeException("DB error"));
 
-            service.deleteTable(1L);
+            assertThatThrownBy(() -> service.deleteTable(1L)).hasMessage("DB error");
+            verify(tableDefinitionRepository, never()).delete(any());
+        }
 
-            verify(tableDefinitionRepository).delete(existing);
+        @Test
+        @DisplayName("Bindings are looked up in released versions by table id, never in the designer")
+        void bindingsAreLookedUpInReleasesByTableId() {
+            assertThat(RelationTableStructureServiceImpl.RELEASE_REFERENCE_SQL)
+                    .contains("rt_table_function_units").contains("'tableBindings'").contains("'relationTableId'")
+                    .doesNotContainPattern("\\bdw_");
+        }
+
+        private void releaseReference(Long tableId, boolean referenced) {
+            when(jdbcTemplate.queryForObject(eq(RelationTableStructureServiceImpl.RELEASE_REFERENCE_SQL),
+                    eq(Boolean.class), eq(tableId), eq(String.valueOf(tableId)), eq(String.valueOf(tableId))))
+                    .thenReturn(referenced);
         }
     }
 

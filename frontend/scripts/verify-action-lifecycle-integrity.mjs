@@ -48,7 +48,8 @@ try{
  for(const [actionName,actionType]of[['Save Draft','SAVE'],['Approve','APPROVE'],['Reject','REJECT']])actions.push(await api('POST',`${base}/actions`,{actionName,actionType,configJson:{}}))
  const form=await api('POST',`${base}/forms`,{formName:'QA task form',formType:'TASK',scene:'TASK',configJson:{rule:[],options:{}}})
  const xml=diagram(unit,actions,form);await api('POST',`${base}/process`,{bpmnXml:xml})
- const clone=await api('POST',`${base}/clone?newName=${encodeURIComponent(`Action CRUD QA clone ${phase} ${Date.now()}`)}`)
+ const {workspaceId}=await api('GET',base);assert(workspaceId,`${base} has no workspace for its clone`)
+ const clone=await api('POST',`${base}/clone?newName=${encodeURIComponent(`Action CRUD QA clone ${phase} ${Date.now()}`)}&targetGroupId=${encodeURIComponent(workspaceId)}`)
  samples.push(clone);await persist()
  const clonedActions=await api('GET',`/function-units/${clone.id}/actions`)
  for(const name of ['Approve','Reject']){

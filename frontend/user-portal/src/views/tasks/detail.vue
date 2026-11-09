@@ -88,6 +88,7 @@
         @claim="handleClaimTask"
         @unclaim="handleUnclaimTask"
         @force-unclaim="handleForceUnclaimTask"
+        @take-over="takeOverHeld(effectiveTaskId, taskInfo?.assigneeName)"
         @reassign="handleReassignTask"
       />
 
@@ -437,7 +438,8 @@
         :is-completed-task="isCompletedTask"
         :claim-locked="claimLocked"
         :actions="taskInfo.actions"
-        :can-delegate="!!String(taskInfo.assignee || '').trim()"
+        :can-delegate="taskInfo.delegable === true && taskInfo.canDelegate === true"
+        :can-transfer="taskInfo.canTransfer === true"
         :get-icon-component="getIconComponent"
         :get-action-label="getActionLabel"
         @custom-action="handleCustomAction"
@@ -503,8 +505,7 @@
     />
     <TaskReassignDialog
       v-model="reassignDialogVisible"
-      :candidate-user-ids="taskInfo?.candidateUserIds ?? []"
-      :current-holder-id="taskInfo?.assignee"
+      :target-user-ids="taskInfo?.reassignTargetUserIds ?? []"
       :submitting="claimSubmitting"
       @confirm="confirmReassignTask"
     />
@@ -919,12 +920,11 @@ const {
   handleFormPopupSubTableUpdate,
 } = customActions
 
-/** BU Role pool request held by somebody else (or by nobody yet): view only, no action bar. */
-const claimLocked = computed(
-  () => !!taskInfo.value?.claimPoolTask && !taskInfo.value?.claimedByCurrentUser,
-)
+/** Pool request held by somebody else (or by nobody yet), incl. a D-17 one I may take over: view only, no action bar. */
+const claimLocked = computed(() => !!taskInfo.value && !taskInfo.value.claimedByCurrentUser
+  && !!(taskInfo.value.claimPoolTask || taskInfo.value.canTakeOver || taskInfo.value.canForceUnclaim))
 const claimSubmitting = ref(false)
-const { claim: claimHeld, unclaim: unclaimHeld, forceUnclaim: forceUnclaimHeld, reassign: reassignHeld } = useTaskClaimActions({
+const { claim: claimHeld, unclaim: unclaimHeld, forceUnclaim: forceUnclaimHeld, reassign: reassignHeld, takeOver: takeOverHeld } = useTaskClaimActions({
   reload: loadTaskDetail,
   submitting: claimSubmitting,
 })

@@ -26,7 +26,8 @@ try {
   const source = await dw('GET', `/function-units/${sourceId}`)
   assert.match(source.name, /^Batch verification /)
   assert.ok(source.tags.includes('batch-verification-synthetic'))
-  const clone = await dw('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(`Batch verification runtime${Date.now()}`)}`)
+  assert.ok(source.workspaceId, 'Source has no workspace for its clone')
+  const clone = await dw('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(`Batch verification runtime${Date.now()}`)}&targetGroupId=${encodeURIComponent(source.workspaceId)}`)
   assert.notEqual(String(clone.id), sourceId)
   processKey = clone.code
   assert.match(processKey, /^[A-Za-z0-9_-]{1,100}$/)
@@ -38,7 +39,7 @@ try {
   assert.ok(['line_key', 'case_ref', 'caption', 'amount'].every(name => child.fieldDefinitions.some(field => field.fieldName === name)))
   assert.equal((await dw('GET', `/function-units/${clone.id}/validate`)).valid, true)
   const deployment = await dw('POST', `/function-units/${clone.id}/deploy`, {
-    environment: 'DEVELOPMENT', autoEnable: true, conflictStrategy: 'FAIL', changeLog: 'Synthetic clone runtime verification',
+    environment: 'DEVELOPMENT', autoEnable: true, changeLog: 'Synthetic clone runtime verification',
   })
   await waitForFixtureDeployment(dw, deployment.deploymentId)
   await loginViaPortalPassword(page)

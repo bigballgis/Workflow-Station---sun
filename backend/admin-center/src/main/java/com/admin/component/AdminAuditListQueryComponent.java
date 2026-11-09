@@ -41,7 +41,7 @@ public class AdminAuditListQueryComponent {
     static final String LIST_KEY = "admin-audit";
 
     /** Matches {@code hibernate.jdbc.time_zone} in admin-center application.yml. */
-    private static final ZoneId DB_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId DB_ZONE = ZoneId.of("Asia/Hong_Kong");
 
     private static final String PAGE_COLUMNS = "SELECT al.id, al.action, al.resource_type, al.resource_id,"
             + " al.user_id, al.user_name, al.ip_address, al.success, al.duration_ms, al.timestamp";

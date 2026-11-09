@@ -19,7 +19,7 @@ import java.util.Set;
 /**
  * Evaluates View-Design-style filter configs against one {@code up_process_instance} row and,
  * for FORM_POPUP conditions marked {@code source: "ACTION"}, the ACTION table row that the
- * popup submit just wrote to {@code dw_table_data_rows} (runtime_table_id path).
+ * popup submit just wrote to {@code up_table_data_rows} (runtime_table_id path).
  * Used before publishing post-action email events so only matching rules send mail.
  */
 @Slf4j
@@ -107,7 +107,7 @@ public class ActionEmailRuleConditionEvaluator {
 
             String join = "";
             if (joinActionRow) {
-                join = " LEFT JOIN dw_table_data_rows ar ON ar.process_instance_id = pi.id AND ar.row_id = ?";
+                join = " LEFT JOIN up_table_data_rows ar ON ar.process_instance_id = pi.id AND ar.row_id = ?";
                 params.add(actionRow.rowId());
             }
             params.add(processInstanceId);

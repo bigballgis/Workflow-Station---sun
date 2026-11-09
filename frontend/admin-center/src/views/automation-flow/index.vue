@@ -9,6 +9,7 @@
           <el-icon><Refresh /></el-icon>{{ t('common.refresh') }}
         </el-button>
         <el-button
+          v-if="writable"
           type="primary"
           @click="importDialogVisible = true"
         >
@@ -172,15 +173,20 @@
                           {{ t('automationFlow.viewStructure') }}
                         </el-dropdown-item>
                         <el-dropdown-item
+                          v-if="writable"
                           command="toggle"
                           :disabled="!row.published"
                         >
                           {{ row.status === 'ENABLED' ? t('automationFlow.disable') : t('automationFlow.enable') }}
                         </el-dropdown-item>
-                        <el-dropdown-item command="transfer">
+                        <el-dropdown-item
+                          v-if="writable"
+                          command="transfer"
+                        >
                           {{ t('automationFlow.transfer') }}
                         </el-dropdown-item>
                         <el-dropdown-item
+                          v-if="writable"
                           command="delete"
                           divided
                         >
@@ -364,6 +370,7 @@ import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 const { t } = useI18n()
 
 const {
+  writable,
   loading,
   keyword,
   exportingId,

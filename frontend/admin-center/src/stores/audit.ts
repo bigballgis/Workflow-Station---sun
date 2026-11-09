@@ -7,6 +7,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import { queryAuditLogs, getAuditResourceTypes, type AuditLog, type AuditListRow, type AuditQueryRequest } from '@/api/audit'
+import { localDayRangeToIso } from '@/utils/dateRange'
 
 interface SortState {
   field: string
@@ -69,8 +70,7 @@ export const useAuditStore = defineStore('audit', () => {
   const buildQueryRequest = (): AuditQueryRequest => {
     const req: AuditQueryRequest = { ...query }
     if (dateRange.value && dateRange.value.length === 2) {
-      req.startTime = dateRange.value[0] + 'T00:00:00+08:00'
-      req.endTime = dateRange.value[1] + 'T23:59:59+08:00'
+      Object.assign(req, localDayRangeToIso(dateRange.value[0], dateRange.value[1]))
     }
     Object.keys(req).forEach(key => {
       if (!req[key as keyof AuditQueryRequest]) delete req[key as keyof AuditQueryRequest]

@@ -157,7 +157,7 @@ public class FunctionUnitPropertyTest {
             return fu;
         });
         
-        FunctionUnit cloned = component.clone(1L, cloneName);
+        FunctionUnit cloned = component.clone(1L, cloneName, "vg-team-a");
         
         assertThat(cloned.getName()).isEqualTo(cloneName);
         assertThat(cloned.getDisplayName()).isEqualTo(original.getDisplayName());
@@ -236,7 +236,7 @@ public class FunctionUnitPropertyTest {
             return fu;
         });
 
-        FunctionUnit cloned = component.clone(1L, cloneName);
+        FunctionUnit cloned = component.clone(1L, cloneName, "vg-team-a");
 
         ArgumentCaptor<ProcessDefinition> captor = ArgumentCaptor.forClass(ProcessDefinition.class);
         verify(processRepo).save(captor.capture());
@@ -403,7 +403,7 @@ public class FunctionUnitPropertyTest {
             return ad;
         });
 
-        component.clone(1L, cloneName);
+        component.clone(1L, cloneName, "vg-team-a");
 
         ArgumentCaptor<ProcessDefinition> captor = ArgumentCaptor.forClass(ProcessDefinition.class);
         verify(processRepo).save(captor.capture());

@@ -8,12 +8,12 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { logger } from '@/utils/logger'
-import { notifyConfirm, notifyError, notifySuccess, notifyWarning } from '@/utils/notify'
+import { notifyConfirm, notifySuccess, notifyWarning } from '@/utils/notify'
+import { notifyUnreportedError } from '@/utils/notifyUnreportedError'
 import { functionUnitApi, type FunctionUnit, type DeletePreviewResponse, type FunctionUnitValidationResult } from '@/api/functionUnit'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import { ApiError } from '@/types/errors'
-import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 import { useFunctionUnitLists, type FunctionUnitRow } from '@/composables/modules/useFunctionUnitLists'
+import { useFunctionUnitImport } from '@/composables/modules/useFunctionUnitImport'
 
 export function useFunctionUnit() {
   const { t } = useI18n()
@@ -43,7 +43,6 @@ export function useFunctionUnit() {
 
   const activeTab = ref('list')
   const versionsLoading = ref(false)
-  const importLoading = ref(false)
   const deployLoadingId = ref<string | null>(null)
   const validateLoadingId = ref<string | null>(null)
   const restoreLoadingId = ref<string | null>(null)
@@ -51,7 +50,6 @@ export function useFunctionUnit() {
   const versionList = ref<FunctionUnit[]>([])
 
   // Dialog visibility
-  const showImportDialog = ref(false)
   const showAccessDialogVisible = ref(false)
   const showDeleteDialogVisible = ref(false)
   const showVersionsDialogVisible = ref(false)
@@ -63,7 +61,6 @@ export function useFunctionUnit() {
   const deletePreview = ref<DeletePreviewResponse | null>(null)
   const compareVersion = ref<FunctionUnit | null>(null)
 
-  const importFile = ref<File | null>(null)
   const importUploadRef = ref<any>(null)
 
   const showValidateResultDialog = ref(false)
@@ -89,7 +86,7 @@ export function useFunctionUnit() {
       versionList.value = await functionUnitApi.getAllVersions(unit.code)
     } catch (e) {
       logger.error('functionUnit', 'Failed to load versions:', e)
-      notifyError(t('functionUnit.loadFailed'))
+      notifyUnreportedError(e, t('functionUnit.loadFailed'))
     } finally {
       versionsLoading.value = false
     }
@@ -109,11 +106,7 @@ export function useFunctionUnit() {
       }
     } catch (e: unknown) {
       logger.error('functionUnit', 'Failed to validate:', e)
-      // HTTP 错误已由 request 拦截器 toast；此处仅补充 ApiError 文案（拦截器已展示则不再重复）
-      if (!(e instanceof ApiError)) {
-        const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-        notifyError(msg || t('functionUnit.validateFailed'))
-      }
+      notifyUnreportedError(e, t('functionUnit.validateFailed'))
     } finally {
       validateLoadingId.value = null
     }
@@ -140,8 +133,7 @@ export function useFunctionUnit() {
       await fetchDeployments()
     } catch (e: unknown) {
       logger.error('functionUnit', 'Failed to deploy:', e)
-      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-      notifyError(msg || t('functionUnit.deployFailed'))
+      notifyUnreportedError(e, t('functionUnit.deployFailed'))
     } finally {
       deployLoadingId.value = null
     }
@@ -168,8 +160,7 @@ export function useFunctionUnit() {
       await fetchFunctionUnits()
     } catch (e: unknown) {
       logger.error('functionUnit', 'Failed to restore:', e)
-      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-      notifyError(msg || t('functionUnit.restoreFailed'))
+      notifyUnreportedError(e, t('functionUnit.restoreFailed'))
     } finally {
       restoreLoadingId.value = null
     }
@@ -195,7 +186,7 @@ export function useFunctionUnit() {
       }
     } catch (e) {
       logger.error('functionUnit', 'Failed to rollback:', e)
-      notifyError(t('functionUnit.rollbackFailed'))
+      notifyUnreportedError(e, t('functionUnit.rollbackFailed'))
     }
   }
 
@@ -219,8 +210,7 @@ export function useFunctionUnit() {
       await store.setEnabled(unit.id, enabled)
       notifySuccess(enabled ? t('functionUnit.enabledSuccess') : t('functionUnit.disabledSuccess'))
     } catch (e: unknown) {
-      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-      notifyError(msg || t('common.failed'))
+      notifyUnreportedError(e, t('common.failed'))
       unit.enabled = !enabled
     } finally {
       unit._enabledLoading = false
@@ -234,8 +224,8 @@ export function useFunctionUnit() {
     try {
       deletePreview.value = await functionUnitApi.getDeletePreview(unit.id)
       showDeleteDialogVisible.value = true
-    } catch {
-      notifyError(t('functionUnit.getDeletePreviewFailed'))
+    } catch (e: unknown) {
+      notifyUnreportedError(e, t('functionUnit.getDeletePreviewFailed'))
     }
   }
 
@@ -248,8 +238,7 @@ export function useFunctionUnit() {
       fetchFunctionUnits()
     } catch (e: unknown) {
       logger.error('functionUnit', 'Failed to archive:', e)
-      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-      notifyError(msg || t('functionUnit.deleteFailed'))
+      notifyUnreportedError(e, t('functionUnit.deleteFailed'))
     }
   }
 
@@ -262,8 +251,7 @@ export function useFunctionUnit() {
       selectedUnits.value = []
       fetchFunctionUnits()
     } catch (e: unknown) {
-      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-      notifyError(msg || t('common.failed'))
+      notifyUnreportedError(e, t('common.failed'))
     }
   }
 
@@ -275,7 +263,8 @@ export function useFunctionUnit() {
       selectedUnits.value = []
       fetchFunctionUnits()
     } catch (e) {
-      if ((e as string) !== 'cancel') notifyError(t('common.failed'))
+      // A dismissed confirm rejects with 'cancel' ('close' for X / Esc if distinguishCancelAndClose is set): not a failure.
+      if (e !== 'cancel' && e !== 'close') notifyUnreportedError(e, t('common.failed'))
     }
   }
 
@@ -288,7 +277,8 @@ export function useFunctionUnit() {
       selectedUnits.value = []
       fetchFunctionUnits()
     } catch (e) {
-      if ((e as string) !== 'cancel') notifyError(t('common.failed'))
+      // A dismissed confirm rejects with 'cancel' ('close' for X / Esc if distinguishCancelAndClose is set): not a failure.
+      if (e !== 'cancel' && e !== 'close') notifyUnreportedError(e, t('common.failed'))
     }
   }
 
@@ -301,58 +291,7 @@ export function useFunctionUnit() {
 
   // ==================== Import ====================
 
-  const resetImportDialog = () => {
-    importFile.value = null
-  }
-
-  const openImportDialog = () => {
-    resetImportDialog()
-    showImportDialog.value = true
-  }
-
-  watch(showImportDialog, (open) => {
-    if (!open) resetImportDialog()
-  })
-
-  const handleImportFileChange = (file: any) => {
-    importFile.value = file?.raw || null
-  }
-
-  const handleStartImport = async () => {
-    if (!importFile.value) return
-    importLoading.value = true
-    try {
-      const reader = new FileReader()
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1]
-        try {
-          const result = await functionUnitApi.import({
-            fileName: importFile.value!.name,
-            fileContent: base64,
-          })
-          if (result.success) {
-            notifySuccess(result.versioned
-              ? t('functionUnit.importVersioned')
-              : t('functionUnit.importSuccess'))
-            showImportDialog.value = false
-            resetImportDialog()
-            fetchFunctionUnits()
-          } else {
-            notifyError(result.errorMessage || t('functionUnit.importFailed'))
-          }
-        } catch (e: unknown) {
-          const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-          notifyError(msg || t('functionUnit.importFailed'))
-        } finally {
-          importLoading.value = false
-        }
-      }
-      reader.readAsDataURL(importFile.value)
-    } catch {
-      notifyError(t('functionUnit.importFailed'))
-      importLoading.value = false
-    }
-  }
+  const importing = useFunctionUnitImport(() => { void fetchFunctionUnits() })
 
   return {
     activeTab,
@@ -360,7 +299,6 @@ export function useFunctionUnit() {
     archivedLoading,
     deploymentsLoading,
     versionsLoading,
-    importLoading,
     deployLoadingId,
     validateLoadingId,
     restoreLoadingId,
@@ -376,7 +314,6 @@ export function useFunctionUnit() {
     LIST_ACTIONS_WIDTH,
     LIST_SELECTION_WIDTH,
     ARCHIVE_ACTIONS_WIDTH,
-    showImportDialog,
     showAccessDialogVisible,
     showDeleteDialogVisible,
     showVersionsDialogVisible,
@@ -385,7 +322,6 @@ export function useFunctionUnit() {
     deleteTargetUnit,
     deletePreview,
     compareVersion,
-    importFile,
     importUploadRef,
     showValidateResultDialog,
     validateResult,
@@ -405,8 +341,6 @@ export function useFunctionUnit() {
     handleBatchDisable,
     handleBatchDelete,
     handleCompareVersion,
-    openImportDialog,
-    handleImportFileChange,
-    handleStartImport,
+    ...importing,
   }
 }

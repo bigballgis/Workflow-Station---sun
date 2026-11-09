@@ -125,4 +125,75 @@ describe('useChangeHistoryFormatting', () => {
     expect(getChangeTypeLabel('FORCE_UNCLAIM')).toBe('changeHistory.forceUnclaim')
     expect(getChangeTypeLabel('REASSIGN')).toBe('changeHistory.reassign')
   })
+
+  it('shows the system reassigning a departed holder\'s task to their manager (holder old → new)', () => {
+    const { fieldLocationLabel, getChangeTypeLabel, getChangeTypeTag, formatDisplayValue, resolveOperator } =
+      useChangeHistoryFormatting(t, dayjs)
+    const departed = {
+      changeType: 'MANAGER_REASSIGN',
+      fieldName: 'claimed_by',
+      reason: 'ASSIGNEE_DEPARTED',
+      userId: 'system',
+      userName: null,
+      oldValue: 'Gone User',
+      newValue: 'Mia Manager',
+    } as never
+    expect(getChangeTypeLabel('MANAGER_REASSIGN')).toBe('changeHistory.managerReassign')
+    expect(getChangeTypeTag('MANAGER_REASSIGN')).toBe('warning')
+    expect(fieldLocationLabel(departed))
+      .toBe('changeHistory.claimedBy · changeHistory.reassignedAssigneeDeparted')
+    expect(resolveOperator(departed)).toBe('changeHistory.systemOperator')
+    expect(formatDisplayValue('Gone User', 240, 'claimed_by')).toBe('Gone User')
+    expect(formatDisplayValue('Mia Manager', 240, 'claimed_by')).toBe('Mia Manager')
+  })
+
+  it('shows the end of a single-task delegation when the task changed hands (D-59)', () => {
+    const { fieldLocationLabel, getChangeTypeLabel, getChangeTypeTag, formatDisplayValue } =
+      useChangeHistoryFormatting(t, dayjs)
+    const ended = {
+      changeType: 'DELEGATION_ENDED',
+      fieldName: 'delegated_to',
+      reason: 'HOLDER_CHANGED',
+      userId: 'b',
+      userName: 'Bob',
+      oldValue: 'Carol',
+      newValue: null,
+    } as never
+    expect(getChangeTypeLabel('DELEGATION_ENDED')).toBe('changeHistory.delegationEnded')
+    expect(getChangeTypeTag('DELEGATION_ENDED')).toBe('info')
+    expect(fieldLocationLabel(ended))
+      .toBe('changeHistory.delegatedTo · changeHistory.delegationEndedHolderChanged')
+    expect(formatDisplayValue('Carol', 240, 'delegated_to')).toBe('Carol')
+  })
+
+  it('a MANAGER_REASSIGN row without a known reason keeps the plain Claimed By label', () => {
+    const { fieldLocationLabel } = useChangeHistoryFormatting(t, dayjs)
+    expect(fieldLocationLabel({ changeType: 'MANAGER_REASSIGN', fieldName: 'claimed_by' } as never))
+      .toBe('changeHistory.claimedBy')
+    expect(fieldLocationLabel({ changeType: 'MANAGER_REASSIGN', fieldName: 'claimed_by', reason: 'OTHER' } as never))
+      .toBe('changeHistory.claimedBy')
+  })
+
+  it('says why the system released a hold whose holder lost the BU + Role, and names the operator System', () => {
+    const { fieldLocationLabel, resolveOperator, batchHeaderFields } = useChangeHistoryFormatting(t, dayjs)
+    const release = {
+      changeType: 'FORCE_UNCLAIM',
+      fieldName: 'claimed_by',
+      reason: 'POOL_MEMBERSHIP_LOST',
+      userId: 'system',
+      userName: '',
+    } as never
+    expect(fieldLocationLabel(release))
+      .toBe('changeHistory.claimedBy · changeHistory.releasedPoolMembershipLost')
+    expect(resolveOperator(release)).toBe('changeHistory.systemOperator')
+    expect(batchHeaderFields(release).displayOperator).toBe('changeHistory.systemOperator')
+  })
+
+  it('leaves ordinary releases and real operator names alone', () => {
+    const { fieldLocationLabel, resolveOperator } = useChangeHistoryFormatting(t, dayjs)
+    expect(fieldLocationLabel({ changeType: 'FORCE_UNCLAIM', fieldName: 'claimed_by', reason: null } as never))
+      .toBe('changeHistory.claimedBy')
+    expect(resolveOperator({ userId: 'u-1', userName: 'Alice Chen' } as never)).toBe('Alice Chen')
+    expect(resolveOperator({ userId: 'u-1', userName: '' } as never)).toBe('u-1')
+  })
 })

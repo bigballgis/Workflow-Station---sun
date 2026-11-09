@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 
 @Data
-@Builder
+@Builder(toBuilder = true)
 public class EnvironmentVariableResponse {
 
     private String id;
@@ -18,6 +18,8 @@ public class EnvironmentVariableResponse {
     private String defaultValue;
     private String currentValue;
     private String vaultSecretPath;
+    /** VAULT only: whether a secret path is set; shown instead of the path to everyone but SYS_ADMIN (D-44). */
+    private Boolean vaultConfigured;
 
     public static EnvironmentVariableResponse fromEntity(EnvironmentVariable entity) {
         return EnvironmentVariableResponse.builder()
@@ -30,6 +32,17 @@ public class EnvironmentVariableResponse {
                 .defaultValue(entity.getDefaultValue())
                 .currentValue(entity.getCurrentValue())
                 .vaultSecretPath(entity.getVaultSecretPath())
+                .vaultConfigured(entity.getValueKind() == EnvironmentValueKind.VAULT
+                        ? entity.getVaultSecretPath() != null && !entity.getVaultSecretPath().isBlank()
+                        : null)
                 .build();
+    }
+
+    /** A copy for a caller who may not see secrets: a VAULT entry keeps its key and "configured", nothing else. */
+    public EnvironmentVariableResponse withoutSecrets() {
+        if (valueKind != EnvironmentValueKind.VAULT) {
+            return this;
+        }
+        return toBuilder().vaultSecretPath(null).currentValue(null).defaultValue(null).build();
     }
 }

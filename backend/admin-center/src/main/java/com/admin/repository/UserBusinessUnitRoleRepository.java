@@ -87,6 +87,12 @@ public interface UserBusinessUnitRoleRepository extends JpaRepository<UserBusine
      */
     @Query("SELECT COUNT(DISTINCT ubur.businessUnitId) FROM UserBusinessUnitRole ubur WHERE ubur.userId = :userId")
     long countDistinctBusinessUnitsByUserId(@Param("userId") String userId);
+
+    /**
+     * Roles of all the user's BU memberships.
+     */
+    @Query("SELECT DISTINCT ubur.roleId FROM UserBusinessUnitRole ubur WHERE ubur.userId = :userId")
+    List<String> findRoleIdsByUserId(@Param("userId") String userId);
     
     /**
      * 统计业务单元的成员数量

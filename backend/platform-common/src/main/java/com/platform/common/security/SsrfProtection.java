@@ -2,6 +2,8 @@ package com.platform.common.security;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -13,6 +15,12 @@ import java.util.Set;
 /**
  * SSRF (Server-Side Request Forgery) protection utility.
  * Validates that URLs point to external/public hosts and block internal/private addresses.
+ *
+ * <p>A host passes only when it resolves and <em>every</em> address it resolves to is public: a host that does not
+ * resolve is refused (it used to pass), and one public A record no longer hides a private one. Checking a name and
+ * then letting the HTTP client resolve it again leaves a DNS rebinding window (the second answer may differ);
+ * {@link SsrfGuardedHttpClient} closes it by resolving through {@link #resolveValidated} at connect time, so the
+ * connection uses exactly the addresses that were checked.</p>
  */
 @Slf4j
 public final class SsrfProtection {
@@ -26,8 +34,9 @@ public final class SsrfProtection {
             "169.254.169.254"  // cloud metadata endpoints (AWS, GCP, Azure)
     ));
 
-    /** Private IPv4 ranges */
+    /** Private / reserved IPv4 ranges */
     private static final long[] PRIVATE_RANGES = {
+            ipToLong("0.0.0.0"),            ipToLong("0.255.255.255"),       // 0.0.0.0/8 ("this" network)
             ipToLong("10.0.0.0"),          ipToLong("10.255.255.255"),      // 10.0.0.0/8
             ipToLong("172.16.0.0"),         ipToLong("172.31.255.255"),      // 172.16.0.0/12
             ipToLong("192.168.0.0"),        ipToLong("192.168.255.255"),     // 192.168.0.0/16
@@ -38,9 +47,6 @@ public final class SsrfProtection {
 
     /** Allowed schemes */
     private static final Set<String> ALLOWED_SCHEMES = new HashSet<>(Arrays.asList("http", "https"));
-
-    /** Optional allowed domains (e.g., third-party SaaS domains). Empty = none allowed beyond basic checks. */
-    private static final Set<String> allowedDomains = new HashSet<>();
 
     private SsrfProtection() {}
 
@@ -92,11 +98,95 @@ public final class SsrfProtection {
 
     /**
      * Validate a bare hostname (no scheme) for outbound connections such as SMTP/IMAP.
+     * An allowed host is accepted without a DNS lookup (it may not resolve yet, e.g. a compose service name).
      *
      * @param hostname     host or bracketed IPv6 literal
      * @param allowedHosts hostnames permitted to resolve to private addresses (case-insensitive)
      */
     public static void validateHostname(String hostname, Set<String> allowedHosts) {
+        String host = checkedHost(hostname);
+        if (normalizeAllowedHosts(allowedHosts).contains(unbracketedLower(host))) {
+            log.debug("SSRF hostname validation passed (allowed host): {}", truncate(host));
+            return;
+        }
+        resolveValidated(host, allowedHosts);
+        log.debug("SSRF hostname validation passed: {}", truncate(host));
+    }
+
+    public static void validateHostname(String hostname) {
+        validateHostname(hostname, Set.of());
+    }
+
+    /**
+     * Resolve a host for a connection and return the addresses to connect to. An allowed host is resolved as is;
+     * any other host must resolve, and every address it resolves to must be public, or nothing is returned.
+     * Connecting to exactly these addresses (no second lookup) is what closes the DNS rebinding window.
+     *
+     * @throws SsrfException when the host is blocked, does not resolve, or resolves to an internal address
+     */
+    public static InetAddress[] resolveValidated(String hostname, Set<String> allowedHosts) {
+        String host = checkedHost(hostname);
+        String lookup = unbracketedLower(host);
+        boolean allowed = normalizeAllowedHosts(allowedHosts).contains(lookup);
+        if (!allowed && BLOCKED_HOSTS.contains(lookup)) {
+            log.warn("SSRF blocked — hostname: {}", truncate(host));
+            throw new SsrfException("Requests to " + host + " are not allowed");
+        }
+        InetAddress[] addresses;
+        try {
+            addresses = InetAddress.getAllByName(lookup);
+        } catch (UnknownHostException e) {
+            log.warn("SSRF blocked — host does not resolve: {}", truncate(host));
+            throw new SsrfException("Host " + host + " could not be resolved");
+        }
+        if (!allowed) {
+            for (InetAddress address : addresses) {
+                if (isInternalAddress(address)) {
+                    log.warn("SSRF blocked — private/reserved address: {} -> {}", truncate(host),
+                            address.getHostAddress());
+                    throw new SsrfException("Requests to internal addresses are not allowed");
+                }
+            }
+        }
+        return addresses;
+    }
+
+    /**
+     * Loopback, link-local, site-local, any-local or multicast; a private / reserved IPv4 range; an IPv6 unique local
+     * address (fc00::/7, which {@link InetAddress#isSiteLocalAddress} does not cover); or an IPv4-compatible IPv6
+     * address embedding any of those.
+     */
+    static boolean isInternalAddress(InetAddress address) {
+        if (address.isLoopbackAddress() || address.isLinkLocalAddress() || address.isSiteLocalAddress()
+                || address.isAnyLocalAddress() || address.isMulticastAddress()) {
+            return true;
+        }
+        byte[] bytes = address.getAddress();
+        if (address instanceof Inet4Address) {
+            long ip = ipToLong(bytes);
+            for (int i = 0; i < PRIVATE_RANGES.length; i += 2) {
+                if (ip >= PRIVATE_RANGES[i] && ip <= PRIVATE_RANGES[i + 1]) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (address instanceof Inet6Address v6) {
+            if ((bytes[0] & 0xFE) == 0xFC) {
+                return true;
+            }
+            if (v6.isIPv4CompatibleAddress()) {
+                try {
+                    return isInternalAddress(InetAddress.getByAddress(Arrays.copyOfRange(bytes, 12, 16)));
+                } catch (UnknownHostException e) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String checkedHost(String hostname) {
         if (hostname == null || hostname.isBlank()) {
             throw new SsrfException("Hostname must not be blank");
         }
@@ -104,54 +194,15 @@ public final class SsrfProtection {
         if (host.contains("://") || host.contains("/") || host.contains("@") || host.contains(" ")) {
             throw new SsrfException("Invalid hostname");
         }
-
-        String hostLower = host.toLowerCase();
-        if (hostLower.startsWith("[") && hostLower.endsWith("]")) {
-            hostLower = hostLower.substring(1, hostLower.length() - 1);
-        }
-
-        Set<String> normalizedAllowed = normalizeAllowedHosts(allowedHosts);
-        if (normalizedAllowed.contains(hostLower)) {
-            log.debug("SSRF hostname validation passed (allowed host): {}", truncate(host));
-            return;
-        }
-
-        if (BLOCKED_HOSTS.contains(hostLower)) {
-            log.warn("SSRF blocked — hostname: {}", truncate(host));
-            throw new SsrfException("Requests to " + host + " are not allowed");
-        }
-
-        try {
-            InetAddress addr = InetAddress.getByName(host);
-            if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress()) {
-                log.warn("SSRF blocked — private/reserved address: {} -> {}", truncate(host), addr.getHostAddress());
-                throw new SsrfException("Requests to internal addresses are not allowed");
-            }
-
-            byte[] bytes = addr.getAddress();
-            if (bytes.length == 4) {
-                long ip = ipToLong(bytes);
-                for (int i = 0; i < PRIVATE_RANGES.length; i += 2) {
-                    if (ip >= PRIVATE_RANGES[i] && ip <= PRIVATE_RANGES[i + 1]) {
-                        log.warn("SSRF blocked — private range: {} -> {}", truncate(host), addr.getHostAddress());
-                        throw new SsrfException("Requests to internal addresses are not allowed");
-                    }
-                }
-            }
-
-            if (bytes.length == 16 && addr.isLoopbackAddress()) {
-                log.warn("SSRF blocked — IPv6 loopback: {}", truncate(host));
-                throw new SsrfException("Requests to internal addresses are not allowed");
-            }
-        } catch (UnknownHostException e) {
-            log.debug("SSRF check: host {} could not be resolved, allowing (DNS failure)", truncate(host));
-        }
-
-        log.debug("SSRF hostname validation passed: {}", truncate(host));
+        return host;
     }
 
-    public static void validateHostname(String hostname) {
-        validateHostname(hostname, Set.of());
+    private static String unbracketedLower(String host) {
+        String lower = host.toLowerCase();
+        if (lower.startsWith("[") && lower.endsWith("]")) {
+            return lower.substring(1, lower.length() - 1);
+        }
+        return lower;
     }
 
     private static Set<String> normalizeAllowedHosts(Set<String> allowedHosts) {

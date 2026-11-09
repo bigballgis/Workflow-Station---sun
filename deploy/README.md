@@ -111,9 +111,10 @@ cd deploy/environments/dev
 # 0. DBA 准备数据库（PostgreSQL 不部署）
 #    创建 workflow_platform_{env} 数据库
 
-# 1. 初始化数据库 Schema（首次部署）
+# 1. 初始化数据库（首次部署，空库）：k8s 初始化，无演示数据，初始 System Administrator 为 admin
+#    （= deploy/k8s/init-data/README.md 的四步：Flowable 建表 → schema 包 → seed 包 → Flowable 迁移）
 cd deploy/init-scripts
-.\init-database.ps1 -DbHost {postgres-host} -DbPort 5432 -DbName workflow_platform_{env} -DbUser platform_{env} -DbPassword {password}
+.\init-database.ps1 -DbHost {postgres-host} -DbPort 5432 -DbName workflow_platform_{env} -DbUser platform_{env} -DbPassword {password} -SkipDemoData
 
 # 2. 更新 K8S 配置
 #    deploy/k8s/configmap-{env}.yaml — PostgreSQL 地址、域名

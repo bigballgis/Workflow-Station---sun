@@ -10,6 +10,7 @@ import com.platform.security.entity.VirtualGroupRole;
 import com.platform.security.entity.UserBusinessUnit;
 import com.admin.repository.*;
 import com.admin.service.UserPermissionService;
+import com.admin.service.UserRoleIdResolver;
 import com.admin.util.EntityTypeConverter;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -26,7 +27,6 @@ import static org.mockito.Mockito.*;
  * 
  * Properties tested:
  * - Property 12: BU-Bounded Role Activation
- * - Property 13: BU-Unbounded Role Immediate Effect
  * - Property 18: Unactivated BU-Bounded Role Reminder
  * 
  * **Validates: Requirements 3.4, 3.5, 10.3, 10.4, 11.2, 18.1, 18.2, 18.6, 18.7, 18.9**
@@ -37,7 +37,7 @@ public class UserPermissionProperties {
     private VirtualGroupRoleRepository virtualGroupRoleRepository;
     private UserBusinessUnitRepository userBusinessUnitRepository;
     private RoleRepository roleRepository;
-    private UserRoleRepository userRoleRepository;
+    private UserRoleIdResolver userRoleIdResolver;
     private UserPreferenceRepository userPreferenceRepository;
     private BusinessUnitRepository businessUnitRepository;
     private com.admin.helper.RoleHelper roleHelper;
@@ -49,7 +49,7 @@ public class UserPermissionProperties {
         virtualGroupRoleRepository = mock(VirtualGroupRoleRepository.class);
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         roleRepository = mock(RoleRepository.class);
-        userRoleRepository = mock(UserRoleRepository.class);
+        userRoleIdResolver = mock(UserRoleIdResolver.class);
         userPreferenceRepository = mock(UserPreferenceRepository.class);
         businessUnitRepository = mock(BusinessUnitRepository.class);
         roleHelper = mock(com.admin.helper.RoleHelper.class);
@@ -59,7 +59,7 @@ public class UserPermissionProperties {
                 virtualGroupRoleRepository,
                 userBusinessUnitRepository,
                 roleRepository,
-                userRoleRepository,
+                userRoleIdResolver,
                 userPreferenceRepository,
                 businessUnitRepository,
                 roleHelper);
@@ -152,118 +152,6 @@ public class UserPermissionProperties {
         // Then: Role should NOT be effective
         assertThat(hasRole).isFalse();
     }
-    
-    // ==================== Property 13: BU-Unbounded Role Immediate Effect ====================
-    
-    /**
-     * Feature: permission-request-approval, Property 13: BU-Unbounded Role Immediate Effect
-     * BU-Unbounded role should be immediately effective regardless of business unit membership
-     * **Validates: Requirements 3.5, 10.3**
-     */
-    @Property(tries = 100)
-    @Label("Feature: permission-request-approval, Property 13: BU-Unbounded role immediately effective")
-    void buUnboundedRoleImmediatelyEffective(
-            @ForAll("validUserIds") String userId,
-            @ForAll("validRoleIds") String roleId,
-            @ForAll("validTargetIds") String anyBusinessUnitId) {
-        
-        // Given: User has a BU-Unbounded role through virtual group
-        String virtualGroupId = "vg-" + UUID.randomUUID();
-        when(virtualGroupMemberRepository.findVirtualGroupIdsByUserId(userId))
-                .thenReturn(List.of(virtualGroupId));
-        
-        VirtualGroupRole binding = VirtualGroupRole.builder()
-                .id(UUID.randomUUID().toString())
-                .virtualGroupId(virtualGroupId)
-                .roleId(roleId)
-                .build();
-        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
-                .thenReturn(Optional.of(binding));
-        
-        Role buUnboundedRole = createRole(roleId, RoleType.BU_UNBOUNDED);
-        when(roleRepository.findAllById(Set.of(roleId))).thenReturn(List.of(buUnboundedRole));
-        
-        // Given: User is NOT a member of any business unit (doesn't matter for BU-Unbounded)
-        when(userBusinessUnitRepository.existsByUserIdAndBusinessUnitId(userId, anyBusinessUnitId))
-                .thenReturn(false);
-        
-        // When: Check if user has role
-        boolean hasRole = userPermissionService.hasRoleInBusinessUnit(userId, roleId, anyBusinessUnitId);
-        
-        // Then: Role should be effective immediately (regardless of BU membership)
-        assertThat(hasRole).isTrue();
-    }
-    
-    /**
-     * Feature: permission-request-approval, Property 13: BU-Unbounded Role Immediate Effect
-     * Getting BU-Unbounded roles should return all such roles user has
-     * **Validates: Requirements 3.5, 10.3**
-     */
-    @Property(tries = 100)
-    @Label("Feature: permission-request-approval, Property 13: Get BU-Unbounded roles returns all such roles")
-    void getBuUnboundedRolesReturnsAllSuchRoles(
-            @ForAll("validUserIds") String userId,
-            @ForAll("validRoleIdLists") List<String> unboundedRoleIds,
-            @ForAll("validRoleIdLists") List<String> boundedRoleIds) {
-        
-        // Ensure no overlap between role ID lists
-        Set<String> unboundedSet = new HashSet<>(unboundedRoleIds);
-        boundedRoleIds = boundedRoleIds.stream()
-                .filter(id -> !unboundedSet.contains(id))
-                .toList();
-        
-        // Given: User has multiple virtual groups with different role types
-        List<String> virtualGroupIds = new ArrayList<>();
-        List<Role> allRoles = new ArrayList<>();
-        
-        // Setup BU-Unbounded roles
-        for (int i = 0; i < unboundedRoleIds.size(); i++) {
-            String vgId = "vg-unbounded-" + i;
-            virtualGroupIds.add(vgId);
-            
-            VirtualGroupRole binding = VirtualGroupRole.builder()
-                    .id(UUID.randomUUID().toString())
-                    .virtualGroupId(vgId)
-                    .roleId(unboundedRoleIds.get(i))
-                    .build();
-            when(virtualGroupRoleRepository.findSingleByVirtualGroupId(vgId))
-                    .thenReturn(Optional.of(binding));
-            
-            allRoles.add(createRole(unboundedRoleIds.get(i), RoleType.BU_UNBOUNDED));
-        }
-        
-        // Setup BU-Bounded roles
-        for (int i = 0; i < boundedRoleIds.size(); i++) {
-            String vgId = "vg-bounded-" + i;
-            virtualGroupIds.add(vgId);
-            
-            VirtualGroupRole binding = VirtualGroupRole.builder()
-                    .id(UUID.randomUUID().toString())
-                    .virtualGroupId(vgId)
-                    .roleId(boundedRoleIds.get(i))
-                    .build();
-            when(virtualGroupRoleRepository.findSingleByVirtualGroupId(vgId))
-                    .thenReturn(Optional.of(binding));
-            
-            allRoles.add(createRole(boundedRoleIds.get(i), RoleType.BU_BOUNDED));
-        }
-        
-        when(virtualGroupMemberRepository.findVirtualGroupIdsByUserId(userId))
-                .thenReturn(virtualGroupIds);
-        
-        Set<String> allRoleIds = new HashSet<>();
-        allRoleIds.addAll(unboundedRoleIds);
-        allRoleIds.addAll(boundedRoleIds);
-        when(roleRepository.findAllById(allRoleIds)).thenReturn(allRoles);
-        
-        // When: Get BU-Unbounded roles
-        List<Role> result = userPermissionService.getUserBuUnboundedRoles(userId);
-        
-        // Then: Should return only BU-Unbounded roles
-        assertThat(result).hasSize(unboundedRoleIds.size());
-        assertThat(result).allMatch(role -> EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED).equals(role.getType()));
-    }
-
     
     // ==================== Property 18: Unactivated BU-Bounded Role Reminder ====================
     
@@ -389,43 +277,6 @@ public class UserPermissionProperties {
         boolean shouldShow = userPermissionService.shouldShowBuApplicationReminder(userId);
         
         // Then: Should NOT show reminder (role is activated)
-        assertThat(shouldShow).isFalse();
-    }
-    
-    /**
-     * Feature: permission-request-approval, Property 18: Unactivated BU-Bounded Role Reminder
-     * User with only BU-Unbounded roles should not see reminder
-     * **Validates: Requirements 18.1, 18.2**
-     */
-    @Property(tries = 100)
-    @Label("Feature: permission-request-approval, Property 18: No reminder for BU-Unbounded only users")
-    void noReminderForBuUnboundedOnlyUsers(
-            @ForAll("validUserIds") String userId,
-            @ForAll("validRoleIds") String roleId) {
-        
-        // Given: User has only BU-Unbounded role through virtual group
-        String virtualGroupId = "vg-" + UUID.randomUUID();
-        when(virtualGroupMemberRepository.findVirtualGroupIdsByUserId(userId))
-                .thenReturn(List.of(virtualGroupId));
-        
-        VirtualGroupRole binding = VirtualGroupRole.builder()
-                .id(UUID.randomUUID().toString())
-                .virtualGroupId(virtualGroupId)
-                .roleId(roleId)
-                .build();
-        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
-                .thenReturn(Optional.of(binding));
-        
-        Role buUnboundedRole = createRole(roleId, RoleType.BU_UNBOUNDED);
-        when(roleRepository.findAllById(Set.of(roleId))).thenReturn(List.of(buUnboundedRole));
-        
-        // Given: User is NOT a member of any business unit (doesn't matter for BU-Unbounded)
-        when(userBusinessUnitRepository.countByUserId(userId)).thenReturn(0L);
-        
-        // When: Check if should show reminder
-        boolean shouldShow = userPermissionService.shouldShowBuApplicationReminder(userId);
-        
-        // Then: Should NOT show reminder (no BU-Bounded roles)
         assertThat(shouldShow).isFalse();
     }
     

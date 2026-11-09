@@ -19,6 +19,7 @@ import type {
 } from '@/api/biManagement'
 import { assignmentTargetTypeKey } from '@/utils/format'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+import { canWrite } from '@/utils/permission'
 
 const ACTIONS_COL_WIDTH = 220
 
@@ -34,9 +35,12 @@ export function useBiAssignment() {
     dashboardTitle: '',
   })
 
+  /** Every Technical Lead assigns any dashboard to anyone (D-15); Auditors read. */
+  const writable = computed(() => canWrite('biAudienceAssignment'))
   const grid = useAdminListGrid<DashboardAssignmentResponse>({
     storageKey: 'admin-list-layout:bi-assignments',
-    extraWidth: ACTIONS_COL_WIDTH,
+    // No action column for a read-only viewer, so the columns take its width.
+    extraWidth: () => (writable.value ? ACTIONS_COL_WIDTH : 0),
   })
 
   const dialogVisible = ref(false)
@@ -116,6 +120,7 @@ export function useBiAssignment() {
   }
 
   return {
+    writable,
     loading,
     query,
     dialogVisible,

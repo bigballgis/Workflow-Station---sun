@@ -18,10 +18,11 @@ Layout `layouts/AdminLayout.vue`, permission-based sidebar. Guard forces unified
 | `/user/import` | `views/user/UserImport.vue` | Batch import (xlsx) |
 | `/organization` | `views/organization/BusinessUnitTree.vue` | BU tree, members, roles, approvers |
 | `/organization/department` | (BU tree variant) | department view |
-| `/virtual-group` | `views/virtual-group/index.vue` | Virtual group list, members, roles, approvers |
-| `/role`, `/role/list` | `views/role/RoleList.vue` | Role CRUD, members, **Permission Config matrix** |
+| `/virtual-group` | `views/virtual-group/index.vue` | Virtual groups by type (SYSTEM / CUSTOM / DEVELOPER teams), members per list and source, approvers; SYSTEM groups show their fixed role read-only (no Bind Roles) |
+| `/role`, `/role/list` | `views/role/RoleList.vue` | Role CRUD, holders (read-only) |
 | `/function-unit` | `views/function-unit/index.vue` | FU list, enable/disable, access config, deploy, version history/rollback, deployment records, import ZIP |
 | `/audit` | `views/audit/index.vue` | Audit log (filter/detail/export) |
+| `/audit/ldap-sync` | `views/ldap-sync/index.vue` | LDAP sync records (read-only) |
 | `/config` | `views/config/index.vue` | System + business config, data dictionary |
 | `/bi-management/dashboard-registry` | `views/bi-management/DashboardRegistry.vue` | Superset dashboard registry |
 | `/bi-management/dashboard-assignment` | (assignment) | dashboard → user/role assignment |
@@ -33,7 +34,7 @@ Layout `layouts/AdminLayout.vue`, permission-based sidebar. Guard forces unified
 
 API clients (`src/api/`): `auth`, `user`, `role`, `organization`, `businessUnit`, `virtualGroup`, `functionUnit`, `audit`, `config`, `dashboard`, `biManagement`, `relationTable`, `taskAssignment`, `monitor`, `ap`, `request`.
 
-> **Observation:** LDAP sync and Gateway governance have **no dedicated frontend route** — LDAP sync is scheduled/backend-only (see §5); gateway-governance UI referenced in PROJECT_ARCHITECTURE.md does **not exist** (no `backend/api-gateway` module, no gateway-mfe wired). Permission-request approvals surface inside role/permission pages, not a standalone route.
+> **Observation:** Gateway governance has **no dedicated frontend route**; LDAP sync has a read-only records page (`/audit/ldap-sync`, `views/ldap-sync/index.vue`); when `ldap.enabled` and `ldap.sync-enabled` are both on, syncs run at startup and on `ldap.sync-cron`, and only SYS_ADMIN can start one by hand, through `POST /ldap-sync/full|incremental|hermes-groups[/incremental]`, which exists only under the same two switches (PRD D-51); gateway-governance UI referenced in PROJECT_ARCHITECTURE.md does **not exist** (no `backend/api-gateway` module, no gateway-mfe wired). Permission-request approvals surface inside role/permission pages, not a standalone route.
 
 ---
 
@@ -42,11 +43,11 @@ API clients (`src/api/`): `auth`, `user`, `role`, `organization`, `businessUnit`
 **Identity / RBAC**
 - `AuthController /auth`, `AuthSsoExchangeController /auth/sso`, `SsoAuthController /sso`, `SsoInternalController /internal/sso` (redeem, `X-Platform-Sso-Internal`) — see auth.md.
 - `UserController /users`: create/`{id}`/status/reset-password/delete, `batch-import`, `export-template`, `/{id}/roles|virtual-groups|business-units|memberships`, `preferences`.
-- `RoleController /roles`: CRUD, `/business`, `/developer`, `PUT/GET /{id}/permissions` (the resource×action matrix), members (paged/batch/count), `/{id}/history`.
-- `PermissionController /permissions`: `/{id}`, `/resource/{res}`, `/check`, `/user/{id}`, delegations CRUD, **conflict detect/resolve/pending**.
+- `RoleController /roles`: CRUD, `/business`, `/developer`, `/{id}/references`, `/{id}/holders` (read-only; holders come from BU memberships and group lists). The member and history endpoints were removed in WP10 (Q3); `PUT/GET /{id}/permissions` (the resource×action matrix, no caller) in WP16.
+- `PermissionController /permissions` was removed in WP10 (Q3), together with permission check, delegation and conflict handling; none had a caller.
 - `BusinessUnitController /business-units` + `BusinessUnitRoleController /business-units/{unit}/roles` + `UserBusinessUnitRoleController /users/{id}/business-unit-roles`.
-- `VirtualGroupController /virtual-groups` + `VirtualGroupRoleController /virtual-groups/{id}`.
-- `MemberController`-equivalents: `ApproverController /approvers`, `MemberChangeLogController /member-change-logs`, `ExitController /exit`, `DeveloperPermissionController /developer-permissions`, `TaskAssignmentController /task-assignment` (BU-bounded/unbounded role lookups for DW assignee config).
+- `VirtualGroupController /virtual-groups` + `VirtualGroupRoleController /virtual-groups/{id}` (GET only; binding roles to groups was removed, PRD §5.1).
+- `MemberController`-equivalents: `ApproverController /approvers`, `MemberChangeLogController /member-change-logs`, `ExitController /exit`, `DeveloperPermissionController /developer-permissions`, `TaskAssignmentController /task-assignment` (BU + Role candidate lookups for the engine, BU-bounded role catalog for DW assignee config).
 
 **Function-unit deployment (the DW↔UP pivot)**
 - `FunctionUnitController /function-units`: FU catalog governance, access config, enable/disable.
@@ -61,6 +62,7 @@ API clients (`src/api/`): `auth`, `user`, `role`, `organization`, `businessUnit`
 - `LogController /logs`: query/search/by-type/by-user + behavior, statistics, error-trend, performance-bottlenecks, export, retention-policies.
 - `ConfigController /configs`, `DictionaryController /dictionaries`, `DashboardController /dashboard`, `SystemMonitorController /monitor`.
 - `LdapSyncController /ldap-sync`: `POST /full|/incremental|/hermes-groups|/hermes-groups/incremental`, `GET /status|/audit-logs`.
+- `LdapSyncRecordController /ldap-sync`: `POST /audit-logs/query` (the records page).
 - `PermissionRequestAdminController /permission-requests`, `ApprovalController /approvals`.
 - `ApTokenController /internal/ap` (Activepieces gateway token bridge), `RelationTableStructureController /relation-tables/structures`, `RelationTableDataController /relation-tables/data`.
 - `AdminApiExceptionHandler` — `@RestControllerAdvice`.
@@ -72,8 +74,8 @@ API clients (`src/api/`): `auth`, `user`, `role`, `organization`, `businessUnit`
 ### BI / Superset embed (Confirmed, scheduled-synced)
 Admin UI (`@superset-ui/embedded-sdk`) → `BiGuestTokenController /bi/guest-token` → backend logs into Superset (`POST {superset}/api/v1/security/login`) then mints a **guest token** (`POST /api/v1/security/guest_token`) scoped to the embedded dashboard + RLS → SDK embeds. `bi_*` schema (`15-bi-management-schema.sql`) stores the dashboard registry, user/role assignments, and platform-role→Superset-role RBAC mapping. Two scheduled syncs (`@Scheduled bi.sync.cron` default every 6h): `DashboardSyncComponent` (pull Superset dashboard list) + `SupersetRoleSyncComponent` (push role mapping). Superset schema `40-superset-schema.sql`. SSO integration: see memory `superset-sso-integration` + auth.md.
 
-### LDAP sync (Confirmed real, backend/scheduled — no UI page)
-`LdapSyncService` + `LdapHermesGroupSyncComponent`, triggered by `@Scheduled(cron ldap.sync-cron, default every 2h)` **and** manual `POST /ldap-sync/full|incremental|hermes-groups`. Bind + JIT upsert of users/groups. Writes `ac_ldap_sync_audit` (`39/44-ac-ldap-sync-audit.sql`) via `LdapSyncAuditService`. `ShedLock` (`SchedulerLockConfig`) prevents multi-replica double-run. Gated by `ldap.enabled` (off in dev). Login-side LDAP is separate (auth.md).
+### LDAP sync (Confirmed real, scheduled + SYS_ADMIN API; read-only records page at `/audit/ldap-sync`)
+`LdapSyncService` + `LdapHermesGroupSyncComponent`, triggered by `@Scheduled(cron ldap.sync-cron, default every 2h)` **and** manual `POST /ldap-sync/full|incremental|hermes-groups[/incremental]` (SYS_ADMIN only), plus one run at startup. Bind + JIT upsert of users/groups. Writes `ac_ldap_sync_audit` (`39/44-ac-ldap-sync-audit.sql`) via `LdapSyncAuditService`. The startup, scheduled and four manual triggers share `LdapSyncLock` (ShedLock on the `SchedulerLockConfig` Redis provider, lock name `LdapHermesGroupSync_onSchedule`, held at most 20 min and extended every 10 min while a sync runs), so at most one LDAP sync runs at a time across replicas. A startup or scheduled run that finds the lock held is skipped with a WARN log; a manual trigger gets 409 `LDAP_SYNC_IN_PROGRESS` and is not queued, or 503 `LDAP_SYNC_LOCK_UNAVAILABLE` when Redis cannot be reached. Gated by `ldap.enabled` + `ldap.sync-enabled` (both on in the dev compose; go-live step W5 turns sync off for the first start). Login-side LDAP is separate (auth.md).
 
 ### Function-unit deployment target
 DW POSTs ZIP → `FunctionUnitImportController /import` → validate → `/deploy` writes `sys_function_units` + `sys_form/process/action_definitions` by code+version → `POST /{code}/activate/{version}` flips the enabled flag (partial unique index `idx_function_unit_code_enabled` = at most one enabled version per code, `11-add-unique-enabled-constraint.sql`). Engine BPMN deployed via `/deploy-process`. On undeploy/redeploy, admin-center calls user-portal `POST /internal/runtime/purge-by-catalog` (`PortalRuntimePurgeClient`, `X-Internal-Token`).
@@ -91,7 +93,7 @@ DW POSTs ZIP → `FunctionUnitImportController /import` → validate → `/deplo
 ```mermaid
 flowchart TB
   subgraph FE["frontend/admin-center"]
-    DASH[Dashboard] & USR[User] & ORG[BU tree] & VG[Virtual Group] & ROLE[Role+PermMatrix]
+    DASH[Dashboard] & USR[User] & ORG[BU tree] & VG[Virtual Group] & ROLE[Role + holders]
     FU[Function Unit] & AUD[Audit] & CFG[Config/Dictionary] & BI[BI Management] & RT[Relation Tables]
   end
   subgraph BE["backend/admin-center (/api/v1/admin)"]
@@ -116,8 +118,8 @@ flowchart TB
 | # | Finding | Status | Evidence |
 |---|---|---|---|
 | 1 | Gateway-governance UI + `backend/api-gateway` module referenced in PROJECT_ARCHITECTURE.md **do not exist** | Missing (doc drift) | no `backend/api-gateway`, no gateway route in AC router |
-| 2 | LDAP sync has **no admin UI** — only scheduled + raw POST endpoints; `GET /ldap-sync/status|audit-logs` exist but no confirmed page consuming them | Backend Only | `LdapSyncController`, no `ldap` view/api |
-| 3 | Permission **conflict detect/resolve** endpoints exist — confirm a UI surfaces them (else orphan) | Unknown / possible Orphan | `PermissionController /conflicts/*` |
+| 2 | LDAP sync records are shown read-only at `/audit/ldap-sync` (SYS_ADMIN, Technical Lead, Auditor); only SYS_ADMIN can trigger a sync (PRD D-51) | Closed (2026-11) | `LdapSyncController`, `views/ldap-sync` |
+| 3 | Permission **conflict detect/resolve** endpoints had no UI and no caller | Removed (2026-11, WP10) | `PermissionController` deleted |
 | 4 | Audit coverage uneven — some domain mutations captured only via general `LogController`, not explicit audit rows | Partially Implemented | §3 audit |
 | 5 | 419 files but HTTP-layer tests near-zero (AuthController, SSO, SecurityAudit, TaskAssignment untested); AC frontend only 5 test files | Test gap | testing-quality.md |
 | 6 | `LdapSyncService.java` 952 lines — God-class candidate | Technical Debt | testing-quality.md |

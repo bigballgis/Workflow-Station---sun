@@ -6,6 +6,9 @@ import java.util.List;
 
 /**
  * One page of Admin User Portal audit logs. Toolbar fields AND with shared-header filters.
+ *
+ * <p>{@code functionUnitCodes} is written by Admin Center for the caller (platform access model §8.2): null = every
+ * unit, an empty list = no unit, otherwise only processes of these units.</p>
  */
 public record UserPortalAuditListQueryRequest(
         int page,
@@ -18,7 +21,8 @@ public record UserPortalAuditListQueryRequest(
         String endTime,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection) {
+        String sortDirection,
+        List<String> functionUnitCodes) {
 
     public UserPortalAuditListQueryRequest {
         if (page < 0) {
@@ -35,5 +39,6 @@ public record UserPortalAuditListQueryRequest(
         if (sortField != null && sortDirection == null) {
             throw new IllegalArgumentException("sortDirection is required when sortField is set");
         }
+        functionUnitCodes = functionUnitCodes == null ? null : List.copyOf(functionUnitCodes);
     }
 }

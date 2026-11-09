@@ -39,10 +39,20 @@ class UserPortalAuditListQueryRequestTest {
         assertEquals(List.of(), body.filters());
     }
 
+    @Test
+    void theUnitScopeIsAdminsAndKeepsNullApartFromEmpty() {
+        UserPortalAuditListQueryRequest fromBrowser = new UserPortalAuditListQueryRequest(
+                0, 20, null, null, null, null, null, null, null, null, null, List.of("SOMEONE_ELSES"));
+
+        assertEquals(List.of("FU_A"), fromBrowser.withFunctionUnitCodes(java.util.Set.of("FU_A")).functionUnitCodes());
+        assertEquals(List.of(), fromBrowser.withFunctionUnitCodes(java.util.Set.of()).functionUnitCodes());
+        assertEquals(null, fromBrowser.withFunctionUnitCodes(null).functionUnitCodes());
+    }
+
     private static UserPortalAuditListQueryRequest request(
             int page, int size, String sortField, String sortDirection) {
         return new UserPortalAuditListQueryRequest(
                 page, size, null, null, null, null, null, null,
-                null, sortField, sortDirection);
+                null, sortField, sortDirection, null);
     }
 }

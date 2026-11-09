@@ -5,7 +5,6 @@ import com.admin.entity.FunctionUnitAccess;
 import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RoleRepository;
-import com.admin.repository.UserRoleRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,14 +32,14 @@ class FunctionUnitAccessServiceCopyTest {
     @Mock
     private RoleRepository roleRepository;
     @Mock
-    private UserRoleRepository userRoleRepository;
+    private UserRoleIdResolver userRoleIdResolver;
 
     private FunctionUnitAccessService service;
 
     @BeforeEach
     void setUp() {
         service = new FunctionUnitAccessService(
-                accessRepository, functionUnitRepository, roleRepository, userRoleRepository);
+                accessRepository, functionUnitRepository, roleRepository, userRoleIdResolver);
     }
 
     @Test

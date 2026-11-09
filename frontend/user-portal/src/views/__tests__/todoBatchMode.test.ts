@@ -34,7 +34,7 @@ vi.mock('@/stores/userPreference', () => ({
   }),
 }))
 
-const session = vi.hoisted(() => ({ user: null as { roles: string[]; systemAdministrator: boolean } | null }))
+const session = vi.hoisted(() => ({ user: null as { roles: string[] } | null }))
 vi.mock('@/api/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/auth')>()),
   getStoredUser: () => session.user,
@@ -243,6 +243,8 @@ describe('To Do batch actions tab', () => {
     expect(w.findAllComponents({ name: 'ListColumnHeader' })).toHaveLength(6)
     // The full To Do keeps the per-row claim / unclaim / force-unclaim / reassign column.
     expect(w.find('.todo-claim-action-header').exists()).toBe(true)
+    // ...pinned to the right edge when the columns overflow (shared lists §6.6).
+    expect(w.find('[fixed="right"] .todo-claim-action-header').exists()).toBe(true)
   })
 
   /**
@@ -250,7 +252,7 @@ describe('To Do batch actions tab', () => {
    * hidden for this session is not offered (nor counted, nor marked on its rows).
    */
   it('applies Allowed Roles to the batch actions and drops a group left with none', async () => {
-    session.user = { roles: ['CLERK'], systemAdministrator: false }
+    session.user = { roles: ['CLERK'] }
     const managerOnly = JSON.stringify({ allowedRoles: ['MANAGER'] })
     vi.mocked(getBatchTaskGroups).mockResolvedValue({ data: [
       { ...GROUP, actions: [GROUP.actions[0], { ...GROUP.actions[1], configJson: managerOnly }] },
@@ -268,8 +270,12 @@ describe('To Do batch actions tab', () => {
     expect(groupOfRow({ batchGroupKey: SECOND_STEP.groupKey, taskDefinitionKey: 'dept' })).toBeUndefined()
   })
 
-  it('shows a System Administrator every batch action, Allowed Roles notwithstanding', async () => {
-    session.user = { roles: [], systemAdministrator: true }
+  /**
+   * Platform access model D-05: a stored session that still carries the retired
+   * `systemAdministrator` flag gets no bypass — Allowed Roles apply exactly as for anyone.
+   */
+  it('applies Allowed Roles to a System Administrator like to anyone else', async () => {
+    session.user = { roles: [], systemAdministrator: true } as unknown as { roles: string[] }
     const managerOnly = JSON.stringify({ allowedRoles: ['MANAGER'] })
     vi.mocked(getBatchTaskGroups).mockResolvedValue({ data: [
       { ...GROUP, actions: GROUP.actions.map((a) => ({ ...a, configJson: managerOnly })) },
@@ -278,9 +284,7 @@ describe('To Do batch actions tab', () => {
     const w = mountPage()
     await flushPromises()
 
-    const row = w.get('[data-test="batch-group-row"]')
-    expect(row.text()).toContain('Approve Purchase')
-    expect(row.text()).toContain('Reject Purchase')
+    expect(w.findAll('[data-test="batch-group-row"]')).toHaveLength(0)
   })
 
   /** The mark must agree with the Batch tab: server flag and a listed group, never one alone. */

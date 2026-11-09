@@ -43,7 +43,8 @@ try{
  for(const s of samples){
   await api('POST',`/function-units/${s.unit.id}/process`,{bpmnXml:s.xml})
   if(s.shape==='duplicate'){
-   const clone=await api('POST',`/function-units/${s.unit.id}/clone?newName=${encodeURIComponent(`Action Round4 QA clone ${phase} ${Date.now()}`)}`)
+   const {workspaceId}=await api('GET',`/function-units/${s.unit.id}`);assert(workspaceId,`Function unit ${s.unit.id} has no workspace for its clone`)
+   const clone=await api('POST',`/function-units/${s.unit.id}/clone?newName=${encodeURIComponent(`Action Round4 QA clone ${phase} ${Date.now()}`)}&targetGroupId=${encodeURIComponent(workspaceId)}`)
    s[`${phase}CloneId`]=clone.id;await persist()
    const process=await api('GET',`/function-units/${clone.id}/process`)
    const actions=await api('GET',`/function-units/${clone.id}/actions`)

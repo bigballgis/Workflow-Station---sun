@@ -2,6 +2,7 @@ import { type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { claimBatch, claimTask, reassignTask, unclaimBatch, unclaimTask } from '@/api/task'
+import { getStoredUser } from '@/api/auth'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 
 type BatchSlice = {
@@ -91,6 +92,25 @@ export function useTaskClaimActions(options: {
       return Promise.resolve()
     }
     return run(taskId, () => reassignTask(taskId, targetUserId.trim()), 'task.reassignSuccess')
+  }
+
+  /** Holder lost Portal entry: after a confirm, reassign the task to the signed-in user. */
+  async function takeOver(taskId: string, holderName?: string): Promise<void> {
+    const me = getStoredUser()?.userId?.trim()
+    if (!me) {
+      ElMessage.error(t('api.unauthorized'))
+      return
+    }
+    try {
+      await ElMessageBox.confirm(
+        t('task.takeOverConfirm', { user: holderName || '-' }),
+        t('task.takeOver'),
+        { type: 'warning' },
+      )
+    } catch {
+      return
+    }
+    return run(taskId, () => reassignTask(taskId, me), 'task.takeOverSuccess')
   }
 
   async function runConfirmedBatch(
@@ -228,6 +248,7 @@ export function useTaskClaimActions(options: {
     unclaim,
     forceUnclaim,
     reassign,
+    takeOver,
     claimAll,
     unclaimAll,
     claimSelected,

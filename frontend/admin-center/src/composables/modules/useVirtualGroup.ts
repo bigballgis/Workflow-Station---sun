@@ -17,7 +17,7 @@ import { useVirtualGroupStore } from '@/stores/virtualGroup'
 import type { VirtualGroupTab } from '@/utils/virtualGroupList'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
-const ACTIONS_COL_WIDTH = 400
+const ACTIONS_COL_WIDTH = 320
 
 export function useVirtualGroup() {
   const { t } = useI18n()
@@ -26,7 +26,6 @@ export function useVirtualGroup() {
   const loading = ref(false)
   const formDialogVisible = ref(false)
   const membersDialogVisible = ref(false)
-  const rolesDialogVisible = ref(false)
   const currentGroup = ref<VirtualGroup | null>(null)
   const statusToggleLoadingId = ref<string | null>(null)
 
@@ -75,11 +74,6 @@ export function useVirtualGroup() {
   const showMembersDialog = (group: VirtualGroup) => {
     currentGroup.value = group
     membersDialogVisible.value = true
-  }
-
-  const showRolesDialog = (group: VirtualGroup) => {
-    currentGroup.value = group
-    rolesDialogVisible.value = true
   }
 
   const handleCreateSuccess = async (createdType?: VirtualGroupTab) => {
@@ -135,14 +129,12 @@ export function useVirtualGroup() {
     searchKeyword,
     formDialogVisible,
     membersDialogVisible,
-    rolesDialogVisible,
     currentGroup,
     statusToggleLoadingId,
     fetchGroups,
     showCreateDialog,
     showEditDialog,
     showMembersDialog,
-    showRolesDialog,
     handleDelete,
     handleCreateSuccess,
     handleToggleStatus,

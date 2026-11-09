@@ -35,7 +35,15 @@ public class FunctionUnitInfo {
     private Instant updatedAt;
     private String updatedBy;
     private String iconSvg;
-    
+    /** Owning team of the unit's code (its latest imported row); set by the catalog list only. */
+    private String teamCode;
+    /** Name of that team; null when the team no longer exists. */
+    private String teamName;
+    /** What the catalog's team column shows and exports: the team name, or its code once the team is deleted. */
+    private String team;
+    /** Whether the caller may change this unit (its team is one they lead, or they are SYS_ADMIN); lists only. */
+    private Boolean canManage;
+
     /**
      * Map from persisted {@link FunctionUnit} entity.
      */

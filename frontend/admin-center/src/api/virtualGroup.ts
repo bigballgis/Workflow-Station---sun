@@ -10,20 +10,32 @@ export interface VirtualGroup {
   code: string
   type: 'SYSTEM' | 'CUSTOM' | 'DEVELOPER'
   description?: string
+  /** SYSTEM / CUSTOM: the members; team: the Developer list */
   adGroup?: string
+  /** Team only: the Technical Lead list */
+  techLeadAdGroup?: string
   status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED'
   memberCount: number
   createdAt: string
   createdBy?: string
   updatedAt: string
   updatedBy?: string
-  // 绑定的角色信息
+  // 绑定的角色信息（只有 SYSTEM 组有固定角色，只读）
   boundRoleId?: string
   boundRoleName?: string
   boundRoleCode?: string
   boundRoleType?: string
+  /** Public team: no lists, no AD groups, cannot be disabled or deleted */
+  publicTeam: boolean
+  /** System Administrators: must keep an active member */
+  systemAdministrators: boolean
 }
 
+/** A team has the DEVELOPER and TECH_LEAD lists; SYSTEM and CUSTOM groups have MEMBER only. */
+export type MemberListType = 'MEMBER' | 'DEVELOPER' | 'TECH_LEAD'
+export type MemberSource = 'AD' | 'MANUAL'
+
+/** One entry per person and list; a person can be on a list from AD, by hand, or both. */
 export interface VirtualGroupMember {
   id: string
   groupId: string
@@ -35,17 +47,9 @@ export interface VirtualGroupMember {
   businessUnitId?: string
   businessUnitName?: string
   role: 'LEADER' | 'MEMBER'
+  listType: MemberListType
+  sources: MemberSource[]
   joinedAt: string
-}
-
-export interface VirtualGroupRole {
-  id: string
-  virtualGroupId: string
-  roleId: string
-  roleName?: string
-  roleCode?: string
-  roleType?: string
-  createdAt: string
 }
 
 export interface Approver {
@@ -89,11 +93,13 @@ export interface VirtualGroupCreateRequest {
   type: 'SYSTEM' | 'CUSTOM' | 'DEVELOPER'
   description?: string
   adGroup?: string
+  techLeadAdGroup?: string
 }
 
 export interface MemberRequest {
   userId: string
   role?: 'LEADER' | 'MEMBER'
+  listType?: MemberListType
 }
 
 export interface TaskClaimRequest {
@@ -168,9 +174,9 @@ export const virtualGroupApi = {
   addMember: (groupId: string, data: MemberRequest) =>
     post<VirtualGroupResult>(`/virtual-groups/${groupId}/members`, data),
 
-  // 移除成员
-  removeMember: (groupId: string, userId: string) =>
-    del<VirtualGroupResult>(`/virtual-groups/${groupId}/members/${userId}`),
+  // 撤销人工成员（只删这份名单的人工来源；AD 来源由 AD 同步维护）
+  removeMember: (groupId: string, userId: string, listType: MemberListType) =>
+    del<VirtualGroupResult>(`/virtual-groups/${groupId}/members/${userId}`, { params: { listType } }),
 
   // 更新成员角色
   updateMemberRole: (groupId: string, userId: string, data: MemberRequest) =>
@@ -197,34 +203,6 @@ export const virtualGroupApi = {
   // 获取任务历史
   getTaskHistory: (groupId: string, taskId: string) =>
     get<TaskHistory[]>(`/virtual-groups/${groupId}/tasks/${taskId}/history`),
-
-  // ==================== 角色绑定 API ====================
-
-  // 获取虚拟组绑定的角色（单角色绑定）
-  getBoundRoles: (groupId: string) =>
-    get<any>(`/virtual-groups/${groupId}/role`).then(role => {
-      if (role) {
-        // Transform Role to VirtualGroupRole format for compatibility
-        return [{
-          id: role.id,
-          virtualGroupId: groupId,
-          roleId: role.id,
-          roleName: role.name,
-          roleCode: role.code,
-          roleType: role.type,
-          createdAt: role.createdAt
-        } as VirtualGroupRole]
-      }
-      return []
-    }).catch(() => []),  // Return empty array if no role bound (204 No Content)
-
-  // 绑定角色到虚拟组（会替换现有绑定）
-  bindRole: (groupId: string, roleId: string) =>
-    post<void>(`/virtual-groups/${groupId}/role`, { roleId }),
-
-  // 解绑角色
-  unbindRole: (groupId: string, _roleId: string) =>
-    del<void>(`/virtual-groups/${groupId}/role`),
 
   // ==================== 审批人 API ====================
 

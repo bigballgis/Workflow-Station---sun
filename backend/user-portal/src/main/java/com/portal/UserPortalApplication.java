@@ -10,6 +10,7 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 import com.platform.security.resolver.TargetResolverFactory;
+import com.platform.security.service.PortalEntryService;
 import com.platform.security.service.impl.UserRoleServiceImpl;
 
 /**
@@ -18,11 +19,11 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
 @SpringBootApplication
 @ComponentScan(
     basePackages = {"com.portal", "com.platform.common", "com.platform.security.exception", "com.platform.messaging", "com.platform.security.filter", "com.platform.security.config"},
-    basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
+    basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class, PortalEntryService.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.service\\.impl\\.(?!UserRoleServiceImpl|JwtTokenServiceImpl).*"),
-        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.config\\.(?!JwtProperties).*"),
+        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.config\\.(?!JwtProperties|RequiredConnectionSecrets).*"),
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.controller\\..*")
     }
 )
@@ -31,7 +32,7 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
 public class UserPortalApplication {
 
     public static void main(String[] args) {
-        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Hong_Kong"));
         SpringApplication.run(UserPortalApplication.class, args);
     }
 }

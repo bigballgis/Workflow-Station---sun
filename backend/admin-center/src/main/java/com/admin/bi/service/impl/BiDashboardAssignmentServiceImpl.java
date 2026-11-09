@@ -21,7 +21,7 @@ import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.UserBusinessUnitRoleRepository;
-import com.admin.repository.UserRoleRepository;
+import com.admin.service.UserRoleIdResolver;
 import com.admin.service.UserBusinessUnitService;
 import com.platform.security.entity.UserBusinessUnitRole;
 import jakarta.persistence.EntityManager;
@@ -48,7 +48,7 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final BusinessUnitRepository businessUnitRepository;
-    private final UserRoleRepository userRoleRepository;
+    private final UserRoleIdResolver userRoleIdResolver;
     private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private final UserBusinessUnitService userBusinessUnitService;
     private final DashboardRoleGate dashboardRoleGate;
@@ -245,7 +245,7 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
 
     private List<String> getEffectiveRoleIds(String userId, String activeBusinessUnitId) {
         LinkedHashSet<String> roleIds = new LinkedHashSet<>();
-        List<String> globalRoleIds = userRoleRepository.findGlobalRoleIdsByUserId(userId);
+        List<String> globalRoleIds = userRoleIdResolver.platformRoleIds(userId);
         if (globalRoleIds != null) {
             roleIds.addAll(globalRoleIds);
         }

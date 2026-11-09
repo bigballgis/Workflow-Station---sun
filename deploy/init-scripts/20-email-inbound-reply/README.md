@@ -41,7 +41,7 @@ Reply Subject / Reply Body 建案时从入站 SUBJECT / 正文写入，可再改
 
 Email Monitor 分两层：**Email Monitors** 页是模板（`Start from inbound email`）；**Process Design → Start Event** 再绑定到 `StartEvent_1`。种子会同时写入这两行。
 
-View Design 默认视图 **Inbound Email Case**（DRAFT，无 BU/Role access → 仅管理员可见，直到在 View Design 补规则并 Publish）。
+View Design 默认视图 **Inbound Email Case**（DRAFT，无 BU/Role access → 发布后任何人都看不到，System Administrator 也一样（平台访问模型 D-05），直到在 View Design 补 BU + Role 规则并 Publish）。
 
 ## 灌库（仅 UAT，手工执行）
 

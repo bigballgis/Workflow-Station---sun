@@ -12,5 +12,7 @@ public record SlaPolicyRow(
         String updatedBy,
         String updatedAt,
         String latestJobStatus,
-        String latestJobId) {
+        String latestJobId,
+        /* Whether the caller may change this unit's policy: a team they lead, or SYS_ADMIN (§8.2). */
+        boolean canEdit) {
 }

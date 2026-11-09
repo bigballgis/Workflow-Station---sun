@@ -7,7 +7,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import javax.naming.CommunicationException;
 import javax.naming.Context;
+import javax.naming.InvalidNameException;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
 import javax.naming.directory.Attribute;
@@ -17,14 +19,17 @@ import javax.naming.directory.SearchControls;
 import javax.naming.directory.SearchResult;
 import javax.naming.ldap.Control;
 import javax.naming.ldap.InitialLdapContext;
+import javax.naming.ldap.LdapName;
 import javax.naming.ldap.LdapContext;
 import javax.naming.ldap.PagedResultsControl;
 import javax.naming.ldap.PagedResultsResponseControl;
 
-import java.time.Instant;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -43,22 +48,32 @@ import java.util.TreeMap;
 @ConditionalOnProperty(prefix = "ldap", name = "enabled", havingValue = "true")
 public class LdapClient {
 
+    private static final String RANGED_MEMBER_PREFIX = "member;range=";
+
     private static final String CTX_FACTORY = "com.sun.jndi.ldap.LdapCtxFactory";
     private static final String CONNECT_TIMEOUT_KEY = "com.sun.jndi.ldap.connect.timeout";
     private static final String READ_TIMEOUT_KEY = "com.sun.jndi.ldap.read.timeout";
+    private static final String SOCKET_FACTORY_KEY = "java.naming.ldap.factory.socket";
 
     private final LdapProperties props;
 
     /**
-     * 启动时配置自定义 LDAPS truststore（含 HSBC CA 根证书）。
-     * 设置 JVM 级 trustStore 系统属性；未配置则沿用 JVM 默认信任库。
+     * Why the configured truststore could not be loaded; every LDAP connection then fails with this text instead of
+     * falling back to the JVM's default trust. {@code null} when it loaded or none is configured.
+     */
+    private String trustStoreFailure;
+
+    /**
+     * 启动时加载自定义 LDAPS truststore（含 HSBC CA 根证书），只给 LDAP 连接用（{@link LdapTrustStoreSocketFactory}），
+     * 不改 JVM 级 {@code javax.net.ssl.trustStore}，Admin Center 其它出站 TLS 仍用 JVM 默认信任库；未配置则 LDAP 也用默认。
+     * 读不了时不阻止启动，但所有 LDAP 连接都报明确的错误。
      *
      * <p>传输安全 fail-fast：simple bind 会把服务账号与用户口令原文发给 LDAP 服务器，
      * 因此除非显式 {@code ldap.allow-insecure=true}（仅本地 mock OpenLDAP 联调），
      * 连接必须为 ldaps:// 或 {@code ldap.tls=true}，否则启动即失败，防止生产误配明文过网。</p>
      */
     @PostConstruct
-    void configureTrustStore() {
+    void configureTransport() {
         String url = props.getProviderUrl() == null ? "" : props.getProviderUrl().trim().toLowerCase(java.util.Locale.ROOT);
         boolean cleartext = url.startsWith("ldap://") && !props.isTls();
         if (cleartext && !props.isAllowInsecure()) {
@@ -70,12 +85,17 @@ public class LdapClient {
         if (cleartext) {
             log.warn("LDAP cleartext transport explicitly allowed (ldap.allow-insecure=true) — local/mock use only");
         }
-        if (StringUtils.hasText(props.getKeystorePath())) {
-            System.setProperty("javax.net.ssl.trustStore", props.getKeystorePath());
-            if (StringUtils.hasText(props.getKeystorePassword())) {
-                System.setProperty("javax.net.ssl.trustStorePassword", props.getKeystorePassword());
+        if (StringUtils.hasText(props.getKeystorePath()) && !usesTls()) {
+            log.warn("ldap.keystore-path is set but LDAP connections do not use TLS; the truststore is not used");
+        } else if (StringUtils.hasText(props.getKeystorePath())) {
+            try {
+                LdapTrustStoreSocketFactory.load(props.getKeystorePath(), props.getKeystorePassword());
+                log.info("LDAP custom truststore loaded; it applies to LDAP connections only");
+            } catch (IOException | GeneralSecurityException e) {
+                trustStoreFailure = "LDAP truststore " + props.getKeystorePath() + " could not be loaded: "
+                        + e.getMessage();
+                log.error("{}. Every LDAP connection fails until it is fixed.", trustStoreFailure);
             }
-            log.info("LDAP custom truststore configured");
         }
     }
 
@@ -119,7 +139,7 @@ public class LdapClient {
         Hashtable<String, Object> env = baseEnv(userDn, password);
         DirContext userCtx = null;
         try {
-            userCtx = new InitialLdapContext(env, null);
+            userCtx = connect(env);
             return true;
         } catch (javax.naming.AuthenticationException e) {
             // 口令错误：确定性失败
@@ -149,7 +169,7 @@ public class LdapClient {
     public Optional<Map<String, String>> getUserAttributes(String userDn) throws NamingException {
         DirContext ctx = openServiceContext();
         try {
-            Attributes attrs = ctx.getAttributes(userDn, retrieveAttributeNames());
+            Attributes attrs = ctx.getAttributes(ldapName(userDn), retrieveAttributeNames());
             return Optional.of(flatten(attrs));
         } finally {
             closeQuietly(ctx);
@@ -168,7 +188,7 @@ public class LdapClient {
             if (dn == null) {
                 return Optional.empty();
             }
-            Attributes attrs = ctx.getAttributes(dn, retrieveAttributeNames());
+            Attributes attrs = ctx.getAttributes(ldapName(dn), retrieveAttributeNames());
             return Optional.of(flatten(attrs));
         } finally {
             closeQuietly(ctx);
@@ -178,7 +198,7 @@ public class LdapClient {
     /**
      * 在 group-search-base-dn 下按 CN 搜索组，返回组 DN。
      *
-     * @param groupCn 组的 CN（如 {@code Infodir-Hermes-Default-UAT-User}）
+     * @param groupCn 组的 CN（如 {@code Finance-Approvers}）
      * @return 组 DN；未命中返回 empty
      */
     public Optional<String> findGroupDnByCn(String groupCn) throws NamingException {
@@ -191,7 +211,7 @@ public class LdapClient {
             controls.setReturningAttributes(new String[]{"cn", "member", "whenChanged"});
             controls.setCountLimit(1);
             NamingEnumeration<SearchResult> results =
-                    ctx.search(groupSearchBase, "(cn=" + escaped + ")", controls);
+                    ctx.search(ldapName(groupSearchBase), "(cn=" + escaped + ")", controls);
             try {
                 if (results.hasMore()) {
                     SearchResult sr = results.next();
@@ -209,97 +229,121 @@ public class LdapClient {
     }
 
     /**
-     * 读取组的 member 属性（支持 AD ranged 分段读取，步长 500），返回所有 member DN 列表。
-     * <p>AD 大组场景：member 属性值过多时，AD 返回 {@code member;range=0-499} 而非完整 member。
-     * 本方法自动检测 range 分段并迭代拉取直到返回 {@code member} 或 {@code member;range=xxx-*}。</p>
+     * 读取组的全部 member DN；大组的分段读取规则见 {@link #readMemberRanges}。
      */
     public List<String> fetchGroupMemberDns(String groupDn) throws NamingException {
-        List<String> members = new ArrayList<>();
+        LdapName group = ldapName(groupDn);
         DirContext ctx = openServiceContext();
         try {
-            int step = 500;
-            int start = 0;
-            while (true) {
-                String rangedAttr = "member;range=" + start + "-" + (start + step - 1);
-                // 首次尝试 ranged；若不存在则回退普通 member
-                String[] attrIds = start == 0
-                        ? new String[]{rangedAttr, "member"}
-                        : new String[]{rangedAttr};
-                boolean viaRanged = true;
-                Attributes attrs;
-                try {
-                    attrs = ctx.getAttributes(groupDn, attrIds);
-                } catch (NamingException e) {
-                    // 当前没有更多 ranged 段或属性不存在，回退尝试普通 member（仅首次）
-                    if (start == 0) {
-                        attrs = ctx.getAttributes(groupDn, new String[]{"member"});
-                        viaRanged = false;
-                    } else {
-                        break;
-                    }
-                }
-
-                Attribute memberAttr = attrs.get(rangedAttr);
-                if (memberAttr == null && start == 0) {
-                    memberAttr = attrs.get("member");
-                    viaRanged = false;
-                }
-                if (memberAttr == null) {
-                    break;
-                }
-
-                int count = 0;
-                NamingEnumeration<?> values = memberAttr.getAll();
-                try {
-                    while (values.hasMore()) {
-                        Object v = values.next();
-                        if (v != null) {
-                            members.add(String.valueOf(v));
-                            count++;
-                        }
-                    }
-                } finally {
-                    closeQuietly(values);
-                }
-
-                // 判断是否读取结束
-                String attrId = memberAttr.getID();
-                if (!viaRanged || attrId.equalsIgnoreCase("member") || attrId.endsWith("*")) {
-                    break;
-                }
-                start += count;
-                if (count < step) {
-                    break;
-                }
-            }
+            List<String> members = readMemberRanges(attrIds -> ctx.getAttributes(group, attrIds));
+            log.debug("Fetched {} member DNs from group DN {}", members.size(), groupDn);
+            return members;
         } finally {
             closeQuietly(ctx);
         }
-        log.debug("Fetched {} member DNs from group DN {}", members.size(), groupDn);
-        return members;
+    }
+
+    /** Reads one request of attributes of the group entry. */
+    @FunctionalInterface
+    interface MemberAttributeReader {
+        Attributes read(String[] attrIds) throws NamingException;
+    }
+
+    /**
+     * Reads every value of {@code member}, following AD ranged retrieval: each request asks for
+     * {@code member;range=<start>-*}; AD answers with {@code member;range=<start>-<end>} while more values
+     * follow and with {@code member;range=<start>-*} for the range holding the last one. A server without
+     * ranged retrieval answers with plain {@code member}. A failure after the first range is thrown, so the
+     * caller does not mistake a cut-off list for the whole group.
+     */
+    static List<String> readMemberRanges(MemberAttributeReader reader) throws NamingException {
+        List<String> members = new ArrayList<>();
+        int start = 0;
+        while (true) {
+            Attributes attrs;
+            if (start == 0) {
+                try {
+                    attrs = reader.read(new String[]{RANGED_MEMBER_PREFIX + "0-*", "member"});
+                } catch (NamingException e) {
+                    // A server that rejects the range option: read the plain attribute.
+                    attrs = reader.read(new String[]{"member"});
+                }
+            } else {
+                attrs = reader.read(new String[]{RANGED_MEMBER_PREFIX + start + "-*"});
+            }
+            Attribute memberAttr = memberAttribute(attrs);
+            if (memberAttr == null) {
+                return members;
+            }
+            int count = 0;
+            NamingEnumeration<?> values = memberAttr.getAll();
+            try {
+                while (values.hasMore()) {
+                    Object v = values.next();
+                    if (v != null) {
+                        members.add(String.valueOf(v));
+                        count++;
+                    }
+                }
+            } finally {
+                closeQuietly(values);
+            }
+            String attrId = memberAttr.getID().toLowerCase(Locale.ROOT);
+            if (!attrId.startsWith(RANGED_MEMBER_PREFIX) || attrId.endsWith("-*") || count == 0) {
+                return members;
+            }
+            start += count;
+        }
+    }
+
+    /** The member attribute in an answer, preferring a ranged one over plain {@code member}. */
+    private static Attribute memberAttribute(Attributes attrs) throws NamingException {
+        if (attrs == null) {
+            return null;
+        }
+        Attribute plain = null;
+        NamingEnumeration<? extends Attribute> all = attrs.getAll();
+        try {
+            while (all.hasMore()) {
+                Attribute attr = all.next();
+                String id = attr.getID().toLowerCase(Locale.ROOT);
+                if (id.startsWith(RANGED_MEMBER_PREFIX)) {
+                    return attr;
+                }
+                if (id.equals("member")) {
+                    plain = attr;
+                }
+            }
+        } finally {
+            closeQuietly(all);
+        }
+        return plain;
     }
 
     /**
      * 拉取一个 AD 组内的所有用户（完整 pipeline：按 CN 找组 DN → 读取 member DNs → 逐个取用户属性）。
      *
      * @param groupCn 组的 CN
-     * @return 扁平化的用户属性列表（每行包含 memberOf 等完整属性）
+     * @return 扁平化的用户属性列表（每行包含 memberOf 等完整属性），以及是否读全：有成员读不出属性、
+     *         或因 {@code max-entries} 截断时为不完整，调用方不得据此判断谁已离开该组
      */
-    public List<Map<String, String>> fetchUsersInGroup(String groupCn) throws NamingException {
+    public AdGroupMembers fetchUsersInGroup(String groupCn) throws NamingException {
         Optional<String> groupDnOpt = findGroupDnByCn(groupCn);
         if (groupDnOpt.isEmpty()) {
             log.warn("AD group not found: CN={}", groupCn);
-            return List.of();
+            return new AdGroupMembers(List.of(), true);
         }
         String groupDn = groupDnOpt.get();
         List<String> memberDns = fetchGroupMemberDns(groupDn);
         log.info("AD group CN={} has {} member DNs", groupCn, memberDns.size());
 
         if (memberDns.isEmpty()) {
-            return fetchUsersByMemberOf(groupCn, groupDn);
+            List<Map<String, String>> users = fetchUsersByMemberOf(groupCn, groupDn);
+            return new AdGroupMembers(users, !reachedLimit(users));
         }
 
         List<Map<String, String>> users = new ArrayList<>();
+        boolean complete = true;
         for (String memberDn : memberDns) {
             try {
                 Attributes attrs = getRawAttributes(memberDn);
@@ -309,12 +353,18 @@ public class LdapClient {
                 users.add(flat);
             } catch (NamingException e) {
                 log.warn("Failed to read attributes for member DN {}: {}", memberDn, e.getMessage());
+                complete = false;
             }
             if (reachedLimit(users)) {
+                complete = complete && users.size() == memberDns.size();
                 break;
             }
         }
-        return users;
+        return new AdGroupMembers(users, complete);
+    }
+
+    /** Members read from one AD group; {@code complete} is false when some could not be read. */
+    public record AdGroupMembers(List<Map<String, String>> users, boolean complete) {
     }
 
     /** 组 member 属性为空或不可读时，反向搜索用户侧 memberOf。 */
@@ -326,76 +376,13 @@ public class LdapClient {
         return users;
     }
 
-    /**
-     * 检查 AD 组对象自 {@code watermark} 以来是否发生变更。
-     * <p>在 group-search-base-dn 中按 CN 查询组，读取 whenChanged 属性与 watermark 比较。</p>
-     *
-     * @return {@code true}=已变更（需要重新同步）；{@code false}=未变更或组不存在
-     */
-    public boolean hasGroupChangedSince(String groupCn, Instant watermark) {
-        try {
-            String escaped = escapeFilterValue(groupCn);
-            String groupSearchBase = getGroupSearchBaseDn();
-            DirContext ctx = openServiceContext();
-            try {
-                SearchControls controls = new SearchControls();
-                controls.setSearchScope(SearchControls.SUBTREE_SCOPE);
-                controls.setReturningAttributes(new String[]{"whenChanged", "modifyTimestamp"});
-                controls.setCountLimit(1);
-                NamingEnumeration<SearchResult> results =
-                        ctx.search(groupSearchBase, "(cn=" + escaped + ")", controls);
-                try {
-                    if (results.hasMore()) {
-                        Attributes attrs = results.next().getAttributes();
-                        Attribute whenChangedAttr = attrs.get("whenChanged");
-                        if (whenChangedAttr != null && whenChangedAttr.size() > 0) {
-                            String whenChangedStr = String.valueOf(whenChangedAttr.get(0));
-                            Instant groupChanged = parseGeneralizedTime(whenChangedStr);
-                            if (groupChanged != null) {
-                                return !groupChanged.isBefore(watermark);
-                            }
-                        }
-                    }
-                } finally {
-                    closeQuietly(results);
-                }
-            } finally {
-                closeQuietly(ctx);
-            }
-        } catch (NamingException e) {
-            log.warn("Failed to check group change for CN={}: {}", groupCn, e.getMessage());
-        }
-        // 查询失败时保守处理：认为有变更，触发同步
-        return true;
-    }
-
     /** 按 DN 获取原始 Attributes（用于内部 pipeline）。 */
     Attributes getRawAttributes(String dn) throws NamingException {
         DirContext ctx = openServiceContext();
         try {
-            return ctx.getAttributes(dn, retrieveAttributeNames());
+            return ctx.getAttributes(ldapName(dn), retrieveAttributeNames());
         } finally {
             closeQuietly(ctx);
-        }
-    }
-
-    /** 解析 AD generalized time 格式（yyyyMMddHHmmss[.0Z]）。 */
-    static Instant parseGeneralizedTime(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        String cleaned = value.replaceAll("\\..*", "").trim();
-        if (cleaned.length() >= 14) {
-            cleaned = cleaned.substring(0, 14);
-        }
-        try {
-            return java.time.LocalDateTime.parse(cleaned,
-                            java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
-                    .atZone(java.time.ZoneOffset.UTC)
-                    .toInstant();
-        } catch (Exception e) {
-            log.debug("Failed to parse AD generalized time: {}", value);
-            return null;
         }
     }
 
@@ -407,7 +394,7 @@ public class LdapClient {
         controls.setSearchScope(SearchControls.SUBTREE_SCOPE);
         controls.setReturningAttributes(new String[0]);
         controls.setCountLimit(1);
-        NamingEnumeration<SearchResult> results = ctx.search(props.getBaseDn(), filter, controls);
+        NamingEnumeration<SearchResult> results = ctx.search(ldapName(props.getBaseDn()), filter, controls);
         try {
             if (results.hasMore()) {
                 return results.next().getNameInNamespace();
@@ -445,7 +432,7 @@ public class LdapClient {
         SearchControls controls = new SearchControls();
         controls.setSearchScope(SearchControls.SUBTREE_SCOPE);
         controls.setReturningAttributes(retrieveAttributeNames());
-        NamingEnumeration<SearchResult> page = ctx.search(props.getBaseDn(), filter, controls);
+        NamingEnumeration<SearchResult> page = ctx.search(ldapName(props.getBaseDn()), filter, controls);
         try {
             while (page.hasMore() && !reachedLimit(out)) {
                 out.add(flatten(page.next().getAttributes()));
@@ -511,11 +498,41 @@ public class LdapClient {
         return attrs.toArray(new String[0]);
     }
 
-    private DirContext openServiceContext() throws NamingException {
-        return new InitialLdapContext(baseEnv(props.getBindDn(), props.getBindPassword()), null);
+    /**
+     * A DN in the form JNDI must receive it. The {@code String} overloads of {@code DirContext} read the name as a
+     * composite name, in which '/' separates components, so {@code CN=Ops/Dana,OU=People,...} would be cut at the
+     * '/' and the server asked for another entry (LDAP 32). An {@link LdapName} reaches the server as one DN, escaped
+     * commas and multi-valued RDNs included. Every read or search by DN goes through here; a malformed DN is a
+     * {@link NamingException} like any other read failure.
+     */
+    static LdapName ldapName(String dn) throws InvalidNameException {
+        return new LdapName(dn);
     }
 
-    private Hashtable<String, Object> baseEnv(String principal, String credentials) {
+    private DirContext openServiceContext() throws NamingException {
+        return connect(baseEnv(props.getBindDn(), props.getBindPassword()));
+    }
+
+    /**
+     * Opens the connection. JNDI loads the socket factory by name through the thread's context class loader, which on
+     * a pool thread (the startup sync runs on one) is the system class loader and does not see Admin Center's own
+     * classes in the packaged jar; this class's loader does.
+     */
+    private static LdapContext connect(Hashtable<String, Object> env) throws NamingException {
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        thread.setContextClassLoader(LdapClient.class.getClassLoader());
+        try {
+            return new InitialLdapContext(env, null);
+        } finally {
+            thread.setContextClassLoader(previous);
+        }
+    }
+
+    private Hashtable<String, Object> baseEnv(String principal, String credentials) throws NamingException {
+        if (trustStoreFailure != null) {
+            throw new CommunicationException(trustStoreFailure);
+        }
         Hashtable<String, Object> env = new Hashtable<>();
         env.put(Context.INITIAL_CONTEXT_FACTORY, CTX_FACTORY);
         env.put(Context.PROVIDER_URL, props.getProviderUrl());
@@ -527,7 +544,16 @@ public class LdapClient {
         if (props.isTls()) {
             env.put(Context.SECURITY_PROTOCOL, "ssl");
         }
+        if (StringUtils.hasText(props.getKeystorePath()) && usesTls()) {
+            env.put(SOCKET_FACTORY_KEY, LdapTrustStoreSocketFactory.class.getName());
+        }
         return env;
+    }
+
+    /** Whether connections are TLS from the start: {@code ldaps://}, or {@code ldap.tls=true}. */
+    private boolean usesTls() {
+        return props.isTls() || (props.getProviderUrl() != null
+                && props.getProviderUrl().trim().toLowerCase(Locale.ROOT).startsWith("ldaps://"));
     }
 
     /** 转义 LDAP 过滤值，防注入：\ * ( ) NUL / 。 */
@@ -551,7 +577,7 @@ public class LdapClient {
         return sb.toString();
     }
 
-    private void closeQuietly(NamingEnumeration<?> e) {
+    private static void closeQuietly(NamingEnumeration<?> e) {
         if (e != null) {
             try {
                 e.close();

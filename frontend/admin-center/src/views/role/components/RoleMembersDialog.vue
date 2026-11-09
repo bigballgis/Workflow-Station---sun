@@ -1,9 +1,9 @@
 <template>
-  <el-dialog 
-    :model-value="modelValue" 
-    :title="t('role.members') + ' - ' + (role?.name || '')" 
-    width="900px" 
-    destroy-on-close 
+  <el-dialog
+    :model-value="modelValue"
+    :title="t('role.members') + ' - ' + (role?.name || '')"
+    width="900px"
+    destroy-on-close
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <!-- 角色信息卡片 -->
@@ -36,38 +36,23 @@
           </el-tag>
         </el-descriptions-item>
         <el-descriptions-item
-          :label="t('virtualGroup.boundRole')"
+          :label="t('role.holdersSource')"
           :span="3"
         >
-          <template v-if="boundVirtualGroup">
-            <el-tag
-              type="primary"
-              size="small"
-            >
-              {{ boundVirtualGroup.name }}
-            </el-tag>
-            <span
-              class="text-muted"
-              style="margin-left: 8px"
-            >({{ boundVirtualGroup.boundRoleCode || boundVirtualGroup.id }})</span>
-          </template>
-          <span
-            v-else
-            class="text-muted"
-          >{{ t('role.noVirtualGroupBound') }}</span>
+          <span class="text-muted">{{ sourceText }}</span>
         </el-descriptions-item>
       </el-descriptions>
     </el-card>
-    
-    <!-- 成员列表 -->
+
+    <!-- 持有人列表：来源按角色类型（SYSTEM 组 / 团队名单 / BU 成员资格） -->
     <div class="section-title">
       <span>{{ t('role.memberList') }}</span>
-      <span class="member-count">{{ members.length }} {{ t('role.people') }}</span>
+      <span class="member-count">{{ holders.length }} {{ t('role.people') }}</span>
     </div>
-    
+
     <el-table
       v-loading="loading"
-      :data="members"
+      :data="holders"
       max-height="350"
       stripe
       size="small"
@@ -90,7 +75,7 @@
       <el-table-column
         prop="fullName"
         :label="t('user.fullName')"
-        width="100"
+        width="120"
       />
       <el-table-column
         prop="email"
@@ -99,31 +84,23 @@
         show-overflow-tooltip
       />
       <el-table-column
-        prop="businessUnitName"
-        :label="t('user.businessUnit')"
-        min-width="120"
+        prop="scopeName"
+        :label="scopeLabel"
+        min-width="140"
         show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          {{ row.businessUnitName || '-' }}
-        </template>
-      </el-table-column>
+      />
       <el-table-column
-        prop="joinedAt"
-        :label="t('virtualGroup.joinedAt')"
-        width="160"
-      >
-        <template #default="{ row }">
-          {{ formatDate(row.joinedAt) }}
-        </template>
-      </el-table-column>
+        prop="status"
+        :label="t('common.status')"
+        width="100"
+      />
     </el-table>
-    
+
     <el-empty
-      v-if="members.length === 0 && !loading && boundVirtualGroup"
+      v-if="holders.length === 0 && !loading"
       :description="t('common.noData')"
     />
-    
+
     <template #footer>
       <el-button @click="$emit('update:modelValue', false)">
         {{ t('common.close') }}
@@ -133,10 +110,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { type Role } from '@/api/role'
-import { virtualGroupApi, type VirtualGroup, type VirtualGroupMember } from '@/api/virtualGroup'
+import { roleApi, type Role, type RoleHolder } from '@/api/role'
 
 const { t } = useI18n()
 
@@ -144,72 +120,69 @@ const props = defineProps<{ modelValue: boolean; role: Role | null }>()
 defineEmits(['update:modelValue'])
 
 const loading = ref(false)
-const members = ref<VirtualGroupMember[]>([])
-const boundVirtualGroup = ref<VirtualGroup | null>(null)
+const holders = ref<RoleHolder[]>([])
 
-const typeText = (type?: string) => ({ 
-  BU_BOUNDED: t('role.buBounded'), 
-  BU_UNBOUNDED: t('role.buUnbounded'), 
+const typeText = (type?: string) => ({
+  BU_BOUNDED: t('role.buBounded'),
   ADMIN: t('role.adminRole'),
   AUDITOR: t('role.auditorRole'),
-  DEVELOPER: t('role.developerRole') 
+  DEVELOPER: t('role.developerRole')
 }[type || ''] || type || '-')
 
-const typeTagType = (type?: string) => ({ 
-  BU_BOUNDED: 'warning', 
-  BU_UNBOUNDED: 'success', 
+const typeTagType = (type?: string) => ({
+  BU_BOUNDED: 'warning',
   ADMIN: 'danger',
   AUDITOR: 'info',
-  DEVELOPER: 'primary' 
+  DEVELOPER: 'primary'
 }[type || ''] || 'info') as any
 
-const formatDate = (date?: string) => {
-  if (!date) return '-'
-  return new Date(date).toLocaleString('zh-CN', { 
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit'
-  })
-}
-
-// 获取角色绑定的虚拟组
-const getBoundVirtualGroup = async (roleId: string): Promise<VirtualGroup | null> => {
-  try {
-    const groups = await virtualGroupApi.list()
-    return groups.find(g => g.boundRoleId === roleId) || null
-  } catch (error) {
-    console.error('Failed to get bound virtual group:', error)
-    return null
+/** Where holders come from, by role type: the backend reads the same source. */
+const sourceText = computed(() => {
+  switch (props.role?.type) {
+    case 'ADMIN':
+    case 'AUDITOR':
+      return t('role.holdersFromSystemGroup')
+    case 'DEVELOPER':
+      return t('role.holdersFromTeamLists')
+    default:
+      return t('role.holdersFromBusinessUnits')
   }
-}
+})
 
-const loadMembers = async () => {
+const scopeLabel = computed(() => {
+  switch (props.role?.type) {
+    case 'ADMIN':
+    case 'AUDITOR':
+      return t('role.holderGroup')
+    case 'DEVELOPER':
+      return t('role.holderTeam')
+    default:
+      return t('user.businessUnit')
+  }
+})
+
+const loadHolders = async () => {
   if (!props.modelValue || !props.role) return
   loading.value = true
-  members.value = []
-  boundVirtualGroup.value = null
+  holders.value = []
   try {
-    boundVirtualGroup.value = await getBoundVirtualGroup(props.role.id)
-    if (boundVirtualGroup.value) {
-      members.value = await virtualGroupApi.getMembers(boundVirtualGroup.value.id)
-    }
-  } catch (error) {
-    console.error('Failed to load role members:', error)
+    holders.value = await roleApi.getHolders(props.role.id)
   } finally {
     loading.value = false
   }
 }
 
 watch(() => props.modelValue, (val) => {
-  if (val) loadMembers()
+  if (val) loadHolders()
 })
 
 watch(() => props.role, () => {
-  if (props.modelValue && props.role) loadMembers()
+  if (props.modelValue && props.role) loadHolders()
 })
 
 const onVisibilityRefresh = () => {
   if (document.visibilityState === 'visible' && props.modelValue && props.role) {
-    loadMembers()
+    loadHolders()
   }
 }
 

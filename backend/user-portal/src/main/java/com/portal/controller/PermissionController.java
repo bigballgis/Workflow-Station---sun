@@ -7,7 +7,6 @@ import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
 import com.portal.dto.PageResponse;
 import com.portal.dto.PermissionListQueryRequest;
-import com.portal.dto.PermissionRequestDto;
 import com.portal.dto.PermissionRequestListItem;
 import com.portal.dto.PortalListPage;
 import com.portal.entity.PermissionRequest;
@@ -22,7 +21,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,33 +95,6 @@ public class PermissionController {
             @PathVariable String businessUnitId) {
         log.debug("Business unit roles requested by user {} for unit {}", userId, businessUnitId);
         return ApiResponse.success(permissionComponent.getBusinessUnitRoles(businessUnitId));
-    }
-
-    @PostMapping("/request-role")
-    @Operation(summary = "Request role", description = "Apply for a business role in an organization unit (auto-approved)")
-    public ApiResponse<PermissionRequest> requestRole(
-            @CurrentUserId String userId,
-            @RequestBody Map<String, String> body) {
-        String roleId = body.get("roleId");
-        String organizationUnitId = body.get("organizationUnitId");
-        String reason = body.get("reason");
-        
-        if (roleId == null || roleId.isEmpty()) {
-            return ApiResponse.error("500", i18nService.getMessage("validation.role_id_required"));
-        }
-        if (organizationUnitId == null || organizationUnitId.isEmpty()) {
-            return ApiResponse.error("500", i18nService.getMessage("portal.org_unit_id_required"));
-        }
-        if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error("500", i18nService.getMessage("portal.reason_required"));
-        }
-        
-        try {
-            PermissionRequest request = permissionComponent.requestRoleAssignment(userId, roleId, organizationUnitId, reason);
-            return ApiResponse.success(request);
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.error("500", e.getMessage());
-        }
     }
 
     @PostMapping("/request-virtual-group")
@@ -375,26 +346,7 @@ public class PermissionController {
         return ApiResponse.success(PageResponse.of(result));
     }
 
-    // ==================== Legacy API endpoints (kept for compatibility) ====================
-
-    @GetMapping("/my")
-    @Operation(summary = "Get my permission list")
-    @Deprecated
-    public ApiResponse<List<Map<String, Object>>> getMyPermissions(
-            @CurrentUserId String userId) {
-        List<Map<String, Object>> permissions = permissionComponent.getUserPermissions(userId);
-        return ApiResponse.success(permissions);
-    }
-
-    @PostMapping("/request")
-    @Operation(summary = "Submit permission request")
-    @Deprecated
-    public ApiResponse<PermissionRequest> submitRequest(
-            @CurrentUserId String userId,
-            @RequestBody @Valid PermissionRequestDto dto) {
-        PermissionRequest request = permissionComponent.submitRequest(userId, dto);
-        return ApiResponse.success(request);
-    }
+    // ==================== Request records ====================
 
     @GetMapping("/requests")
     @Operation(summary = "Get my request records")
@@ -438,31 +390,6 @@ public class PermissionController {
             return ApiResponse.success(null);
         }
         return ApiResponse.error("500", i18nService.getMessage("portal.cancel_request_failed"));
-    }
-
-    @PostMapping("/renew")
-    @Operation(summary = "Renew request")
-    @Deprecated
-    public ApiResponse<PermissionRequest> renewPermission(
-            @CurrentUserId String userId,
-            @RequestBody Map<String, Object> body) {
-        String permissionId = (String) body.get("permissionId");
-        String validToStr = (String) body.get("validTo");
-        String reason = (String) body.get("reason");
-        
-        LocalDateTime newValidTo = LocalDateTime.parse(validToStr);
-        PermissionRequest request = permissionComponent.renewPermission(userId, permissionId, newValidTo, reason);
-        return ApiResponse.success(request);
-    }
-
-    @GetMapping("/expiring")
-    @Operation(summary = "Get expiring permissions")
-    @Deprecated
-    public ApiResponse<List<Map<String, Object>>> getExpiringPermissions(
-            @CurrentUserId String userId,
-            @RequestParam(defaultValue = "30") int days) {
-        List<Map<String, Object>> expiring = permissionComponent.getExpiringPermissions(userId, days);
-        return ApiResponse.success(expiring);
     }
 
     private static String beneficiaryUserIdFromBody(Map<String, Object> body, String currentUserId) {

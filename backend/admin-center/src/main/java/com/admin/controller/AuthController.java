@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.List;
 import com.admin.util.ClientIpResolver;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Authentication controller
@@ -27,6 +29,7 @@ import com.admin.util.ClientIpResolver;
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
+@AdminAccess(AdminAudience.PUBLIC)
 public class AuthController {
 
     private final AuthService authService;
@@ -42,6 +45,7 @@ public class AuthController {
     /**
      * User login
      */
+    @AdminAccess(AdminAudience.PUBLIC)
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request,
@@ -76,6 +80,7 @@ public class AuthController {
     /**
      * User logout
      */
+    @AdminAccess(AdminAudience.PUBLIC)
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response,
                                        @RequestHeader(value = "Authorization", required = false) String authHeader) {
@@ -174,6 +179,7 @@ public class AuthController {
     /**
      * Refresh token
      */
+    @AdminAccess(AdminAudience.PUBLIC)
     @PostMapping("/refresh")
     public ResponseEntity<LoginResponse> refresh(
             @RequestBody(required = false) Map<String, String> request,
@@ -237,6 +243,7 @@ public class AuthController {
     /**
      * Change current user password; on success, current access token is invalidated and re-login is required.
      */
+    @AdminAccess(AdminAudience.PUBLIC)
     @PostMapping("/change-password")
     public ResponseEntity<Void> changePassword(
             @RequestHeader(value = "Authorization", required = false) String authHeader,

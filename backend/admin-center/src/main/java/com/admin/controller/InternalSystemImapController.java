@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Internal API for service-to-service global IMAP settings lookup (email monitor).
@@ -21,6 +23,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/internal/system-imap")
 @Tag(name = "内部-系统 IMAP", description = "服务间读取全局 IMAP 配置")
+@AdminAccess(AdminAudience.SERVICE)
 public class InternalSystemImapController {
 
     private final SystemImapConfigResolver systemImapConfigResolver;

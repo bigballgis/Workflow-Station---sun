@@ -18,7 +18,7 @@ import java.util.Map;
 
 /**
  * Server-side backstop for Table Design auto-PK strategies in process variables.
- * All users share {@code dw_pk_sequences} (perTable scope) — not per-user counters.
+ * All users share {@code up_pk_sequences} (perTable scope) — not per-user counters.
  */
 @Slf4j
 @Component
@@ -149,7 +149,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
                         continue;
                     }
                     List<String> values = primaryKeyAllocationService.allocate(
-                            tableId, pk.fieldName(), pk.config(), 1, "", "dw_pk_sequences");
+                            tableId, pk.fieldName(), pk.config(), 1, "", "up_pk_sequences");
                     if (values != null && !values.isEmpty()) {
                         row.put(pk.fieldName(), values.get(0));
                         allocated++;

@@ -361,12 +361,11 @@
         <el-form-item
           v-if="showTeamSelector"
           :label="t('functionUnit.team')"
-          prop="teamGroupIds"
+          prop="teamGroupId"
         >
           <el-select
             v-if="teamEditable"
-            v-model="basicForm.teamGroupIds"
-            multiple
+            v-model="basicForm.teamGroupId"
             filterable
             :loading="teamsLoading"
             :placeholder="t('functionUnit.selectTeam')"
@@ -381,7 +380,7 @@
           </el-select>
           <el-input
             v-else
-            :model-value="formDialogMode === 'create' ? activeGroupName : currentTeamNames"
+            :model-value="currentTeamName"
             readonly
             :placeholder="t('devGroup.noTeam')"
             style="width: 100%;"
@@ -417,6 +416,60 @@
       @rename="renameFolder"
       @reorder="reorderInFolder"
     />
+
+    <!-- Clone: a new unit in one workspace the user may create in (platform access model §6.3) -->
+    <el-dialog
+      v-model="showCloneDialog"
+      :title="t('functionUnit.cloneTitle')"
+      width="480px"
+    >
+      <el-form
+        ref="cloneFormRef"
+        :model="cloneForm"
+        :rules="cloneRules"
+        label-width="auto"
+        label-position="left"
+      >
+        <el-form-item
+          :label="t('functionUnit.name')"
+          prop="name"
+        >
+          <el-input
+            v-model="cloneForm.name"
+            :placeholder="t('functionUnit.enterNewName')"
+          />
+        </el-form-item>
+        <el-form-item
+          :label="t('functionUnit.team')"
+          prop="targetGroupId"
+        >
+          <el-select
+            v-model="cloneForm.targetGroupId"
+            :placeholder="t('functionUnit.selectTeam')"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="target in cloneTargets"
+              :key="target.id"
+              :label="target.name"
+              :value="target.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showCloneDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="cloning"
+          @click="submitClone"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
 
     <!-- Import Dialog -->
     <FunctionUnitImportDialog
@@ -473,7 +526,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { Search, Plus, Upload, Download, Grid, Postcard, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { type FunctionUnitResponse } from '@/api/functionUnit'
@@ -485,7 +538,8 @@ import LaunchpadFolderCard from '@/components/function-unit/LaunchpadFolderCard.
 import LaunchpadFolderOverlay from '@/components/function-unit/LaunchpadFolderOverlay.vue'
 import FunctionUnitImportDialog from '@/components/function-unit/FunctionUnitImportDialog.vue'
 import { isAuthenticated } from '@/api/auth'
-import { permissions, canCreateInActiveScope, isCurrentScopeReadOnly } from '@/utils/permission'
+import { canCreateInActiveScope, canCreateInWorkspace, isCurrentScopeReadOnly } from '@/utils/permission'
+import { getActiveGroupRaw, getMyTeams, PUBLIC_GROUP_ID } from '@/utils/devGroupContext'
 import { redirectToUnifiedLogin } from '@/utils/sso'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { useFunctionUnitFilters } from '@/composables/functionUnitList/useFunctionUnitFilters'
@@ -541,8 +595,7 @@ const {
   teamsLoading,
   showTeamSelector,
   teamEditable,
-  activeGroupName,
-  currentTeamNames,
+  currentTeamName,
   openCreateDialog,
   handleFormDialogClosed,
   handleSettings,
@@ -583,7 +636,7 @@ const PAGE_SIZE_BY_VIEW = { card: 20, icon: 50 } as const
 const pageSize = computed(() => PAGE_SIZE_BY_VIEW[viewMode.value])
 
 const canCreateInCurrentScope = computed(() => canCreateInActiveScope())
-const canModifyLayout = computed(() => permissions.canEdit() && !isCurrentScopeReadOnly())
+const canModifyLayout = computed(() => !isCurrentScopeReadOnly())
 
 // ==================== Launchpad (iOS-style icon layout + drag & drop + folders) ====================
 const {
@@ -671,21 +724,49 @@ function handleEdit(item: FunctionUnitResponse) {
   router.push(`/function-units/${item.id}`)
 }
 
-async function handleClone(item: FunctionUnitResponse) {
+const showCloneDialog = ref(false)
+const cloning = ref(false)
+const cloneFormRef = ref<FormInstance>()
+const cloneSourceId = ref<number | null>(null)
+const cloneForm = ref({ name: '', targetGroupId: '' })
+const cloneRules = computed(() => ({
+  name: [{ required: true, message: t('functionUnit.enterNewName'), trigger: 'blur' }],
+  targetGroupId: [{ required: true, message: t('functionUnit.selectTeamRequired'), trigger: 'change' }],
+}))
+/** Workspaces the copy may land in: teams the user may create in, and Public for a System Administrator. */
+const cloneTargets = computed(() => {
+  const targets = getMyTeams()
+    .filter(team => canCreateInWorkspace(team.id))
+    .map(team => ({ id: team.id, name: team.name }))
+  if (canCreateInWorkspace(PUBLIC_GROUP_ID)) targets.push({ id: PUBLIC_GROUP_ID, name: t('devGroup.publicGroup') })
+  return targets
+})
+
+function handleClone(item: FunctionUnitResponse) {
+  cloneSourceId.value = item.id
+  // Default to the source's workspace, else the selected one, when the user may create there.
+  const preferred = [item.workspaceId, getActiveGroupRaw()].find(id => id && cloneTargets.value.some(c => c.id === id))
+  cloneForm.value = { name: '', targetGroupId: preferred ?? '' }
+  showCloneDialog.value = true
+}
+
+async function submitClone() {
+  if (cloneSourceId.value == null) return
   try {
-    const { value } = await ElMessageBox.prompt(t('functionUnit.enterNewName'), t('functionUnit.cloneTitle'))
-    if (!value?.trim()) {
-      ElMessage.warning(t('functionUnit.enterNewName'))
-      return
-    }
-    await store.clone(item.id, value.trim())
+    await cloneFormRef.value?.validate()
+  } catch {
+    return
+  }
+  cloning.value = true
+  try {
+    await store.clone(cloneSourceId.value, cloneForm.value.name.trim(), cloneForm.value.targetGroupId)
     ElMessage.success(t('functionUnit.cloneSuccess'))
+    showCloneDialog.value = false
     loadData()
   } catch (e: unknown) {
-    if (e === 'cancel' || (e as { message?: string })?.message === 'cancel') {
-      return
-    }
     ElMessage.error(resolveUserFacingHttpMessage(e, t) || t('functionUnit.cloneFailed'))
+  } finally {
+    cloning.value = false
   }
 }
 

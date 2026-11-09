@@ -37,7 +37,8 @@ class ActionLifecycleIntegrityTest {
         lenient().when(forms.findByFunctionUnitId(1L)).thenReturn(List.of());
         lenient().when(tables.findByFunctionUnitId(1L)).thenReturn(List.of());
         var component = new ActionDesignComponentImpl(actions, units, forms, tables,
-                mock(FormTableBindingRepository.class), i18n);
+                mock(FormTableBindingRepository.class), i18n,
+                mock(com.developer.security.WorkspaceRouteOwnership.class));
         return new Fixture(actions, unit, action, component, new ProcessBpmnStaleIdFixer(tables, forms, actions));
     }
 

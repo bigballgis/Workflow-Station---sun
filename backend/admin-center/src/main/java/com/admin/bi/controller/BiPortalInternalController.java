@@ -21,11 +21,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /** Internal BI facade used only by the User Portal backend. */
 @RestController
 @RequestMapping("/internal/bi")
 @RequiredArgsConstructor
+@AdminAccess(AdminAudience.SERVICE)
 public class BiPortalInternalController {
 
     private final InternalServiceAuthenticator internalServiceAuthenticator;
@@ -42,6 +45,7 @@ public class BiPortalInternalController {
                 dashboardAssignmentService.getUserDashboards(userId, activeBusinessUnitId));
     }
 
+    @AdminAccess(AdminAudience.SERVICE)
     @PostMapping("/guest-token")
     public ResponseEntity<GuestTokenResponse> getGuestToken(
             HttpServletRequest servletRequest,
@@ -50,11 +54,13 @@ public class BiPortalInternalController {
         return ResponseEntity.ok(guestTokenService.getGuestToken(userId, request));
     }
 
-    @GetMapping("/data-views/{viewId}/dashboards")
+    /** A View is named by function unit code and View name (names may hold spaces and slashes: query, not path). */
+    @GetMapping("/data-views/dashboards")
     public ResponseEntity<List<DataViewDashboardResponse>> getDataViewDashboards(
             HttpServletRequest servletRequest,
-            @PathVariable Long viewId) {
+            @RequestParam String functionUnitCode,
+            @RequestParam String viewName) {
         String userId = internalServiceAuthenticator.requireDelegatedUserId(servletRequest);
-        return ResponseEntity.ok(dataViewAssignmentService.getDashboardsForView(userId, viewId));
+        return ResponseEntity.ok(dataViewAssignmentService.getDashboardsForView(userId, functionUnitCode, viewName));
     }
 }

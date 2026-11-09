@@ -218,22 +218,10 @@
                 >
                   {{ t(`task.${assignmentDisplayKey(row)}`) }}
                 </el-tag>
-                <template v-else-if="col.field === 'assigneeName'">
-                  <el-tag
-                    v-if="isTodoClaimHold(row)"
-                    :type="row.claimedByCurrentUser ? 'success' : 'info'"
-                    size="small"
-                    data-test="todo-current-assignee"
-                  >
-                    {{ formatTodoCurrentAssignee(row, t('task.claimedByMe')) }}
-                  </el-tag>
-                  <span
-                    v-else
-                    data-test="todo-current-assignee"
-                  >
-                    {{ formatTodoCurrentAssignee(row, t('task.claimedByMe')) }}
-                  </span>
-                </template>
+                <TodoAssigneeCell
+                  v-else-if="col.field === 'assigneeName'"
+                  :task="row"
+                />
                 <span
                   v-else-if="col.field === 'priority'"
                   class="priority"
@@ -261,10 +249,12 @@
                 </template>
               </template>
             </el-table-column>
-            <!-- Claim operations belong to the full To Do; a batch group holds only tasks I already handle. -->
+            <!-- Claim operations belong to the full To Do; a batch group holds only tasks I already handle.
+                 When the columns overflow, the actions stay at the window's right edge (shared lists §6.6). -->
             <el-table-column
               v-if="!groupRef"
               :width="CLAIM_ACTION_WIDTH"
+              fixed="right"
               class-name="todo-claim-action-col"
             >
               <template #header>
@@ -277,6 +267,7 @@
                   @claim="handleClaim"
                   @unclaim="handleUnclaim"
                   @force-unclaim="handleForceUnclaim"
+                  @take-over="handleTakeOver"
                   @reassign="handleReassign"
                 />
               </template>
@@ -339,7 +330,7 @@
         <el-button
           type="warning"
           size="small"
-          @click="handleBatchUrge"
+          @click="batchUrgeVisible = true"
         >
           {{ t('task.batchUrge') }}
         </el-button>
@@ -362,51 +353,15 @@
       @clear="onFilterClear"
     />
 
-    <el-dialog
-      v-model="actionDialogVisible"
-      :title="actionDialogTitle"
-      width="500px"
-      class="task-action-form"
-    >
-      <el-form
-        :model="actionForm"
-        label-width="100px"
-      >
-        <el-form-item
-          v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'"
-          :label="t('task.targetUser')"
-          required
-        >
-          <el-input
-            v-model="actionForm.targetUserId"
-            :placeholder="t('task.enterUserId')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('common.reason')">
-          <el-input
-            v-model="actionForm.reason"
-            type="textarea"
-            :rows="3"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="actionDialogVisible = false">
-          {{ t('common.cancel') }}
-        </el-button>
-        <el-button
-          type="primary"
-          @click="submitAction"
-        >
-          {{ t('common.confirm') }}
-        </el-button>
-      </template>
-    </el-dialog>
+    <TodoBatchUrgeDialog
+      v-model="batchUrgeVisible"
+      :task-ids="selectedTaskIds"
+      @urged="loadTasks"
+    />
 
     <TaskReassignDialog
       v-model="reassignDialogVisible"
-      :candidate-user-ids="reassignTask?.candidateUserIds ?? []"
-      :current-holder-id="reassignTask?.assignee"
+      :target-user-ids="reassignTask?.reassignTargetUserIds ?? []"
       :submitting="claimAllBusy"
       @confirm="confirmReassign"
     />
@@ -419,6 +374,8 @@ import { ArrowLeft, Loading } from '@element-plus/icons-vue'
 import TodoListToolbar from './TodoListToolbar.vue'
 import TodoPageHeader from './TodoPageHeader.vue'
 import TodoClaimRowActions from '@/components/tasks/TodoClaimRowActions.vue'
+import TodoAssigneeCell from '@/components/tasks/TodoAssigneeCell.vue'
+import TodoBatchUrgeDialog from '@/components/tasks/TodoBatchUrgeDialog.vue'
 import TaskReassignDialog from '@/components/tasks/TaskReassignDialog.vue'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
 import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
@@ -427,7 +384,7 @@ import type { TaskInfo } from '@/api/task'
 import { CLAIM_ACTION_WIDTH, useTodoTasksPage } from '@/composables/tasks/useTodoTasksPage'
 import { formatDate } from '@/utils/dateFormat'
 import { assignmentDisplayKey, assignmentTagClass } from '@/utils/taskAssignmentDisplay'
-import { formatTodoCurrentAssignee, isTodoClaimHold } from '@/utils/todoCurrentAssignee'
+import { formatTodoCurrentAssignee } from '@/utils/todoCurrentAssignee'
 import BatchTaskGroups from '@/components/tasks/BatchTaskGroups.vue'
 import type { BatchTaskAction } from '@/api/task'
 import { useTodoBatchMode } from '@/composables/tasks/useTodoBatchMode'
@@ -485,9 +442,8 @@ const {
   persistWidths,
   moveColumn,
   openFilter,
-  actionDialogVisible,
-  actionDialogTitle,
-  actionForm,
+  batchUrgeVisible,
+  selectedTaskIds,
   actingTaskId,
   claimAllBusy,
   loadTasks,
@@ -504,6 +460,7 @@ const {
   handleClaim,
   handleUnclaim,
   handleForceUnclaim,
+  handleTakeOver,
   handleReassign,
   confirmReassign,
   reassignDialogVisible,
@@ -514,8 +471,6 @@ const {
   handleUnclaimSelected,
   onAutoClaimChange,
   onAutoPreviewChange,
-  handleBatchUrge,
-  submitAction,
   getPriorityLabel,
   getPriorityClass,
 } = useTodoTasksPage(() => groupRef.value, loadGroups)
@@ -716,11 +671,5 @@ onActivated(() => {
   .todo-claim-action-header {
     font-weight: 500;
   }
-}
-</style>
-
-<style lang="scss">
-.task-action-form .el-form-item__label {
-  white-space: nowrap;
 }
 </style>

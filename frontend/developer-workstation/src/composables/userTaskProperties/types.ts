@@ -12,7 +12,7 @@ import type {
 } from '@/api/functionUnit'
 import type { BusinessUnitInfo, RoleInfo } from '@/api/adminCenter'
 
-/** 与引擎 {@code AssigneeType.fromCode} / 旧版 BPMN 字符串对齐；BU_UNBOUNDED 仅历史加载 */
+/** 与引擎 {@code AssigneeType.fromCode} / 旧版 BPMN 字符串对齐 */
 export type AssigneeTypeEnum =
   | 'INITIATOR'
   | 'ENTITY_MANAGER'
@@ -27,7 +27,6 @@ export type AssigneeTypeEnum =
   | 'INITIATOR_BU_ROLE'
   | 'INITIATOR_PARENT_BU_ROLE'
   | 'FIXED_BU_ROLE'
-  | 'BU_UNBOUNDED_ROLE'
 
 /** i18n 翻译函数（与 useI18n 的 t 等价签名） */
 export type TFn = (key: string, ...args: any[]) => string
@@ -85,7 +84,6 @@ export interface UserTaskPropertyContext {
   // Business unit and role data
   businessUnits: Ref<BusinessUnitInfo[]>
   buBoundedRoles: Ref<RoleInfo[]>
-  buUnboundedRoles: Ref<RoleInfo[]>
   eligibleRoles: Ref<RoleInfo[]>
   loadingBusinessUnits: Ref<boolean>
   loadingRoles: Ref<boolean>

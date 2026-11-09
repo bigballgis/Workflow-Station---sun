@@ -95,7 +95,7 @@ onMounted(async () => {
   const dest = consumeSsoReturnPath('/dashboard')
   const resolvedDest = router.resolve(dest)
   try {
-    await router.replace(canAccessRoute(resolvedDest.path) ? dest : '/403')
+    await router.replace(canAccessRoute(resolvedDest) ? dest : '/403')
   } catch {
     await router.replace('/403')
   }

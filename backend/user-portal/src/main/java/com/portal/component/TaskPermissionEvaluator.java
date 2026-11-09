@@ -1,15 +1,14 @@
 package com.portal.component;
 
+import com.platform.security.service.PortalEntryService;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationRule;
-import com.portal.repository.DelegationRuleRepository;
 import com.portal.util.BuRolePoolTasks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -25,9 +24,10 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class TaskPermissionEvaluator {
 
-    private final DelegationRuleRepository delegationRuleRepository;
+    private final EffectiveDelegationRules effectiveDelegationRules;
     private final WorkflowEngineClient workflowEngineClient;
     private final WorkspaceTaskFilterComponent workspaceTaskFilterComponent;
+    private final PortalEntryService portalEntryService;
 
     /**
      * Runtime empty pool: no assignee, candidates, groups, or assignmentTarget (matches Flowable identity links); do not tighten by assignmentType.
@@ -182,9 +182,28 @@ public class TaskPermissionEvaluator {
      * cannot drift apart on who holds a request.
      */
     public void annotateClaimState(TaskInfo task, String userId, String portalUsername) {
+        if (task != null) {
+            annotateClaimState(List.of(task), userId, portalUsername);
+        }
+    }
+
+    /** As {@link #annotateClaimState(TaskInfo, String, String)} for a list; also marks single-task delegations (D-55). */
+    public void annotateClaimState(List<TaskInfo> tasks, String userId, String portalUsername) {
+        if (tasks == null) {
+            return;
+        }
+        for (TaskInfo task : tasks) {
+            annotateClaimFlags(task, userId, portalUsername);
+        }
+        effectiveDelegationRules.markSingleTaskDelegations(tasks, userId);
+    }
+
+    private void annotateClaimFlags(TaskInfo task, String userId, String portalUsername) {
         if (task == null) {
             return;
         }
+        task.setCanTransfer(mayTransfer(task, userId, portalUsername));
+        task.setCanDelegate(mayDelegate(task, userId, portalUsername));
         boolean pool = BuRolePoolTasks.isClaimPoolTask(task);
         task.setClaimPoolTask(pool);
         if (!pool) {
@@ -197,13 +216,17 @@ public class TaskPermissionEvaluator {
                 && candidateUserIdsContain(task.getCandidateUserIds(), userId, portalUsername));
     }
 
-    public void annotateClaimState(List<TaskInfo> tasks, String userId, String portalUsername) {
-        if (tasks == null) {
-            return;
-        }
-        for (TaskInfo task : tasks) {
-            annotateClaimState(task, userId, portalUsername);
-        }
+    /**
+     * Platform access model D-60, as the engine requires: a task someone holds is transferred by its holder only, not
+     * by a delegate (single-task or standing); a task nobody holds keeps its rules.
+     */
+    public static boolean mayTransfer(TaskInfo task, String userId, String portalUsername) {
+        return task != null && (!BuRolePoolTasks.isHeld(task) || matchesPortalIdentity(task.getAssignee(), userId, portalUsername));
+    }
+
+    /** D-60, same rule as {@link #mayTransfer}: a task someone holds is delegated by its holder only. */
+    public static boolean mayDelegate(TaskInfo task, String userId, String portalUsername) {
+        return mayTransfer(task, userId, portalUsername);
     }
 
     public boolean isHeldByUser(TaskInfo task, String userId, String portalUsername) {
@@ -274,10 +297,9 @@ public class TaskPermissionEvaluator {
             }
         }
 
-        // Check delegation rules
+        // Check delegation rules in force (both parties have Portal entry, D-18)
         if (assignee != null) {
-            List<DelegationRule> delegations = delegationRuleRepository
-                    .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
+            List<DelegationRule> delegations = effectiveDelegationRules.inForceForDelegate(userId);
             for (DelegationRule delegation : delegations) {
                 if (samePortalUserId(assignee, delegation.getDelegatorId())) {
                     return true;
@@ -301,21 +323,21 @@ public class TaskPermissionEvaluator {
     }
 
     /**
-     * Single-task USER or current-workspace BU+Role delegatee (not standing rules).
+     * Single-task USER or current-workspace BU+Role delegatee (not standing rules), while the delegation is in effect:
+     * the delegator and the delegate both have Portal entry (D-55).
      */
     public boolean isSingleTaskDelegatee(TaskInfo task, String userId, String portalUsername) {
         if (task == null || userId == null || userId.isBlank()) {
             return false;
         }
-        if (task.getDelegatedTo() != null && matchesPortalIdentity(task.getDelegatedTo(), userId, portalUsername)) {
-            return true;
-        }
-        boolean buRole = "BU_ROLE".equalsIgnoreCase(blankToNull(task.getDelegatedTargetType()))
+        boolean named = task.getDelegatedTo() != null && matchesPortalIdentity(task.getDelegatedTo(), userId, portalUsername);
+        boolean buRole = !named && ("BU_ROLE".equalsIgnoreCase(blankToNull(task.getDelegatedTargetType()))
                 || (task.getDelegatedTo() == null
                         && task.getDelegatedBuCode() != null && !task.getDelegatedBuCode().isBlank()
-                        && task.getDelegatedRoleCode() != null && !task.getDelegatedRoleCode().isBlank());
-        return buRole && workspaceTaskFilterComponent.workspacePairMatches(
-                task.getDelegatedBuCode(), task.getDelegatedRoleCode(), userId);
+                        && task.getDelegatedRoleCode() != null && !task.getDelegatedRoleCode().isBlank()))
+                && workspaceTaskFilterComponent.workspacePairMatches(
+                        task.getDelegatedBuCode(), task.getDelegatedRoleCode(), userId);
+        return (named || buRole) && effectiveDelegationRules.singleTaskDelegationInForce(task, userId);
     }
 
     private static String blankToNull(String raw) {
@@ -375,7 +397,11 @@ public class TaskPermissionEvaluator {
                 && candidateUserIdsContain(task.getCandidateUserIds(), userId, portalUsername)) {
             return true;
         }
-        return false;
+        // Other pools (a list of named people, D-17): a member may open a held task once its holder lost Portal entry,
+        // the moment they may release, take it over or reassign it (§7.3); not while the holder still has entry.
+        return BuRolePoolTasks.hasPool(task) && BuRolePoolTasks.isHeld(task)
+                && candidateUserIdsContain(task.getCandidateUserIds(), userId, portalUsername)
+                && !portalEntryService.hasPortalEntry(task.getAssignee());
     }
 
     /**

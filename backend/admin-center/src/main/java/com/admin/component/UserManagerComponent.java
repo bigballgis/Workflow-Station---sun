@@ -16,6 +16,10 @@ import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.LoginAuditQueryRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
+import com.admin.repository.VirtualGroupMemberRepository;
+import com.admin.repository.VirtualGroupRepository;
+import com.platform.security.entity.VirtualGroupMember;
+import com.platform.security.entity.VirtualGroup;
 import com.platform.security.entity.LoginAudit;
 import com.platform.common.audit.Audited;
 import com.platform.common.i18n.I18nService;
@@ -52,7 +56,10 @@ public class UserManagerComponent {
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
     private final LoginAuditQueryRepository loginAuditQueryRepository;
     private final I18nService i18nService;
-    
+    private final VirtualGroupRepository virtualGroupRepository;
+    private final VirtualGroupMemberRepository virtualGroupMemberRepository;
+    private final com.admin.service.DepartedUserTasksService departedUserTasksService;
+
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     
@@ -232,23 +239,19 @@ public class UserManagerComponent {
     @Audited(action = "USER_STATUS_CHANGE", resourceType = "USER", resourceId = "#userId")
     public void updateUserStatus(String userId, UserStatus newStatus, String reason) {
         log.info("Updating user status: {} -> {}", userId, newStatus);
-        
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
-        
         UserStatus oldStatus = user.getStatus();
-        
         validateStatusTransition(oldStatus, newStatus);
-
         user.setStatus(newStatus);
-
         if (newStatus == UserStatus.ACTIVE && oldStatus == UserStatus.LOCKED) {
             user.setLockedUntil(null);
             user.setFailedLoginCount(0);
         }
-        
         userRepository.save(user);
-        
+        if (newStatus == UserStatus.INACTIVE) {
+            departedUserTasksService.userDeparted(userId); // their tasks go to their manager (D-42)
+        }
         log.info("User status updated: {} from {} to {}", userId, oldStatus, newStatus);
     }
     
@@ -278,7 +281,7 @@ public class UserManagerComponent {
             }
             
             userRepository.save(user);
-            
+            departedUserTasksService.userDeparted(userId); // their tasks go to their manager (D-42)
             log.info("User soft deleted successfully: {}", userId);
         } catch (AdminBusinessException e) {
             throw e;
@@ -289,25 +292,24 @@ public class UserManagerComponent {
     }
     
     /**
-     * Guardrail deleting the solitary active SUPER_ADMIN-equivalent boundary.
+     * Whether the user is the last active member of System Administrators, the only source of SYS_ADMIN
+     * (platform access model §5.2): deleting them would leave nobody to administer the platform.
      */
     private boolean isLastActiveAdmin(User user) {
-        if (user == null) {
+        Optional<VirtualGroup> administrators =
+                virtualGroupRepository.findByCode(VirtualGroup.SYSTEM_ADMINISTRATORS_CODE);
+        if (administrators.isEmpty()) {
             return false;
         }
-        
-        try {
-            boolean isAdmin = userRepository.isUserAdmin(user.getId());
-            if (!isAdmin) {
-                return false;
-            }
-
-            long activeAdminCount = userRepository.countActiveAdmins();
-            return activeAdminCount <= 1;
-        } catch (Exception e) {
-            log.error("Error checking if last active admin for user: {}", user.getId(), e);
-            return true;
+        Set<String> memberIds = virtualGroupMemberRepository.findByGroupId(administrators.get().getId()).stream()
+                .map(VirtualGroupMember::getUserId)
+                .collect(Collectors.toSet());
+        if (!memberIds.contains(user.getId())) {
+            return false;
         }
+        return userRepository.findAllById(memberIds).stream()
+                .filter(other -> !other.getId().equals(user.getId()))
+                .noneMatch(other -> other.isActive() && !Boolean.TRUE.equals(other.getDeleted()));
     }
 
     private String buildDeletedUsername(String userId) {

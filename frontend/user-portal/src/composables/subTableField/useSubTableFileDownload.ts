@@ -5,6 +5,7 @@ import { FILE_PREVIEW_PLAYLIST_KEY, openFilePreviewFromList } from '@/composable
 import { uploadPropsBlockDownload } from '@/utils/filePreview'
 import { extractFileLinks } from '@platform-shared/list/fileNames'
 import { formatUploadCellText } from '@platform-shared/upload/uploadFieldValue'
+import { fetchWithSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 /** Extract filename from URL, preferring the original filename recorded in this session */
 export function getFilenameFromUrl(url: string, savedName?: string): string {
@@ -48,7 +49,7 @@ export function useSubTableFileDownload(t: SubTableFieldT) {
     const msg = ElMessage({ message: t('common.downloading'), type: 'info', duration: 0 })
 
     try {
-      const response = await fetch(url)
+      const response = await fetchWithSessionRefresh(url)
       if (!response.ok) {
         msg.close()
         ElMessage.error(response.status === 404 ? t('common.fileNotFound') : t('common.downloadFailed'))

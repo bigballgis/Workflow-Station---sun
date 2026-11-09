@@ -10,7 +10,6 @@ import com.portal.exception.PortalException;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.service.ProcessAssigneeSnapshot;
 import com.portal.util.BuRolePoolTasks;
-import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -46,6 +45,7 @@ public class TaskProcessComponent {
     private final MiOverlayComponent miOverlayComponent;
     private final ClaimForceUnclaimAnnotator claimForceUnclaimAnnotator;
     private final TaskAssignmentHistoryRecorder taskAssignmentHistoryRecorder;
+    private final TaskDelegationGuard taskDelegationGuard;
 
     /**
      * Claims task
@@ -97,7 +97,7 @@ public class TaskProcessComponent {
                 OwnerFieldComponent.taskScopedCurrentItem(task.getVariables()));
 
         taskQueryComponent.invalidateMineTaskListCache();
-        taskAssignmentHistoryRecorder.record(taskBefore, userId, ChangeType.CLAIM, userId);
+        taskAssignmentHistoryRecorder.record(taskBefore, task, userId, ChangeType.CLAIM, userId);
         log.info("Task {} claimed via Flowable by user {}", taskId, userId);
         return task;
     }
@@ -120,11 +120,12 @@ public class TaskProcessComponent {
 
         TaskInfo taskBefore = getTaskOrThrow(taskId);
         boolean holder = taskPermissionEvaluator.isHeldByUser(taskBefore, userId, portalUsername);
-        if (BuRolePoolTasks.isClaimPoolTask(taskBefore) && !holder
-                && !claimForceUnclaimAnnotator.canForceUnclaim(taskBefore, userId)) {
+        // Releasing someone else's pool task (any pool kind, D-17) is a force unclaim: allowed and recorded as such.
+        boolean force = BuRolePoolTasks.hasPool(taskBefore) && !holder;
+        if (force && !claimForceUnclaimAnnotator.canForceUnclaim(taskBefore, userId)) {
             throw new PortalException("403", "Only the user holding this task can unclaim it");
         }
-        if (BuRolePoolTasks.isClaimPoolTask(taskBefore) && !holder) {
+        if (force) {
             log.info("Force unclaim of task {} by {} (holder was {})",
                     taskId, userId, taskBefore.getAssignee());
         }
@@ -156,8 +157,7 @@ public class TaskProcessComponent {
                 OwnerFieldComponent.taskScopedCurrentItem(task.getVariables()));
 
         taskQueryComponent.invalidateMineTaskListCache();
-        boolean force = BuRolePoolTasks.isClaimPoolTask(taskBefore) && !holder;
-        taskAssignmentHistoryRecorder.record(taskBefore, userId,
+        taskAssignmentHistoryRecorder.record(taskBefore, task, userId,
                 force ? ChangeType.FORCE_UNCLAIM : ChangeType.UNCLAIM, null);
         log.info("Task {} unclaimed via Flowable by user {}", taskId, userId);
         return task;
@@ -213,8 +213,8 @@ public class TaskProcessComponent {
         switch (action) {
             case "APPROVE", "REJECT" ->
                     observationPlan = taskApprovalCompletionComponent.handleApproval(task, request, userId, portalUsername);
-            case "TRANSFER" -> handleTransfer(task, request, userId);
-            case "DELEGATE" -> handleDelegate(task, request, userId);
+            case "TRANSFER" -> handleTransfer(task, request, userId, portalUsername);
+            case "DELEGATE" -> handleDelegate(task, request, userId, portalUsername);
             case "RETURN" -> handleReturn(task, request, userId, "RETURN");
             case "DRAFT" -> handleReturn(task, request, userId, "DRAFT");
             default -> throw new PortalException("400", "Unsupported action type: " + action);
@@ -232,28 +232,30 @@ public class TaskProcessComponent {
         return SubTableBatchCompletionObservation.observe(plan, workflowEngineClient);
     }
 
-    /**
-     * Delegates task
-     * Via WorkflowEngineClient calling Flowable engine
-     */
+    /** Delegates task via WorkflowEngineClient calling Flowable engine. */
     @Transactional
-    public void delegateTask(String taskId, String delegatorId, String delegateId, String reason) {
+    public void delegateTask(String taskId, String delegatorId, String delegateId, String reason,
+                             String portalUsername) {
         TaskDelegateRequest body = TaskDelegateRequest.builder()
                 .delegatedTargetType("USER")
                 .delegatedTo(delegateId)
                 .reason(reason)
                 .build();
-        delegateTask(taskId, delegatorId, body);
+        delegateTask(taskId, delegatorId, body, portalUsername);
     }
 
+    /** Delegation of a task someone holds is its holder's (D-60), and only where the engine can keep it (D-56). */
     @Transactional
-    public void delegateTask(String taskId, String delegatorId, TaskDelegateRequest body) {
+    public void delegateTask(String taskId, String delegatorId, TaskDelegateRequest body, String portalUsername) {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         if (body == null) {
             throw new PortalException("400", "Delegate request cannot be empty");
         }
+        TaskInfo task = getTaskOrThrow(taskId);
+        taskDelegationGuard.requireDelegable(task);
+        taskDelegationGuard.requireMayDelegate(task, delegatorId, portalUsername);
         Map<String, Object> engineBody = new java.util.HashMap<>();
         engineBody.put("delegatedBy", delegatorId);
         engineBody.put("taskId", taskId);
@@ -306,11 +308,28 @@ public class TaskProcessComponent {
     }
 
     /**
-     * Transfers task
-     * Via WorkflowEngineClient calling Flowable engine
+     * Direct transfer ({@code POST /tasks/{id}/transfer}): the caller must be allowed to process the
+     * task — the same rule as completing it — and, once someone holds it, be its holder (D-60), before
+     * the engine is asked to hand it over.
      */
     @Transactional
-    public void transferTask(String taskId, String fromUserId, String toUserId, String reason) {
+    public void transferTask(String taskId, String fromUserId, String toUserId, String reason,
+                             String portalUsername) {
+        TaskInfo task = getTaskOrThrow(taskId);
+        if (!canProcessTask(task, fromUserId, portalUsername)) {
+            throw new PortalException("403", "You do not have permission to process this task");
+        }
+        taskDelegationGuard.requireMayTransfer(task, fromUserId, portalUsername);
+        executeTransfer(task, fromUserId, toUserId, reason);
+    }
+
+    /**
+     * Engine transfer + Portal bookkeeping; callers have already checked {@code canProcessTask}. The engine ends the
+     * holder's single-task delegation with the transfer (D-59), which the change history records like the other changes
+     * of hands.
+     */
+    private void executeTransfer(TaskInfo taskBefore, String fromUserId, String toUserId, String reason) {
+        String taskId = taskBefore.getTaskId();
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
@@ -333,6 +352,7 @@ public class TaskProcessComponent {
         processInstanceSyncComponent.updateProcessInstanceAssignee(
                 task.getProcessInstanceId(), toUserId, null, task.getTaskName(),
                 OwnerFieldComponent.taskScopedCurrentItem(task.getVariables()));
+        taskAssignmentHistoryRecorder.recordDelegationEnded(taskBefore, task, fromUserId);
 
         // Record audit log
         DelegationAudit audit = DelegationAudit.builder()
@@ -440,23 +460,24 @@ public class TaskProcessComponent {
     /**
      * Handles transfer action
      */
-    private void handleTransfer(TaskInfo task, TaskCompleteRequest request, String userId) {
+    private void handleTransfer(TaskInfo task, TaskCompleteRequest request, String userId, String portalUsername) {
         String targetUserId = request.getTargetUserId();
         if (targetUserId == null || targetUserId.isEmpty()) {
             throw new PortalException("400", "Transfer target user cannot be empty");
         }
-        transferTask(task.getTaskId(), userId, targetUserId, request.getComment());
+        taskDelegationGuard.requireMayTransfer(task, userId, portalUsername);
+        executeTransfer(task, userId, targetUserId, request.getComment());
     }
 
     /**
      * Handles delegate action
      */
-    private void handleDelegate(TaskInfo task, TaskCompleteRequest request, String userId) {
+    private void handleDelegate(TaskInfo task, TaskCompleteRequest request, String userId, String portalUsername) {
         String targetUserId = request.getTargetUserId();
         if (targetUserId == null || targetUserId.isEmpty()) {
             throw new PortalException("400", "Delegate target user cannot be empty");
         }
-        delegateTask(task.getTaskId(), userId, targetUserId, request.getComment());
+        delegateTask(task.getTaskId(), userId, targetUserId, request.getComment(), portalUsername);
     }
 
     /**
@@ -509,7 +530,7 @@ public class TaskProcessComponent {
     public void urgeTask(String taskId, String urgerId, String message) {
         TaskInfo task = getTaskOrThrow(taskId);
 
-        // Verify urger permission (usually initiator or admin)
+        // Verify urger permission (initiator only)
         if (!canUrgeTask(task, urgerId)) {
             throw new PortalException("403", "You do not have permission to urge this task");
         }
@@ -551,16 +572,13 @@ public class TaskProcessComponent {
     }
 
     /**
-     * Whether the user may urge the task
+     * Whether the user may urge the task: the request's initiator only (no role bypass, D-05).
      */
     private boolean canUrgeTask(TaskInfo task, String userId) {
         if (userId == null || userId.isBlank()) {
             return false;
         }
-        if (task.getInitiatorId() != null && userId.equals(task.getInitiatorId())) {
-            return true;
-        }
-        return SecurityContextUtils.isSuperAdmin();
+        return task.getInitiatorId() != null && userId.equals(task.getInitiatorId());
     }
 
     /**

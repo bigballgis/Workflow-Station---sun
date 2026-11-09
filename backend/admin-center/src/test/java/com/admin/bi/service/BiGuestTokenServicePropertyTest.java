@@ -61,7 +61,7 @@ class BiGuestTokenServicePropertyTest {
     void dataViewGuestTokenUsesTheConcreteViewAssignment() {
         String dashboardId = "dashboard-data-view";
         String userId = "portal-user";
-        long viewId = 42L;
+        String viewName = "Open cases";
         BiDashboardRegistry dashboard = BiDashboardRegistry.builder()
                 .id(dashboardId)
                 .dashboardTitle("Data View Dashboard")
@@ -69,19 +69,20 @@ class BiGuestTokenServicePropertyTest {
                 .status(DashboardStatus.ACTIVE)
                 .build();
         when(dashboardRegistryRepository.findById(dashboardId)).thenReturn(Optional.of(dashboard));
-        when(dataViewAssignmentService.canAccessDashboardForView(userId, dashboardId, viewId))
+        when(dataViewAssignmentService.canAccessDashboardForView(userId, dashboardId, "FU", viewName))
                 .thenReturn(true);
         when(supersetApiClient.getGuestToken(dashboard.getEmbedId().toString()))
                 .thenReturn("data-view-token");
 
         GuestTokenRequest request = new GuestTokenRequest();
         request.setDashboardId(dashboardId);
-        request.setDataViewId(viewId);
+        request.setDataViewFunctionUnitCode("FU");
+        request.setDataViewName(viewName);
 
         GuestTokenResponse response = service.getGuestToken(userId, request);
 
         assertThat(response.getToken()).isEqualTo("data-view-token");
-        verify(dataViewAssignmentService).canAccessDashboardForView(userId, dashboardId, viewId);
+        verify(dataViewAssignmentService).canAccessDashboardForView(userId, dashboardId, "FU", viewName);
         verifyNoInteractions(assignmentService);
     }
 
@@ -89,7 +90,7 @@ class BiGuestTokenServicePropertyTest {
     void dataViewGuestTokenRejectsAnUnassignedDashboard() {
         String dashboardId = "dashboard-unassigned";
         String userId = "portal-user";
-        long viewId = 43L;
+        String viewName = "Closed cases";
         BiDashboardRegistry dashboard = BiDashboardRegistry.builder()
                 .id(dashboardId)
                 .dashboardTitle("Unassigned")
@@ -97,12 +98,13 @@ class BiGuestTokenServicePropertyTest {
                 .status(DashboardStatus.ACTIVE)
                 .build();
         when(dashboardRegistryRepository.findById(dashboardId)).thenReturn(Optional.of(dashboard));
-        when(dataViewAssignmentService.canAccessDashboardForView(userId, dashboardId, viewId))
+        when(dataViewAssignmentService.canAccessDashboardForView(userId, dashboardId, "FU", viewName))
                 .thenReturn(false);
 
         GuestTokenRequest request = new GuestTokenRequest();
         request.setDashboardId(dashboardId);
-        request.setDataViewId(viewId);
+        request.setDataViewFunctionUnitCode("FU");
+        request.setDataViewName(viewName);
 
         assertThatThrownBy(() -> service.getGuestToken(userId, request))
                 .isInstanceOf(AccessDeniedException.class);

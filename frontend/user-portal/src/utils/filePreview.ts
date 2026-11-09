@@ -2,6 +2,7 @@ import type { FilePreviewKind } from './filePreviewKinds'
 import { fileExtension, isBlockedPreviewExtension, kindFromExtension, kindFromMime } from './filePreviewKinds'
 import { confirmPreviewKind } from './filePreviewMagic'
 import { isCannotDownload, uploadPropsBlockDownload } from './filePreviewFlags'
+import { fetchWithSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 export type { FilePreviewKind } from './filePreviewKinds'
 export { fileExtension, kindFromExtension } from './filePreviewKinds'
@@ -54,7 +55,7 @@ export type StoredFileDownloadResult = 'ok' | 'not-found' | 'failed'
 
 export async function fetchStoredFileBlob(url: string): Promise<{ ok: true; blob: Blob } | { ok: false; result: StoredFileDownloadResult }> {
   try {
-    const response = await fetch(url, { credentials: 'include' })
+    const response = await fetchWithSessionRefresh(url, { credentials: 'include' })
     if (!response.ok) {
       return { ok: false, result: response.status === 404 ? 'not-found' : 'failed' }
     }

@@ -34,7 +34,8 @@ class FunctionUnitImportControllerDisableTest {
     void setUp() {
         lenient().when(i18nService.getMessage(anyString())).thenAnswer(inv -> inv.getArgument(0));
         mockMvc = MockMvcBuilders.standaloneSetup(new FunctionUnitImportController(
-                functionUnitManager, deploymentManager, processDeploymentComponent, i18nService)).build();
+                functionUnitManager, deploymentManager, processDeploymentComponent, i18nService,
+                org.mockito.Mockito.mock(com.admin.service.FunctionUnitTeamService.class))).build();
     }
 
     @Test

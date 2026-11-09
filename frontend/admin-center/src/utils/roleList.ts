@@ -2,14 +2,15 @@ import type { Role, RoleType } from '@/api/role'
 
 export type RoleListTab = 'SYSTEM' | 'CUSTOM'
 
-/** System Role List tab: the five named platform roles + Department Manager. */
+/**
+ * System Role List tab: the four platform roles, granted only through System Administrators, Auditors
+ * and the team lists. Department Manager is a business role on the Custom tab.
+ */
 export const SYSTEM_ROLE_LIST_CODES = new Set([
   'SYS_ADMIN',
   'AUDITOR',
   'TECH_LEAD',
-  'TEAM_LEAD',
   'DEVELOPER',
-  'MANAGER',
 ])
 
 export function isSystemRoleListEntry(role: Role): boolean {

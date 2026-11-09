@@ -12,8 +12,8 @@ vi.mock('@/api/biManagement', () => ({ biManagementApi: {
 } }))
 
 const row = (id: number, enabled: boolean) => ({
-  id: String(id), dashboardId: `dashboard-${id}`, functionUnitId: id, tableId: id * 10,
-  viewId: id * 100, viewAvailable: true, enabled,
+  id: String(id), dashboardId: `dashboard-${id}`, functionUnitCode: `FU_${id}`,
+  tableName: `table_${id}`, viewName: `View ${id}`, viewAvailable: true, enabled,
 }) as DataViewAssignmentResponse
 const Form = defineComponent({
   setup(_, { expose }) { expose({ validate: async () => true }) },
@@ -30,9 +30,9 @@ function mountDialog() {
   })
 }
 type State = {
-  form: { viewId: number | null; enabled: boolean }
+  form: { viewName: string | null; enabled: boolean }
   dashboards: { id: string }[]
-  functionUnits: { id: number }[]
+  functionUnits: { code: string }[]
   submit(): Promise<void>
   initialize(): Promise<void>
 }
@@ -55,13 +55,13 @@ describe('Data View assignment initialization isolation (#1722)', () => {
     vi.mocked(biManagementApi.dashboard.list).mockRejectedValueOnce(new Error('unavailable'))
     await wrapper.setProps({ initialRow: row(2, true), modelValue: true }); await flushPromises()
     const state = wrapper.vm as unknown as State
-    expect(state.form.viewId).toBe(200)
+    expect(state.form.viewName).toBe('View 2')
     expect(state.form.enabled).toBe(true)
     expect(wrapper.findAll('button').find(b => b.text() === 'common.confirm')?.attributes('disabled')).toBeDefined()
     await state.submit()
     expect(biManagementApi.dataViewAssignment.update).not.toHaveBeenCalled()
     await state.initialize(); await state.submit()
-    expect(biManagementApi.dataViewAssignment.update).toHaveBeenCalledWith('2', expect.objectContaining({ viewId: 200 }))
+    expect(biManagementApi.dataViewAssignment.update).toHaveBeenCalledWith('2', expect.objectContaining({ functionUnitCode: 'FU_2', viewName: 'View 2' }))
     expect(vi.mocked(biManagementApi.dataViewAssignment.update).mock.calls[0][1]).not.toHaveProperty('enabled')
     wrapper.unmount()
   })
@@ -80,19 +80,19 @@ describe('Data View assignment initialization isolation (#1722)', () => {
     vi.mocked(biManagementApi.dashboard.list).mockImplementationOnce(() => new Promise(resolve => { complete = resolve }))
       .mockResolvedValueOnce({ content: [{ id: 'dashboard-2' }] } as never)
     vi.mocked(biManagementApi.dataViewAssignment.listFunctionUnits)
-      .mockResolvedValueOnce([{ id: 1 }] as never).mockResolvedValueOnce([{ id: 2 }] as never)
+      .mockResolvedValueOnce([{ code: 'FU_1' }] as never).mockResolvedValueOnce([{ code: 'FU_2' }] as never)
     const wrapper = mountDialog()
     await wrapper.setProps({ modelValue: true }); await nextTick()
     await wrapper.setProps({ modelValue: false })
     await wrapper.setProps({ modelValue: true, initialRow: row(2, true) }); await flushPromises()
     complete({ content: [{ id: 'dashboard-1' }] } as never); await flushPromises()
     const state = wrapper.vm as unknown as State
-    expect(state.form.viewId).toBe(200)
+    expect(state.form.viewName).toBe('View 2')
     expect(state.form.enabled).toBe(true)
     expect(state.dashboards.map(d => d.id)).toEqual(['dashboard-2'])
-    expect(state.functionUnits.map(u => u.id)).toEqual([2])
+    expect(state.functionUnits.map(u => u.code)).toEqual(['FU_2'])
     await state.submit()
-    expect(biManagementApi.dataViewAssignment.update).toHaveBeenCalledWith('2', expect.objectContaining({ viewId: 200 }))
+    expect(biManagementApi.dataViewAssignment.update).toHaveBeenCalledWith('2', expect.objectContaining({ functionUnitCode: 'FU_2', viewName: 'View 2' }))
     wrapper.unmount()
   })
 
@@ -100,10 +100,13 @@ describe('Data View assignment initialization isolation (#1722)', () => {
     const wrapper = mountDialog()
     await wrapper.setProps({ mode: 'create', initialRow: null, modelValue: true }); await flushPromises()
     const state = wrapper.vm as unknown as State
-    Object.assign(state.form, { functionUnitId: 2, tableId: 20, viewId: 200, dashboardIds: ['dashboard-2'], enabled: false })
+    Object.assign(state.form, {
+      functionUnitCode: 'FU_2', tableName: 'table_2', viewName: 'View 2', dashboardIds: ['dashboard-2'], enabled: false,
+    })
     await state.submit()
+    // The View is named by unit code and View name; the table only narrows the choice.
     expect(biManagementApi.dataViewAssignment.createBatch).toHaveBeenCalledWith({
-      functionUnitId: 2, tableId: 20, viewId: 200, dashboardIds: ['dashboard-2'], enabled: false,
+      functionUnitCode: 'FU_2', viewName: 'View 2', dashboardIds: ['dashboard-2'], enabled: false,
     })
     expect(wrapper.emitted('success')).toHaveLength(1)
     wrapper.unmount()

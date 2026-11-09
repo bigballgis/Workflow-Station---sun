@@ -29,14 +29,14 @@ public interface RelationTableAccessService {
     void batchSetAccess(Long tableId, List<String> targetIds, String permissionLevel);
 
     /**
-     * 修改某条授权的权限级别（原地切换 READONLY / READ_WRITE）
+     * 修改某条授权的权限级别（原地切换 READONLY / READ_WRITE）；授权须属于该表（路径里的表决定谁能改）。
      */
-    RelationTableAccess updatePermissionLevel(String accessId, String permissionLevel);
+    RelationTableAccess updatePermissionLevel(Long tableId, String accessId, String permissionLevel);
 
     /**
-     * 删除访问配置
+     * 删除访问配置；授权须属于该表（路径里的表决定谁能改）。
      */
-    void removeAccess(String accessId);
+    void removeAccess(Long tableId, String accessId);
 
     /**
      * 解析用户在某表上的权限级别。

@@ -24,6 +24,8 @@ import java.util.stream.Collectors;
 
 import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.i18n.I18nService;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * User Business Unit Role Assignment Controller
@@ -32,6 +34,7 @@ import com.platform.common.i18n.I18nService;
 @RequestMapping("/users/{userId}/business-unit-roles")
 @RequiredArgsConstructor
 @Tag(name = "User Business Unit Roles", description = "Manage role assignments for users in business units")
+@AdminAccess(value = AdminAudience.WORKSTATION, services = true)
 public class UserBusinessUnitRoleController {
     
     private final UserBusinessUnitRoleManagerComponent userBusinessUnitRoleManagerComponent;
@@ -68,6 +71,7 @@ public class UserBusinessUnitRoleController {
         return ResponseEntity.ok(result);
     }
     
+    @AdminAccess(value = AdminAudience.SYS_ADMIN, services = true)
     @PostMapping
     @Operation(summary = "Assign business unit role to user")
     public ResponseEntity<Void> assignRole(
@@ -81,6 +85,7 @@ public class UserBusinessUnitRoleController {
         return ResponseEntity.ok().build();
     }
     
+    @AdminAccess(value = AdminAudience.SYS_ADMIN, services = true)
     @DeleteMapping("/{businessUnitId}/{roleId}")
     @Operation(summary = "Remove user business unit role")
     public ResponseEntity<Void> removeRole(

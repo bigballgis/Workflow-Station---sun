@@ -7,6 +7,8 @@ import com.developer.enums.BindingType;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.RelationLookupConfigRepository;
 import com.developer.repository.RelationViewConfigRepository;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.developer.service.RelationLookupService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -30,6 +32,7 @@ public class RelationLookupServiceImpl implements RelationLookupService {
     private final FormTableBindingRepository formTableBindingRepository;
     private final RelationViewConfigRepository viewConfigRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final WorkspaceRouteOwnership routeOwnership;
 
     @Override
     @Transactional(readOnly = true)
@@ -49,6 +52,11 @@ public class RelationLookupServiceImpl implements RelationLookupService {
         if (!isBound) {
             throw new IllegalArgumentException(
                     "Table " + config.tableId() + " is not bound to form " + formId);
+        }
+        // The view config id comes from the body: it must be a view of the form's unit (§6.1, §6.2).
+        if (config.viewConfigId() != null) {
+            routeOwnership.requireInUnit(Owned.RELATION_VIEW_CONFIG, config.viewConfigId(),
+                    routeOwnership.unitOf(Owned.FORM, formId));
         }
 
         RelationLookupConfig entity = lookupConfigRepository

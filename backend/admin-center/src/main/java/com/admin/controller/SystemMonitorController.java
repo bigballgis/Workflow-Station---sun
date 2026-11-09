@@ -17,12 +17,15 @@ import java.util.List;
 import java.util.Map;
 import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.i18n.I18nService;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 @Slf4j
 @RestController
 @RequestMapping("/monitor")
 @RequiredArgsConstructor
 @Tag(name = "System Monitor", description = "System metrics query and alert management APIs")
+@AdminAccess(AdminAudience.ADMIN_READ)
 public class SystemMonitorController {
     
     private final SystemMonitorComponent monitorComponent;

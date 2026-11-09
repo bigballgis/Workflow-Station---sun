@@ -126,12 +126,12 @@
 
 - `-DbHost` / `-DbPort` / `-DbName` / `-DbUser` / `-DbPassword` / `-DbSchema`
   - 覆盖数据库初始化时使用的连接参数
-  - `-DbSchema` 会传给 `init-database.ps1`，通过 PostgreSQL `search_path` 保证 SQL 建表落到正确 schema（例如 `hmwfst`）
+  - `-DbSchema` 会传给 `init-database.ps1`，通过 PostgreSQL `search_path` 保证 SQL 建表落到正确 schema（例如 `hmwfst`）；该 schema 须已存在，否则初始化直接报错
 
 - `-IncludeDemoData`
   - 仅在 `-InitializeDatabase` 时生效
-  - 允许执行 `init-database.ps1` 中的 wipe + demo seed 步骤
-  - **默认不执行**，避免 IKP 首次部署时误导入 demo 数据
+  - 改为按 Docker dev 初始化执行（`init-database.ps1` 不带 `-SkipDemoData`）：含 demo 功能单元、E2E 账号，初始 System Administrator 为 `developer`
+  - **默认不执行**：默认传 `-SkipDemoData`，按 k8s 初始化执行（Flowable 建表 → `deploy/k8s/init-data` 的 schema 包 → seed 包 → Flowable 迁移脚本），无 demo 数据，初始 System Administrator 为 `admin`
 
 - `-ForceDatabaseInitialization`
   - 即使目标 schema 中已存在 `wf_extended_task_info` 标记表，也强制执行数据库初始化
@@ -328,7 +328,7 @@
 1. 解析 DB 连接信息
 2. 检查目标 schema 中是否已存在 `wf_extended_task_info`
 3. 若不存在，则调用 [deploy/init-scripts/init-database.ps1](../../init-scripts/init-database.ps1) 进行首次初始化
-4. 默认只做基础 schema / 增量 / admin 初始化，不执行 demo seed；除非显式传入 `-IncludeDemoData`
+4. 默认按 k8s 初始化执行（`-SkipDemoData`：Flowable 建表 → schema 包 → seed 包 → Flowable 7.0.0 → 7.2.0 迁移），不执行 demo seed；显式传入 `-IncludeDemoData` 时按 Docker dev 初始化执行
 
 删除脚本执行顺序如下：
 

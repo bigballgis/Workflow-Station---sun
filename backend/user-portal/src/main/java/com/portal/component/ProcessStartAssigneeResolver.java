@@ -150,10 +150,6 @@ public class ProcessStartAssigneeResolver {
                             result.put("assigneeType", assigneeType);
                             result.put("requiresClaim", "true");
                             break;
-                        case "BU_UNBOUNDED_ROLE":
-                            result.put("assigneeType", assigneeType);
-                            result.put("requiresClaim", "true");
-                            break;
                         case "DEPT_OTHERS":
                             result.put("assigneeType", "DEPT_OTHERS");
                             result.put("requiresClaim", "true");

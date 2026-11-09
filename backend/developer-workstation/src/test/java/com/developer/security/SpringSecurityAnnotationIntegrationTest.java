@@ -13,9 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 验证 developer-workstation 在 test profile 下可成功启动 ApplicationContext。
- * 原 @PreAuthorize 与 MockBean 组合测试依赖自定义 PermissionEvaluator 与真实代理链一致；
- * 方法级安全行为见 {@link com.developer.integration.SecurityPermissionSystemEndToEndTest} 与
- * {@link com.developer.security.DatabasePermissionEvaluatorPropertyTest}。
+ * 功能单元的工作区权限由 {@link com.developer.security.FunctionUnitWorkspaceAccessService} 判定，
+ * 规则见 {@code FunctionUnitWorkspaceAccessServiceTest}。
  */
 @SpringBootTest(properties = "spring.main.allow-bean-definition-overriding=true")
 @ActiveProfiles("test")

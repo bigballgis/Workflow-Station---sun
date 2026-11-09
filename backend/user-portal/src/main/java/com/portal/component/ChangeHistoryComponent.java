@@ -121,7 +121,7 @@ public class ChangeHistoryComponent {
             "assigneedisplayname", "taskid", "taskdefinitionkey");
     private static final String RECORD_NOTE_FIELD_NAME = "__record_note__";
     private static final Set<String> ASSIGNEE_VALUE_FIELDS = Set.of(
-            "assignee", "assigneeuserid", "assigneeid", "claimed_by");
+            "assignee", "assigneeuserid", "assigneeid", "claimed_by", "delegated_to");
 
     /**
      * Record field changes.
@@ -580,6 +580,7 @@ public class ChangeHistoryComponent {
                 .changeType(entity.getChangeType().name())
                 .subTableName(entity.getSubTableName())
                 .rowIdentifier(entity.getRowIdentifier())
+                .reason(entity.getReason())
                 .concurrent(Boolean.TRUE.equals(entity.getIsConcurrent()))
                 .build();
     }

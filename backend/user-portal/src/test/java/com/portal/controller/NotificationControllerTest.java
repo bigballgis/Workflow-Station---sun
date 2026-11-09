@@ -91,6 +91,7 @@ class NotificationControllerTest {
                 .setCustomArgumentResolvers(new CurrentUserIdArgumentResolver())
                 .setMessageConverters(converter)
                 .build();
+        authenticateAs(USER_ID);
     }
 
     @AfterEach
@@ -300,9 +301,8 @@ class NotificationControllerTest {
     }
 
     // --- @CurrentUserId identity resolution (anti-spoofing) ---
-    // The controller resolves identity from the JWT SecurityContext first and only
-    // falls back to the X-User-Id header when unauthenticated. Missing-header requests
-    // are rejected upstream (Kong gateway / JwtAuthenticationFilter), not by the controller.
+    // Identity comes from the authenticated user only; an X-User-Id header is ignored
+    // (CurrentUserIdArgumentResolverTest covers the unauthenticated case).
 
     @Test
     @DisplayName("GET /notifications - SecurityContext 身份优先于 X-User-Id 请求头(防伪造)")

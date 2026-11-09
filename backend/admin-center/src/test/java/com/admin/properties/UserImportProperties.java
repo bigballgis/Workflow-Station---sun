@@ -64,7 +64,10 @@ public class UserImportProperties {
                 passwordEncoder,
                 userBusinessUnitRepository,
                 loginAuditQueryRepository,
-                i18nService);
+                i18nService,
+                mock(com.admin.repository.VirtualGroupRepository.class),
+                mock(com.admin.repository.VirtualGroupMemberRepository.class),
+                mock(com.admin.service.DepartedUserTasksService.class));
         
         // Default mock behaviors
         when(passwordEncoder.encode(anyString())).thenAnswer(inv -> "encoded_" + inv.getArgument(0));

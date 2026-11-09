@@ -25,7 +25,7 @@ class JdbcPrimaryKeyAllocationServiceDailyDateTest {
                 .startValue(1L)
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "ignored", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "ignored", "up_pk_sequences");
 
         assertThat(ids).containsExactly("202607140001");
         assertThat(jdbc.deleteSqls).isEmpty();
@@ -45,7 +45,7 @@ class JdbcPrimaryKeyAllocationServiceDailyDateTest {
                 .padWidth(4)
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("202607150001");
         assertThat(jdbc.updateScopeKey).isEqualTo("20260715");
     }
@@ -61,7 +61,7 @@ class JdbcPrimaryKeyAllocationServiceDailyDateTest {
                 .padWidth(4)
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("2026071410000");
     }
 
@@ -76,7 +76,7 @@ class JdbcPrimaryKeyAllocationServiceDailyDateTest {
                 .padWidth(2)
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("20260714100");
     }
 
@@ -92,7 +92,7 @@ class JdbcPrimaryKeyAllocationServiceDailyDateTest {
                 .startValue(1L)
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "ignored", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "ignored", "up_pk_sequences");
 
         assertThat(ids).containsExactly("2026080001");
         assertThat(jdbc.deleteSqls).isEmpty();
@@ -112,7 +112,7 @@ class JdbcPrimaryKeyAllocationServiceDailyDateTest {
                 .padWidth(4)
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("2026090001");
         assertThat(jdbc.updateScopeKey).isEqualTo("202609");
     }
@@ -128,7 +128,7 @@ class JdbcPrimaryKeyAllocationServiceDailyDateTest {
                 .padWidth(4)
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("20260810000");
     }
 
@@ -146,7 +146,7 @@ class JdbcPrimaryKeyAllocationServiceDailyDateTest {
                 .startValue(1L)
                 .build();
 
-        List<String> ids = service.allocate(10L, "id", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "id", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("ORD-000001");
         assertThat(jdbc.deleteSqls).isNotEmpty();
         assertThat(jdbc.updateScopeType).isEqualTo("perTable");

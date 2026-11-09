@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { AI_EVENT_STREAM_URL } from '@/api/aiGeneration'
 import { getUser } from '@/api/auth'
+import { fetchWithSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 /**
  * Composable for managing independent SSE long connection for async events.
@@ -34,7 +35,7 @@ export function useAiEvents(functionUnitId: Ref<number>) {
 
     try {
       const url = AI_EVENT_STREAM_URL(functionUnitId.value)
-      const response = await fetch(url, {
+      const response = await fetchWithSessionRefresh(url, {
         method: 'GET',
         headers: getAuthHeaders(),
         signal: controller.signal

@@ -40,7 +40,7 @@
 |------|------|
 | [MI 多实例子任务分派](./design/README.md#mi-多实例子任务分派) | 分派模型（BPMN 契约 / 认领池）+ Assignment Mode 组件三端渲染 |
 | [User Portal 身份与权限](./design/README.md#user-portal-身份与权限) | UBR 模型与工作台上下文 + 权限自助申请/退出 |
-| [Developer Workstation](./design/README.md#developer-workstation) | 功能单元工作区隔离（Technical Lead / Team Lead / Developer） |
+| [Developer Workstation](./design/README.md#developer-workstation) | 功能单元工作区隔离：团队 = Workspace，Technical Lead / Developer 名单（平台访问模型 PRD §6） |
 | [Table Design 建模规则](./design/README.md#table-design-建模规则) | 外键 / 主键规则 PRD |
 | [邮件与提醒](./design/README.md#邮件与提醒) | 邮箱监控入子表 & 任务过期通知（未实现） |
 | [跨端主题](./design/README.md#跨端主题) | 功能总蓝图、个人中心信息架构 |

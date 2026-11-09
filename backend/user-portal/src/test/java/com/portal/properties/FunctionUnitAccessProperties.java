@@ -1,12 +1,16 @@
 package com.portal.properties;
 
+import com.platform.common.dto.UserPrincipal;
 import com.portal.component.FunctionUnitAccessComponent;
 import net.jqwik.api.*;
+import net.jqwik.api.lifecycle.AfterTry;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.mockito.Mockito;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
@@ -29,6 +33,16 @@ class FunctionUnitAccessProperties {
     void setUp() {
         restTemplate = Mockito.mock(RestTemplate.class);
         accessComponent = new FunctionUnitAccessComponent(restTemplate);
+        // These properties check the role intersection over every role the user holds; only a permission
+        // self-service session (no workspace) uses all of them — a workspace session uses its current role alone.
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                UserPrincipal.builder().userId("property-user").portalAccessMode("PERMISSION_SELF_SERVICE_ONLY").build(),
+                null, List.of()));
+    }
+
+    @AfterTry
+    void clearSession() {
+        SecurityContextHolder.clearContext();
     }
 
     // ==================== Property 6: 禁用状态访问控制 ====================

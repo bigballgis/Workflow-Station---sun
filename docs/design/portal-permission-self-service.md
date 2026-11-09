@@ -4,6 +4,8 @@
 
 **定稿日期**：2026-04-04（与产品逐项确认）。
 
+> **部分已取代（2026-11）。** 门户准入（§2 表中“门户准入”一行、§5 准入段、§8 第一条）与虚拟组维护者由 [平台访问模型 PRD](./platform-access-model-requirements.md) §7.1、§5.5 取代：准入 = 账号有效且至少属于一个有效 **CUSTOM** 组，SYSTEM / DEVELOPER 组不再算；虚拟组只由 System Administrator 维护；移出后最长 15 分钟（access token 有效期）内失效。`BU_UNBOUNDED` 角色不再存在（PRD §5.3）。其余规则继续有效。
+
 ---
 
 ## 1. 范围与非范围
@@ -18,7 +20,7 @@
 
 ### 1.2 范围外（明确禁止在 User Portal 出现）
 
-- **虚拟组**：**不提供**加入/退出/申请虚拟组等任何能力。虚拟组仅由 **Admin Center（用户管理人员）** 与 **developer-workstation（开发人员）** 维护，与终端用户门户无关。
+- **虚拟组**：**不提供**加入/退出/申请虚拟组等任何能力。虚拟组只由 **System Administrator** 在 Admin Center 维护（PRD §5.5），与终端用户门户无关。
 - 历史数据中若存在 `VIRTUAL_GROUP` 类型申请：门户 **不展示**（列表/详情均隐藏），见 §6。
 
 ---
@@ -33,7 +35,7 @@
 | 选人范围 | 全平台 **启用中**用户可搜（锁定/停用等不可用账号排除，与实现一致）。 |
 | 退出语义 | **两种都要**：(1) 退出 BU 成员；(2) 仅移除指定 UBR、保留成员。 |
 | 审批通过后执行 | **系统自动落库**（幂等、审计齐全），非「仅批过、人工再在 Admin 点执行」。 |
-| 门户准入 | 须属于至少一个 ACTIVE 虚拟组（`SYSTEM`/`CUSTOM`/`DEVELOPER`）；否则登录失败（`PORTAL_ENTITLEMENT_DENIED`）。 |
+| 门户准入 | 须属于至少一个 ACTIVE 的 **CUSTOM** 虚拟组（PRD §7.1，SYSTEM / DEVELOPER 不算）；否则登录失败（`PORTAL_ENTITLEMENT_DENIED`）。 |
 | 自助模式判定 | 已准入前提下仅看 **`|C|=0`**（无有效 UBR 条数），**不**与其它角色/权限再做组合判断。 |
 | 自助模式下额外功能 | **个人资料**、**通知中心**均 **开放**（通知内容仍须按权限与数据隔离实现，避免越权）。 |
 | 历史 `VIRTUAL_GROUP` 单 | 门户 **完全隐藏**。 |
@@ -62,8 +64,8 @@ UI 与 API 须用**不同申请类型或明确子类型**表达，避免审批�
 
 ## 5. 「仅权限自助」模式（`|C|=0`）
 
-- **门户准入（先于自助/FULL）**：用户必须属于至少一个 **ACTIVE** 虚拟组，类型为 `SYSTEM` / `CUSTOM` / `DEVELOPER` 任一（含 Hermes Default Users 等 SYSTEM 组，以及 AD 同步的 CUSTOM 业务组）。无合格成员身份时 **拒绝发放 Portal JWT**（`loginErrorCode=PORTAL_ENTITLEMENT_DENIED`），并返回可读说明（申请 AD 组并等待同步 / 联系管理员）。与「仅 CUSTOM」无关——SYSTEM 与 DEVELOPER 同样准入，以便兼容现网并支持按小组拆分 AD 审批。
-- **吊销时效（已接受）**：准入在发 JWT、`/auth/refresh`、切换工作台时复核；**不**在每个 `/me`/业务请求上复核。成员被移出全部虚拟组后，在 access token 过期前仍可能短暂可用（JWT 常规模型）；refresh 失败后会话结束。产品接受该延迟。
+- **门户准入（先于自助/FULL）**：账号有效，且至少属于一个 **ACTIVE 的 CUSTOM** 虚拟组（AD 或人工来源都算，PRD §7.1）；SYSTEM、DEVELOPER 组成员资格、平台角色和历史 UBR 都不能替代，System Administrator 也不例外（D-04）。不满足时 **拒绝发放 Portal JWT**（`loginErrorCode=PORTAL_ENTITLEMENT_DENIED`），并返回可读说明（申请 AD 组并等待同步 / 联系管理员）。
+- **吊销时效**：准入在登录、`/auth/refresh`、切换工作台时复核；**不**在每个 `/me`/业务请求上复核。被移出最后一个 CUSTOM 组后立即不能再登录；已登录的会话在 access token（15 分钟）过期、续期被拒后结束（PRD §7.1、D-06）。
 - **触发条件（自助模式）**：已通过门户准入，且用户有效 UBR 集合 **`|C|=0`**（定义同 [portal-bu-rbac.md](./portal-bu-rbac.md) §2、§4.1）。
 - **行为**：
   - 允许登录与刷新 token（无工作台上下文时 JWT 可不携带 `activeBusinessUnitId` / `activeRoleId`，与现有登录逻辑对齐方向）。
@@ -91,7 +93,7 @@ UI 与 API 须用**不同申请类型或明确子类型**表达，避免审批�
 
 ## 8. 实现清单（落地时自检）
 
-- [x] 门户准入：`PortalEntitlementService` + `issuePortalSession` / refresh / switch-workspace；无合格 VG → `PORTAL_ENTITLEMENT_DENIED`。
+- [x] 门户准入：`PortalEntryService`（platform-security，只认 ACTIVE CUSTOM 组）+ `issuePortalSession` / refresh / switch-workspace；不满足 → `PORTAL_ENTITLEMENT_DENIED`。
 - [x] `LoginResponse` / `/auth/me` 与 JWT claim **`portalAccessMode`**：`FULL` | `PERMISSION_SELF_SERVICE_ONLY`（**`|C|=0` → 后者**）。
 - [x] 前端路由与 `PortalLayout` 按 `portalAccessMode` 裁剪菜单；深链重定向至 `/permissions`；顶栏 **`SelfServiceBanner`**。
 - [x] 后端 **`PortalSelfServiceAccessFilter`**：自助模式仅白名单 `auth`、`permissions`、`permission-requests`（只读/兼容 GET）、`notifications`、`preferences`、`my-permissions`、`exit`（成员列表等）。
@@ -107,7 +109,7 @@ UI 与 API 须用**不同申请类型或明确子类型**表达，避免审批�
 
 ## 9. 相关文档
 
-- [portal-bu-rbac.md](./portal-bu-rbac.md) — UBR、JWT 工作台上下文、`BU_UNBOUNDED` 与虚拟组（管理侧）约束。
+- [portal-bu-rbac.md](./portal-bu-rbac.md) — UBR、JWT 工作台上下文；不带 BU 的角色只有平台角色（平台访问模型 D-14 / D-64）。
 - [developer-workstation-workspace-rbac.md](./developer-workstation-workspace-rbac.md) — 设计站工作区（与本文门户自助正交）。
 
 ---

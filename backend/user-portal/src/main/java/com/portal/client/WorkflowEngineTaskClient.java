@@ -307,6 +307,18 @@ public class WorkflowEngineTaskClient {
     // ==================== Task operations (complete, claim, delegate, transfer, return) ====================
 
     /**
+     * The engine refused a task operation (4xx, e.g. "this task is held by another user"): that is the answer the user
+     * gets, with the engine's status and message, not an empty result that callers can only report as a 500. Transport
+     * failures and engine errors (5xx) still come back empty.
+     */
+    private com.portal.exception.PortalException rejected(String operation, HttpClientErrorException e) {
+        String msg = engine.parseWorkflowEngineErrorMessage(e.getResponseBodyAsString());
+        log.warn("Workflow engine refused {}: status={}, message={}", operation, e.getStatusCode(), msg);
+        return new com.portal.exception.PortalException(String.valueOf(e.getStatusCode().value()),
+                msg != null ? msg : e.getMessage());
+    }
+
+    /**
      * Completes task
      */
     public Optional<Map<String, Object>> completeTask(String taskId, String userId,
@@ -349,6 +361,8 @@ public class WorkflowEngineTaskClient {
             Map<String, Object> err = new HashMap<>();
             err.put("success", false);
             err.put("message", msg != null ? msg : e.getMessage());
+            // The engine's own status, so the caller can answer a refusal (4xx) with it instead of 500.
+            err.put("status", e.getStatusCode().value());
             return Optional.of(err);
         } catch (Exception e) {
             log.warn("Failed to complete task in workflow engine: {}", e.getMessage());
@@ -381,6 +395,8 @@ public class WorkflowEngineTaskClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+        } catch (HttpClientErrorException e) {
+            throw rejected("claim", e);
         } catch (Exception e) {
             log.warn("Failed to claim task in workflow engine: {}", e.getMessage());
         }
@@ -423,6 +439,8 @@ public class WorkflowEngineTaskClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+        } catch (HttpClientErrorException e) {
+            throw rejected("delegate", e);
         } catch (Exception e) {
             log.warn("Failed to delegate task in workflow engine: {}", e.getMessage());
         }
@@ -481,6 +499,8 @@ public class WorkflowEngineTaskClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+        } catch (HttpClientErrorException e) {
+            throw rejected("unclaim", e);
         } catch (Exception e) {
             log.warn("Failed to unclaim task in workflow engine: {}", e.getMessage());
         }
@@ -513,6 +533,8 @@ public class WorkflowEngineTaskClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+        } catch (HttpClientErrorException e) {
+            throw rejected("reassign", e);
         } catch (Exception e) {
             log.warn("Failed to reassign task in workflow engine: {}", e.getMessage());
         }
@@ -547,6 +569,8 @@ public class WorkflowEngineTaskClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+        } catch (HttpClientErrorException e) {
+            throw rejected("transfer", e);
         } catch (Exception e) {
             log.warn("Failed to transfer task in workflow engine: {}", e.getMessage());
         }
@@ -655,6 +679,8 @@ public class WorkflowEngineTaskClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+        } catch (HttpClientErrorException e) {
+            throw rejected("return", e);
         } catch (Exception e) {
             log.warn("Failed to return task in workflow engine: {}", e.getMessage());
         }

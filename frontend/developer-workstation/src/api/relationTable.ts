@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { installSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 import i18n from '@/i18n'
 import { getUser } from './auth'
 
@@ -8,6 +9,7 @@ const relationTableAxios = axios.create({
   timeout: 30000,
   withCredentials: true
 })
+installSessionRefresh(relationTableAxios, config => axios.request(config))
 
 relationTableAxios.interceptors.request.use(config => {
   // This UI is English-only; without the header the backend answers in the browser's language.

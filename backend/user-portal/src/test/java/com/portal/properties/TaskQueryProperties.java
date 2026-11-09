@@ -93,7 +93,8 @@ class TaskQueryProperties {
                 workflowEngineClient, processInstanceRepository, workspaceFilter);
         MineTaskListCache mineCache = new MineTaskListCache();
         TaskPermissionEvaluator permissionEvaluator =
-                new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter);
+                new TaskPermissionEvaluator(com.portal.testsupport.PortalEntryStubs.delegationRules(delegationRuleRepository), workflowEngineClient, workspaceFilter,
+                com.portal.testsupport.PortalEntryStubs.everyone());
         ClaimForceUnclaimAnnotator claimAnnotator =
                 org.mockito.Mockito.mock(ClaimForceUnclaimAnnotator.class);
         MineTaskScanner mineScanner = new MineTaskScanner(
@@ -101,7 +102,7 @@ class TaskQueryProperties {
                 workspaceFilter, processInstanceRepository);
         taskQueryComponent = new TaskQueryComponent(
             workflowEngineClient,
-            new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
+            new DelegatedTaskQueryComponent(workflowEngineClient, com.portal.testsupport.PortalEntryStubs.delegationRules(delegationRuleRepository)),
             new TaskHistoryComponent(workflowEngineClient, processHistoryRepository),
             requestIdEnricher,
             org.mockito.Mockito.mock(CompletedTaskListQueryComponent.class),

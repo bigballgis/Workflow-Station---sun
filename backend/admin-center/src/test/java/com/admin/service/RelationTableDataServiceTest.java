@@ -89,7 +89,7 @@ class RelationTableDataServiceTest {
                 new RelationTableFunctionUnitResolver(relationTableFunctionUnitRepository, functionUnitRepository);
         service = new RelationTableDataServiceImpl(
                 tableDefinitionRepository, versionRepository, relationTableFunctionUnitResolver, auditService,
-                accessService, primaryKeyAllocationService, jdbcTemplate, objectMapper);
+                accessService, primaryKeyAllocationService, jdbcTemplate, objectMapper, com.admin.security.TestTeamScopes.everything());
     }
 
     // ==================== Helper Methods ====================

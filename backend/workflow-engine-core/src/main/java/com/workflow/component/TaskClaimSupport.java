@@ -1,5 +1,6 @@
 package com.workflow.component;
 
+import com.platform.security.service.PortalEntryService;
 import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.request.TaskClaimRequest;
 import com.workflow.dto.response.TaskAssignmentResult;
@@ -55,6 +56,12 @@ public class TaskClaimSupport {
     @Autowired
     private TaskOrphanRepairService taskOrphanRepairService;
 
+    @Autowired
+    private TaskHoldingResolver taskHoldingResolver;
+
+    @Autowired
+    private PortalEntryService portalEntryService;
+
     public TaskAssignmentResult claimTask(String taskId, TaskClaimRequest request) {
         try {
             Task flowableTask = requireTask(taskId);
@@ -93,7 +100,11 @@ public class TaskClaimSupport {
                 throw validation("userId", "Not allowed to reassign this task", operatorUserId);
             }
             List<String> candidates = FlowableCandidateUsers.userIds(taskService, taskId);
-            validateReassignTarget(flowableTask, taskId, target, candidates);
+            validateReassignTarget(flowableTask, taskId, target);
+            // Whoever reassigns, the new holder must be able to sign in to the Portal (platform access model §7.3).
+            if (!portalEntryService.hasPortalEntry(target)) {
+                throw validation("targetUserId", "Target has no Portal access", target);
+            }
             return applyReassignHold(taskId, operatorUserId, target, candidates);
         } catch (WorkflowValidationException e) {
             throw e;
@@ -133,6 +144,8 @@ public class TaskClaimSupport {
                 if (extended.isClaimed()) {
                     extended.unclaimTask();
                     extendedTaskInfoRepository.save(extended);
+                } else if (extended.endDelegationUnlessSameHolder(null) != null) {
+                    extendedTaskInfoRepository.save(extended); // the hold ends, so does its delegation (D-59)
                 }
                 resultType = extended.getAssignmentType();
                 resultTarget = extended.getAssignmentTarget();
@@ -240,26 +253,23 @@ public class TaskClaimSupport {
                 taskId, resultType, resultTarget, operatorUserId, "Task reassigned successfully");
     }
 
-    private void validateReassignTarget(Task flowableTask, String taskId, String target,
-            List<String> candidates) {
+    /**
+     * The target must be in the task's pool as {@link TaskHoldingResolver} reads it (candidate users, members of
+     * candidate groups and of a legacy virtual-group MI row): the same pool the lost-entry rule and the Portal's
+     * offered targets use.
+     */
+    private void validateReassignTarget(Task flowableTask, String taskId, String target) {
         String current = flowableTask.getAssignee();
         if (engineActorMatchesPortalUser(current, target)) {
             throw validation("targetUserId", "Task already held by target", target);
         }
-        if (!candidates.isEmpty()) {
-            if (!actorInCandidatePool(candidates, target)) {
-                throw validation("targetUserId", "Target is not in the claim pool", target);
-            }
-            return;
+        List<String> pool = List.copyOf(taskHoldingResolver.resolve(flowableTask).poolMemberIds());
+        if (pool.isEmpty()) {
+            throw validation("taskId", "Directly assigned tasks cannot be reassigned in the claim pool", taskId);
         }
-        Optional<ExtendedTaskInfo> extendedOpt = extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(taskId);
-        if (extendedOpt.isPresent()
-                && extendedOpt.get().getAssignmentType() == AssignmentType.VIRTUAL_GROUP
-                && userPermissionService.hasTaskPermission(
-                        target, AssignmentType.VIRTUAL_GROUP, extendedOpt.get().getAssignmentTarget())) {
-            return;
+        if (!actorInCandidatePool(pool, target)) {
+            throw validation("targetUserId", "Target is not in the claim pool", target);
         }
-        throw validation("taskId", "Directly assigned tasks cannot be reassigned in the claim pool", taskId);
     }
 
     private void rememberPoolUnlessVirtualGroup(ExtendedTaskInfo task, List<String> candidates) {
@@ -289,17 +299,29 @@ public class TaskClaimSupport {
         return task.getAssignmentTarget();
     }
 
+    /**
+     * Release or reassign someone else's hold: the Admin Center rule (BU Approver, Leader of the BU + Role) while the
+     * holder has Portal entry, and any pool member with entry once the holder lost it (D-07, D-17). Judged here, not
+     * taken from the Portal's flags.
+     */
     private boolean actorMayForceUnclaim(Task flowableTask, String userId) {
+        return adminAllowsForceUnclaim(flowableTask, userId)
+                || taskHoldingResolver.mayTakeOverFromLostHolder(flowableTask, userId);
+    }
+
+    private boolean adminAllowsForceUnclaim(Task flowableTask, String userId) {
         String businessUnitId = null;
         List<String> roleIds = List.of();
         try {
             String pdId = flowableTask.getProcessDefinitionId();
             String defKey = flowableTask.getTaskDefinitionKey();
             if (pdId != null && defKey != null) {
-                String rawBu = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "businessUnitId");
-                if (StringUtils.hasText(rawBu)) {
-                    businessUnitId = rawBu.trim();
-                }
+                // Same BU as task assignment and the Portal's flags: older BPMN wrote it in assigneeValue.
+                businessUnitId = com.workflow.util.BpmnPoolBusinessUnit.resolve(
+                        com.workflow.enums.AssigneeType.fromCode(
+                                bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeType")),
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "businessUnitId"),
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeValue"));
                 roleIds = com.workflow.util.AssigneeRoleIdsSupport.parseRoleIds(
                         bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleIds"),
                         bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleId"));

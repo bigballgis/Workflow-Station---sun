@@ -103,6 +103,16 @@ security:
   lock-duration-minutes: 30
   jwt-secret-key: testSecretKeyForDeveloperWorkstationModule123456
 
+# application.yml 以必填占位符读取这些值（${JWT_SECRET}、${JWT_EXPIRATION} 等，无默认值），与容器从环境变量取值一致。
+# 这里定义同名属性，让所有占位符在测试中都能解析；上面显式配置的键仍然优先。
+JWT_SECRET: testSecretKeyForDeveloperWorkstationModule123456
+JWT_EXPIRATION: 86400000
+JWT_REFRESH_EXPIRATION: 604800000
+ENCRYPTION_SECRET_KEY: testEncryptionSecretKeyForDeveloperWorkstation123456
+SPRING_DATASOURCE_PASSWORD: sa
+SPRING_REDIS_PASSWORD: ""
+SERVICE_INTERNAL_TOKEN: test-only-service-internal-token
+
 rate-limit:
   enabled: false
   requests-per-minute: 1000

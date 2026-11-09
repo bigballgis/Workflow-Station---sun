@@ -5,7 +5,7 @@ import { extractFieldsRecursive } from '../formRendererHelpers/formRendererRuleP
  * The Record Note panel means different things on the two surfaces it appears on.
  *
  * On a **request form** a note is an audit opinion, so the server decides: only an audit grant
- * held by the user's active role (or SYS_ADMIN) may write, and this designer switch has no say.
+ * held by the user's active role may write, and this designer switch has no say.
  * On a **To Do form** a note is a comment by whoever works the task, so the task's handler may
  * write by default and the Developer Workstation Readonly switch is what turns that off.
  *

@@ -1,9 +1,11 @@
 package com.developer.config;
 
 import com.platform.security.filter.JwtAuthenticationFilter;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -12,6 +14,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -50,16 +53,23 @@ public class SecurityConfig {
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // The re-dispatch that ends an SSE stream continues a request that was already authorized; the
+                // JWT filter does not run on it, so it carries no security context and must not be checked again.
+                .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                 .requestMatchers("/auth/**").permitAll()
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/health/**", "/.well-known/health").permitAll()
-                // DESIGN NOTE: Authentication is handled by Kong Gateway (JWT plugin) as the first line of defense,
-                // and JwtAuthenticationFilter as the second line. Spring Security's authorizeHttpRequests is intentionally
-                // set to permitAll() because the authentication decision is made by the JWT filter, not by Spring Security.
-                // In production, Kong rejects unauthenticated requests before they reach this service.
-                .anyRequest().permitAll()
+                .requestMatchers("/error").permitAll()
+                // The platform file store lives here: Portal form attachments, engine e-mail attachments and
+                // Automation flows read and write it without a DW session (stored names are unguessable).
+                .requestMatchers("/upload/**").permitAll()
+                // Everything else needs a signed-in user (platform access model §6.1). The gateway does not check
+                // the JWT, and an annotation-less endpoint must not be open to anonymous callers.
+                .anyRequest().authenticated()
             )
+            .exceptionHandling(handling -> handling
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
             .addFilterBefore(jwtAuthenticationFilter, 
                 UsernamePasswordAuthenticationFilter.class);
         

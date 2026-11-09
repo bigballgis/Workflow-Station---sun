@@ -168,6 +168,7 @@
                     {{ t('virtualGroup.edit') }}
                   </el-button>
                   <el-button
+                    v-if="!row.publicTeam"
                     link
                     type="primary"
                     @click="showMembersDialog(row)"
@@ -175,14 +176,7 @@
                     {{ t('virtualGroup.members') }}
                   </el-button>
                   <el-button
-                    link
-                    type="primary"
-                    @click="showRolesDialog(row)"
-                  >
-                    {{ t('virtualGroup.bindRoles') }}
-                  </el-button>
-                  <el-button
-                    v-if="!readOnly && row.type !== 'SYSTEM'"
+                    v-if="!readOnly && row.type !== 'SYSTEM' && !row.publicTeam"
                     link
                     type="primary"
                     :loading="statusToggleLoadingId === row.id"
@@ -191,7 +185,7 @@
                     {{ row.status === 'ACTIVE' ? t('virtualGroup.deactivate') : t('virtualGroup.activate') }}
                   </el-button>
                   <el-button
-                    v-if="!readOnly && row.type !== 'SYSTEM'"
+                    v-if="!readOnly && row.type !== 'SYSTEM' && !row.publicTeam"
                     link
                     type="danger"
                     @click="handleDelete(row.id)"
@@ -232,12 +226,6 @@
       :group="currentGroup"
       :read-only="readOnly"
     />
-    <VirtualGroupRolesDialog
-      v-model="rolesDialogVisible"
-      :group="currentGroup"
-      :read-only="readOnly"
-      @success="fetchGroups"
-    />
   </div>
 </template>
 
@@ -248,17 +236,17 @@ import { Download, Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import VirtualGroupFormDialog from './components/VirtualGroupFormDialog.vue'
 import VirtualGroupMembersDialog from './components/VirtualGroupMembersDialog.vue'
-import VirtualGroupRolesDialog from './components/VirtualGroupRolesDialog.vue'
 import { useVirtualGroup } from '@/composables/modules/useVirtualGroup'
 import { virtualGroupTypeKey, roleTypeKey } from '@/utils/format'
-import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { canWrite } from '@/utils/permission'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
 import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 const { t } = useI18n()
-const readOnly = computed(() => !hasPermission(PERMISSIONS.USER_WRITE))
+// Groups and their lists are SYS_ADMIN's; Technical Leads and Auditors read them (§8.2).
+const readOnly = computed(() => !canWrite('virtualGroups'))
 
 const {
   loading,
@@ -266,14 +254,12 @@ const {
   searchKeyword,
   formDialogVisible,
   membersDialogVisible,
-  rolesDialogVisible,
   currentGroup,
   statusToggleLoadingId,
   fetchGroups,
   showCreateDialog,
   showEditDialog,
   showMembersDialog,
-  showRolesDialog,
   handleDelete,
   handleCreateSuccess,
   handleToggleStatus,

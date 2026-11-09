@@ -66,6 +66,15 @@ public class ChangeHistory {
     @Column(name = "row_identifier", length = 255)
     private String rowIdentifier;
 
+    /**
+     * Why the assignment changed (platform access model): {@code POOL_MEMBERSHIP_LOST} (D-40, system: the holder no
+     * longer holds the pool's BU + Role), {@code ASSIGNEE_DEPARTED} (D-42, system: the holder left), or
+     * {@code HOLDER_CHANGED} on a {@code DELEGATION_ENDED} row (D-59, by the user or the system: the task changed hands
+     * or its hold ended); null otherwise.
+     */
+    @Column(name = "reason", length = 40)
+    private String reason;
+
     @Column(name = "is_concurrent", nullable = false)
     @Builder.Default
     private Boolean isConcurrent = false;

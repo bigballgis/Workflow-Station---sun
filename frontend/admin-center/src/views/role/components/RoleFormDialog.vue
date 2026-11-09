@@ -5,6 +5,10 @@
     width="500px"
     @update:model-value="$emit('update:modelValue', $event)"
   >
+    <ReferenceNotice
+      v-if="isEdit"
+      :notice="references ?? null"
+    />
     <el-form
       ref="formRef"
       :model="form"
@@ -90,8 +94,15 @@ import { ElMessage, FormInstance } from 'element-plus'
 import { useRoleStore } from '@/stores/role'
 import type { RoleType } from '@/api/role'
 import { Role } from '@/api/role'
+import ReferenceNotice from '@/components/ReferenceNotice.vue'
+import type { ReferenceNotice as ReferenceNoticeData } from '@/types/referenceNotice'
 
-const props = defineProps<{ modelValue: boolean; role: Role | null }>()
+const props = defineProps<{
+  modelValue: boolean
+  role: Role | null
+  /** Where the role being edited is used (notice only). */
+  references?: ReferenceNoticeData | null
+}>()
 const emit = defineEmits(['update:modelValue', 'success'])
 
 const { t } = useI18n()

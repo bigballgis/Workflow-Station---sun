@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 /**
  * Admin frontend exchanges the code for a local JWT after the unified /login callback
  * (symmetric with portal / dw exchanges).
@@ -24,10 +26,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/auth/sso")
 @RequiredArgsConstructor
+@AdminAccess(AdminAudience.PUBLIC)
 public class AuthSsoExchangeController {
     private static final String ADMIN_CLIENT_ID = "admin";
     private final PlatformSsoService platformSsoService;
     private final AuthService authService;
+    @AdminAccess(AdminAudience.PUBLIC)
     @PostMapping("/exchange")
     public ResponseEntity<LoginResponse> exchange(
             @RequestBody SsoExchangeBody body,

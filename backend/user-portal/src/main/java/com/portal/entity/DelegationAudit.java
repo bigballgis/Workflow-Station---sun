@@ -30,6 +30,13 @@ public class DelegationAudit {
     @Column(name = "delegate_id", nullable = false, length = 64)
     private String delegateId;
 
+    /** Display names of both parties for the Delegations page, read with the list, never stored; null when unknown. */
+    @Transient
+    private String delegatorName;
+
+    @Transient
+    private String delegateName;
+
     @Column(name = "task_id", length = 64)
     private String taskId;
 

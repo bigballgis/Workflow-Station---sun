@@ -105,8 +105,8 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     return res.data
   }
 
-  async function clone(id: number, newName: string) {
-    const res = await functionUnitApi.clone(id, newName)
+  async function clone(id: number, newName: string, targetGroupId: string) {
+    const res = await functionUnitApi.clone(id, newName, targetGroupId)
     return res.data
   }
 

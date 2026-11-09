@@ -81,7 +81,6 @@ public final class VirtualGroupColumnSpec {
     private static String roleTypeKey(RoleType type) {
         return switch (type) {
             case BU_BOUNDED -> "role.buBounded";
-            case BU_UNBOUNDED -> "role.buUnbounded";
             case ADMIN -> "role.adminRole";
             case AUDITOR -> "role.auditorRole";
             case DEVELOPER -> "role.developerRole";

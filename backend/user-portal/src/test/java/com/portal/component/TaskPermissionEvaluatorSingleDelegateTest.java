@@ -32,7 +32,8 @@ class TaskPermissionEvaluatorSingleDelegateTest {
     @BeforeEach
     void setUp() {
         evaluator = new TaskPermissionEvaluator(
-                delegationRuleRepository, workflowEngineClient, workspaceTaskFilterComponent);
+                com.portal.testsupport.PortalEntryStubs.delegationRules(delegationRuleRepository), workflowEngineClient, workspaceTaskFilterComponent,
+                com.portal.testsupport.PortalEntryStubs.everyone());
     }
 
     @Test
@@ -48,6 +49,58 @@ class TaskPermissionEvaluatorSingleDelegateTest {
         assertTrue(evaluator.isSingleTaskDelegatee(task, "user-b", null));
         assertTrue(evaluator.canProcessTask(task, "user-b"));
         assertFalse(evaluator.isSingleTaskDelegatee(task, "user-c", null));
+    }
+
+    @Test
+    @DisplayName("a delegate may process the task but not transfer or delegate it: only its holder can (D-60)")
+    void aDelegateMayNotTransfer() {
+        TaskInfo task = TaskInfo.builder()
+                .taskId("t1")
+                .processInstanceId("pi-1")
+                .assignmentType("USER")
+                .assignee("user-a")
+                .delegatedTargetType("USER")
+                .delegatedTo("user-b")
+                .build();
+        TaskInfo free = TaskInfo.builder().taskId("t2").processInstanceId("pi-2").assignmentType("CANDIDATE_USERS").build();
+
+        evaluator.annotateClaimState(task, "user-b", null);
+        assertTrue(evaluator.canProcessTask(task, "user-b"));
+        assertFalse(task.isCanTransfer());
+        assertFalse(task.isCanDelegate());
+        evaluator.annotateClaimState(task, "user-a", null);
+        assertTrue(task.isCanTransfer());
+        assertTrue(task.isCanDelegate());
+        evaluator.annotateClaimState(free, "user-c", null);
+        assertTrue(free.isCanTransfer());
+        assertTrue(free.isCanDelegate());
+    }
+
+    @Test
+    @DisplayName("a delegate without Portal entry is no delegate until the entry is back (D-55)")
+    void delegateWithoutEntryIsNoDelegate() {
+        TaskInfo task = TaskInfo.builder()
+                .taskId("t1")
+                .assignmentType("USER")
+                .assignee("user-a")
+                .delegatorId("user-a")
+                .delegatedTargetType("USER")
+                .delegatedTo("user-b")
+                .build();
+        com.platform.security.service.PortalEntryService entry =
+                org.mockito.Mockito.mock(com.platform.security.service.PortalEntryService.class);
+        TaskPermissionEvaluator gated = new TaskPermissionEvaluator(
+                new EffectiveDelegationRules(delegationRuleRepository, entry), workflowEngineClient,
+                workspaceTaskFilterComponent, entry);
+
+        when(entry.withPortalEntry(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(java.util.Set.of("user-a"));
+        assertFalse(gated.isSingleTaskDelegatee(task, "user-b", null));
+        assertFalse(gated.canProcessTask(task, "user-b"));
+        assertTrue(gated.canProcessTask(task, "user-a"));
+
+        when(entry.withPortalEntry(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Set.of("user-a", "user-b"));
+        assertTrue(gated.isSingleTaskDelegatee(task, "user-b", null));
     }
 
     @Test

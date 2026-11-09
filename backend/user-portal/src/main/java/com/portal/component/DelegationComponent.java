@@ -29,6 +29,7 @@ public class DelegationComponent {
     private final DelegationRuleRepository delegationRuleRepository;
     private final DelegationAuditRepository delegationAuditRepository;
     private final I18nService i18nService;
+    private final EffectiveDelegationRules effectiveDelegationRules;
 
     /**
      * 创建委托规则
@@ -163,21 +164,22 @@ public class DelegationComponent {
      * 获取用户的委托规则列表
      */
     public List<DelegationRule> getDelegationRules(String delegatorId) {
-        return delegationRuleRepository.findByDelegatorId(delegatorId);
+        return effectiveDelegationRules.markLostEntry(delegationRuleRepository.findByDelegatorId(delegatorId));
     }
 
     /**
      * 获取用户的有效委托规则
      */
     public List<DelegationRule> getActiveDelegationRules(String delegatorId) {
-        return delegationRuleRepository.findActiveDelegationRules(delegatorId, LocalDateTime.now());
+        return effectiveDelegationRules.markLostEntry(
+                delegationRuleRepository.findActiveDelegationRules(delegatorId, LocalDateTime.now()));
     }
 
     /**
      * 获取委托给用户的规则
      */
     public List<DelegationRule> getDelegationsForDelegate(String delegateId) {
-        return delegationRuleRepository.findActiveDelegationsForDelegate(delegateId, LocalDateTime.now());
+        return effectiveDelegationRules.inForceForDelegate(delegateId);
     }
 
     /**
@@ -192,8 +194,7 @@ public class DelegationComponent {
      * 返回当前用户作为代理人时，所有委托人的ID列表
      */
     public List<String> getDelegatorIds(String delegateId) {
-        List<DelegationRule> rules = delegationRuleRepository
-                .findActiveDelegationsForDelegate(delegateId, LocalDateTime.now());
+        List<DelegationRule> rules = effectiveDelegationRules.inForceForDelegate(delegateId);
         return rules.stream()
                 .map(DelegationRule::getDelegatorId)
                 .distinct()
@@ -210,18 +211,6 @@ public class DelegationComponent {
         recordAudit(delegatorId, delegateId, taskId, operationType, result, detail);
         log.info("代理人 {} 代理 {} 处理任务 {}, 操作: {}, 结果: {}", 
                 delegateId, delegatorId, taskId, operationType, result);
-    }
-
-    /**
-     * 获取指定委托人的有效委托规则
-     */
-    public DelegationRule getActiveDelegationRule(String delegatorId, String delegateId) {
-        List<DelegationRule> rules = delegationRuleRepository
-                .findActiveDelegationsForDelegate(delegateId, LocalDateTime.now());
-        return rules.stream()
-                .filter(r -> r.getDelegatorId().equals(delegatorId))
-                .findFirst()
-                .orElse(null);
     }
 
     /**

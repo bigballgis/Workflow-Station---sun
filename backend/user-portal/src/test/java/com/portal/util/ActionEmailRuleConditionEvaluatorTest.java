@@ -46,7 +46,7 @@ class ActionEmailRuleConditionEvaluatorTest {
         verify(jdbcTemplate).queryForMap(sql.capture(), params.capture());
         assertThat(sql.getValue())
                 .contains("ar.data->>'remark_type'")
-                .contains("LEFT JOIN dw_table_data_rows ar ON ar.process_instance_id = pi.id AND ar.row_id = ?")
+                .contains("LEFT JOIN up_table_data_rows ar ON ar.process_instance_id = pi.id AND ar.row_id = ?")
                 .doesNotContain("pi.variables->>'remark_type'");
         assertThat(params.getValue()).containsExactly("urgent", "row-1", "pi-1");
     }
@@ -74,7 +74,7 @@ class ActionEmailRuleConditionEvaluatorTest {
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Object[]> params = ArgumentCaptor.forClass(Object[].class);
         verify(jdbcTemplate).queryForMap(sql.capture(), params.capture());
-        assertThat(sql.getValue()).doesNotContain("dw_table_data_rows");
+        assertThat(sql.getValue()).doesNotContain("up_table_data_rows");
         assertThat(params.getValue()).containsExactly("5", "pi-1");
     }
 
@@ -90,7 +90,7 @@ class ActionEmailRuleConditionEvaluatorTest {
         assertThat(result).containsExactly(false, true, true);
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate).queryForMap(sql.capture(), any(Object[].class));
-        assertThat(sql.getValue()).doesNotContain("dw_table_data_rows");
+        assertThat(sql.getValue()).doesNotContain("up_table_data_rows");
     }
 
     @Test

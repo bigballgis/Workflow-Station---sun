@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   listDeployedLatest: vi.fn(),
   notifyError: vi.fn(),
+  teamScoped: false,
 }))
 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
@@ -20,6 +21,7 @@ vi.mock('@/api/relationTable', () => ({
 vi.mock('@/api/functionUnit', () => ({
   functionUnitApi: { listDeployedLatest: mocks.listDeployedLatest },
 }))
+vi.mock('@/utils/permission', () => ({ canWrite: () => true, isTeamScoped: () => mocks.teamScoped }))
 
 describe('Relation Table Function Unit selection', () => {
   beforeEach(() => {
@@ -85,5 +87,28 @@ describe('Relation Table Function Unit selection', () => {
     const state = await load([])
     expect(state.form.functionUnitIds).toEqual([state.COMMON_OPTION_VALUE])
     expect(state.allFunctionUnitOptions.value).toEqual([])
+  })
+})
+
+/** A Technical Lead must link the table to a unit of a team they lead (D-47); the form says so before the backend does. */
+describe('Relation Table Function Unit links for a Technical Lead', () => {
+  const validate = (teamScoped: boolean, ids: string[] | undefined) => {
+    mocks.teamScoped = teamScoped
+    const state = useTableStructureForm({ tableId: ref(0), isEdit: ref(false) })
+    let error: Error | undefined
+    state.rules.functionUnitIds[0].validator({}, ids, (e?: Error) => { error = e })
+    return error?.message
+  }
+
+  it('requires at least one unit; Common alone does not count', () => {
+    expect(validate(true, [])).toBe('form.validationFunctionUnitRequired')
+    expect(validate(true, undefined)).toBe('form.validationFunctionUnitRequired')
+    expect(validate(true, ['__COMMON__'])).toBe('form.validationFunctionUnitRequired')
+    expect(validate(true, ['fu-a'])).toBeUndefined()
+  })
+
+  it('leaves a System Administrator free to create a Common table', () => {
+    expect(validate(false, [])).toBeUndefined()
+    expect(validate(false, ['__COMMON__'])).toBeUndefined()
   })
 })

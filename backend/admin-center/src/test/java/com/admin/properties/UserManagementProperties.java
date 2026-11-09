@@ -78,7 +78,10 @@ public class UserManagementProperties {
                 passwordEncoder,
                 userBusinessUnitRepository,
                 loginAuditQueryRepository,
-                i18nService);
+                i18nService,
+                mock(com.admin.repository.VirtualGroupRepository.class),
+                mock(com.admin.repository.VirtualGroupMemberRepository.class),
+                mock(com.admin.service.DepartedUserTasksService.class));
         
         // Default mock behaviors
         when(passwordEncoder.encode(anyString())).thenAnswer(inv -> "encoded_" + inv.getArgument(0));
@@ -417,7 +420,6 @@ public class UserManagementProperties {
         User existingUser = createUser(userId, "reusable_user", "reusable@example.com", "Reusable User");
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
-        when(userRepository.isUserAdmin(userId)).thenReturn(false);
 
         userManagerComponent.deleteUser(userId);
 

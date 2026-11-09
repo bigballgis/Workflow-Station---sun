@@ -88,7 +88,7 @@ public class UserPortalMembershipService {
                 if (r == null) {
                     continue;
                 }
-                if (!"BU_BOUNDED".equals(r.getType()) && !"BU_UNBOUNDED".equals(r.getType())) {
+                if (!"BU_BOUNDED".equals(r.getType())) {
                     continue;
                 }
                 Map<String, Object> rm = new LinkedHashMap<>();

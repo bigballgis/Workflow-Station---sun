@@ -37,15 +37,16 @@ class UserDirectoryComponentTest {
         verifyNoInteractions(repository);
     }
     @Test
-    void resolvesDistinctIdsInOneQueryAndReturnsOnlyDirectoryLabels() {
+    void resolvesDistinctIdsInOneQueryIncludingUsersDeletedSince() {
         var repository = mock(UserRepository.class);
         when(repository.findAllById(Set.of("a", "b", "deleted"))).thenReturn(List.of(
                 User.builder().id("a").username("alice").displayName("Alice").build(),
                 User.builder().id("b").username("bob").fullName("Bob Example").build(),
-                User.builder().id("deleted").username("removed").deleted(true).build()));
+                User.builder().id("deleted").username("removed").displayName("Former Colleague").deleted(true).build()));
         var result = new UserDirectoryComponentImpl(repository).summaries(List.of("a", "a", "b", "deleted"));
-        assertEquals(List.of("Alice", "Bob Example"), result.stream().map(user -> user.name()).toList());
-        assertEquals(List.of("a", "b"), result.stream().map(user -> user.id()).toList());
+        // A historical assignee who was deleted later still shows their name, not a raw id.
+        assertEquals(List.of("Alice", "Bob Example", "Former Colleague"), result.stream().map(user -> user.name()).toList());
+        assertEquals(List.of("a", "b", "deleted"), result.stream().map(user -> user.id()).toList());
         verify(repository, times(1)).findAllById(Set.of("a", "b", "deleted"));
     }
 

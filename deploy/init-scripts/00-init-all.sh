@@ -35,6 +35,15 @@ FLOWABLE_UPGRADE_STEPS="
 7.1.0.to.7.2.0
 "
 
+# --- Step 0a: platform account time zone ---
+# Hong Kong time as the default of the platform's database account in this database (every later session of it:
+# psql, GUI clients); the services set it themselves. Account and database level, not database-wide - see the
+# script header.
+# First, so that the scripts below (new sessions of the same account) write DEFAULT CURRENT_TIMESTAMP in that zone.
+echo ""
+echo "[0/7] Setting the platform account time zone (Asia/Hong_Kong)..."
+$PSQL -f /docker-entrypoint-initdb.d/00-schema/101-database-time-zone-hong-kong.sql
+
 echo ""
 echo "[0/7] Creating Flowable engine schema..."
 if [ -f /flowable-sql/create/flowable.postgres.all.create.sql ]; then
@@ -156,12 +165,17 @@ for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
          /docker-entrypoint-initdb.d/00-schema/90-*.sql \
          /docker-entrypoint-initdb.d/00-schema/91-*.sql \
          /docker-entrypoint-initdb.d/00-schema/92-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/93-*.sql \
          /docker-entrypoint-initdb.d/00-schema/94-*.sql \
          /docker-entrypoint-initdb.d/00-schema/95-*.sql \
          /docker-entrypoint-initdb.d/00-schema/96-*.sql \
          /docker-entrypoint-initdb.d/00-schema/97-*.sql \
          /docker-entrypoint-initdb.d/00-schema/98-*.sql \
-         /docker-entrypoint-initdb.d/00-schema/99-*.sql; do
+         /docker-entrypoint-initdb.d/00-schema/99-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/100-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/102-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/103-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/104-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
@@ -186,6 +200,8 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/10-add-auditor-role-type.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/11-rename-hmdc-operator-role.sql
 # SLA policy view/edit permissions (SYS_ADMIN both, AUDITOR view).
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/12-sla-policy-permissions.sql
+# Business roles the Digital Lending demo actions allow, held by the E2E users of those tasks.
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/13-digital-lending-action-roles.sql
 
 # Step 4 used to run 99-maintenance/00-wipe-all-function-units.sql here. Removed: this script
 # only runs when the data directory is empty, and Steps 1-3 create no function units, so the
@@ -304,10 +320,12 @@ echo ""
 echo "========================================="
 echo "  Database Initialization Complete!"
 echo "========================================="
-echo "  Login: admin / admin123  (test: 44027893 / admin123)"
+echo "  System Administrator: developer / password (90-post-seed/04; admin and 44027893 hold no Admin role)"
 echo "  Change password after first login!"
 echo "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending System V2 (EN) fu-20260403-a1b2c6; Meeting Participant Info Collection fu-20260403-a1b2c5; Multi-Instance Subtask Demo fu-20260422-23tfag; MCY Debit Card fu-20260505-thwmut; ATM atm-20260623-gaevus"
 echo "  Organization: ASP → HK → HASE → hase-hmdc (see 01-admin/06-hase-organization-seed.sql)"
 echo "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang"
-echo "  (Re-seed: run init-scripts/99-maintenance/00-wipe-all-function-units.sql then reload 08-, 16-, 17-, 18-, and 19- scripts if needed.)"
+echo "  (Re-seed: run init-scripts/99-maintenance/00-wipe-all-function-units.sql then reload 08-, 16-, 17-, 18-, and 19- scripts if needed,"
+echo "   then rerun 90-post-seed/01 and 03 so every function unit belongs to one team. Skip 08-digital-lending-v2-en/05:"
+echo "   its ON CONFLICT names the member key the access model switch replaced. Never rerun 90-post-seed/04.)"
 echo "========================================="

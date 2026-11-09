@@ -167,7 +167,7 @@ ${directMi ? '' : '<bpmndi:BPMNEdge id="ReviewEdge" bpmnElement="ReviewToEnd"><d
   const validation = await api('GET', `${base}/validate`)
   console.log(JSON.stringify({ step: 'design-created', fixtureUnitId: unit.id, forms, validation }))
   const deploy = await api('POST', `${base}/deploy`, { environment: 'DEVELOPMENT', autoEnable: true,
-    conflictStrategy: 'FAIL', changeLog: 'Synthetic batch acceptance fixture' })
+    changeLog: 'Synthetic batch acceptance fixture' })
   console.log(JSON.stringify({ step: 'deploy-requested', fixtureUnitId: unit.id, deploy }))
   await waitForFixtureDeployment(api, deploy.deploymentId)
   console.log(JSON.stringify({ step: 'deployed', fixtureUnitId: unit.id }))

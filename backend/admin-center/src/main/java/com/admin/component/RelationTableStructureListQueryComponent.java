@@ -12,6 +12,7 @@ import com.admin.list.FunctionUnitColumnSpec;
 import com.admin.list.ListQuerySupport;
 import com.admin.list.RelationTableStructureColumnSpec;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.security.AdminTeamScope;
 import com.platform.common.enums.RelationTableStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,9 @@ import java.util.stream.Collectors;
  * Relation Table Structure list: COUNT(*) and the page share the left-rail Function Unit
  * filter plus column filters. Sidebar groups are counted over the whole catalog so a
  * table linked to two units appears under both.
+ *
+ * <p>A Technical Lead sees Common tables and tables linked to a unit of a team they lead; each row says whether the
+ * caller may change it ({@code canWrite}); both from {@link AdminTeamScope} (D-47).</p>
  */
 @Slf4j
 @Component
@@ -44,6 +48,7 @@ public class RelationTableStructureListQueryComponent {
     private final JdbcTemplate jdbcTemplate;
     private final RelationTableDefinitionRepository tableDefinitionRepository;
     private final RelationTableFunctionUnitResolver relationTableFunctionUnitResolver;
+    private final AdminTeamScope teamScope;
 
     @Transactional(readOnly = true)
     public RelationTableStructureListPage query(RelationTableStructureListQueryRequest request) {
@@ -51,6 +56,7 @@ public class RelationTableStructureListQueryComponent {
         ListFilterSql filterSql = RelationTableStructureColumnSpec.sql();
         List<Object> params = new ArrayList<>();
         StringBuilder where = new StringBuilder(FROM);
+        teamScope.appendVisibleRelationTables(where, params, "t.id");
         appendFunctionUnit(where, params, request.functionUnitCode());
         where.append(filterSql.whereClause(request.filters(), params));
 
@@ -103,6 +109,8 @@ public class RelationTableStructureListQueryComponent {
             }
             RelationTableResponse row = RelationTableResponse.fromEntity(entity);
             row.applyFunctionUnits(relationTableFunctionUnitResolver.resolve(linksByTable.get(id), functionUnitsById));
+            row.setCanWrite(teamScope.mayWriteRelationTableLinkedTo(
+                    relationTableFunctionUnitResolver.linkedCodes(linksByTable.get(id), functionUnitsById)));
             ordered.add(row);
         }
         return ordered;
@@ -122,6 +130,10 @@ public class RelationTableStructureListQueryComponent {
         // per version. The label comes from the newest version of the code (same DISTINCT ON rule as
         // the Function Unit catalog list) and the count is DISTINCT so a table linked to two versions
         // of one unit is still one table.
+        // A Technical Lead's rail lists only the units of the teams they lead (§8.2).
+        List<Object> fuParams = new ArrayList<>();
+        StringBuilder teamFilter = new StringBuilder();
+        AdminTeamScope.appendCodeFilter(teamFilter, fuParams, "fu.code", teamScope.visibleFunctionUnitCodes());
         String fuSql = """
                 SELECT fu.code AS fu_code, newest.name AS fu_name,
                        COUNT(DISTINCT l.relation_table_id) AS group_count
@@ -132,9 +144,10 @@ public class RelationTableStructureListQueryComponent {
                     FROM sys_function_units fu
                     ORDER BY fu.code, %s, fu.updated_at DESC NULLS LAST
                 ) newest ON newest.code = fu.code
+                WHERE 1=1 %s
                 GROUP BY fu.code, newest.name
                 ORDER BY newest.name ASC NULLS LAST, fu.code ASC
-                """.formatted(FunctionUnitColumnSpec.VERSION_ORDER_SQL);
+                """.formatted(FunctionUnitColumnSpec.VERSION_ORDER_SQL, teamFilter);
         ResultSetExtractor<List<RelationTableFuGroup>> extractor = rs -> {
             List<RelationTableFuGroup> groups = new ArrayList<>();
             if (commonCount > 0) {
@@ -149,7 +162,7 @@ public class RelationTableStructureListQueryComponent {
             }
             return groups;
         };
-        return ListQuerySupport.query(jdbcTemplate, fuSql, List.of(), extractor);
+        return ListQuerySupport.query(jdbcTemplate, fuSql, fuParams, extractor);
     }
 
 

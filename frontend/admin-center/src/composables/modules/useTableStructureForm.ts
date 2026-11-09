@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { notifySuccess, notifyError, notifyWarning } from '@/utils/notify'
 import { relationTableStructureApi, type RelationDataType, type CreateFieldDefinitionRequest, type UpdateFieldDefinitionRequest, type RelationTableResponse, type LookupConfig } from '@/api/relationTable'
 import { functionUnitApi, type FunctionUnit } from '@/api/functionUnit'
+import { canWrite, isTeamScoped } from '@/utils/permission'
 import { suggestFieldName, suggestTableName } from '@/utils/fieldNameSlug'
 import { serializePkGeneration } from '@/utils/pkGenerationConfig'
 import { parseComputedFieldFromApi, type ComputedFieldDefinition } from '@/utils/computedFieldConfig'
@@ -74,15 +75,32 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   }
 
   const form = reactive({ tableName: '', displayName: '', description: '', functionUnitIds: [] as string[], fieldDefinitions: [] as FieldRow[] })
-  const rules = {
-    displayName: [{ required: true, message: () => t('form.validationDisplayNameRequired'), trigger: 'blur' }],
-    tableName: [{ required: true, message: () => t('form.validationTableNameRequired'), trigger: 'blur' }],
-  }
 
+  /**
+   * Whether the user may save this table: a new one when they may write relation tables at all, an existing one when
+   * the backend says so (every linked unit is of a team they lead, or SYS_ADMIN; D-47). Read-only until loaded.
+   */
+  const loadedCanWrite = ref(false)
+  const canWriteTable = computed(() => (isEdit.value ? loadedCanWrite.value : canWrite('relationTables')))
+  /** A Technical Lead links tables to their own teams' units only, so Common and other teams' units are not offered. */
+  const teamScoped = computed(() => isTeamScoped('relationTables'))
   // A table with no Function Unit links is "Common" (visible to every FU). Modeled in the select as
   // an explicit, mutually-exclusive option rather than "leave everything blank" so the intent is
   // discoverable in the UI instead of relying on a hint line under the field.
   const COMMON_OPTION_VALUE = '__COMMON__'
+
+  const rules = {
+    displayName: [{ required: true, message: () => t('form.validationDisplayNameRequired'), trigger: 'blur' }],
+    tableName: [{ required: true, message: () => t('form.validationTableNameRequired'), trigger: 'blur' }],
+    // A Technical Lead must link at least one unit of a team they lead; the backend refuses anything else (D-47).
+    functionUnitIds: [{
+      validator: (_rule: unknown, value: string[] | undefined, callback: (error?: Error) => void) => {
+        const linked = (value ?? []).some(id => id !== COMMON_OPTION_VALUE)
+        callback(teamScoped.value && !linked ? new Error(t('form.validationFunctionUnitRequired')) : undefined)
+      },
+      trigger: 'change',
+    }],
+  }
   const onFunctionUnitSelectionChange = (values: string[]) => {
     const commonJustPicked = values.includes(COMMON_OPTION_VALUE)
     if (commonJustPicked && values.length > 1) {
@@ -193,6 +211,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
     if (!isEdit.value) return
     try {
       const data = await relationTableStructureApi.getById(tableId.value)
+      loadedCanWrite.value = data.canWrite === true
       form.tableName = data.tableName
       form.displayName = data.displayName || ''
       form.description = data.description || ''
@@ -336,6 +355,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
 
   return {
     form, rules, submitting, dataTypes, fkRefTables, allFunctionUnitOptions, isAuditField, canBeComputed, addField, removeField, loadTableData, submit,
+    canWriteTable, teamScoped,
     onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange,
     COMMON_OPTION_VALUE, onFunctionUnitSelectionChange,
   }

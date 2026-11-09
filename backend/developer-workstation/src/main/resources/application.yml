@@ -14,7 +14,7 @@ admin-center:
 # C-3 (docs/ap-integration/DECISIONS.md#d6): 调用 admin-center 时附带的可信服务密钥，
 # 使 admin-center 信任转发的 X-User-Id。须与 admin-center service.internal-token 一致。
 service:
-  internal-token: ${SERVICE_INTERNAL_TOKEN:}
+  internal-token: ${SERVICE_INTERNAL_TOKEN}  # required: every Admin Center call is authorized (platform access model WP2)
 
 # 一键部署到管理中心：生产环境应要求 JWT（由 Kong 注入或浏览器转发）；本地/测试可关闭
 developer:
@@ -30,7 +30,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
-    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       # 10 太小：设计器一个页面就并发打 3~4 个接口，叠加 Deploy / AI 的长事务后整池排队，
@@ -61,23 +61,24 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         jdbc:
-          time_zone: Asia/Shanghai
+          time_zone: Asia/Hong_Kong
 
   jackson:
     serialization:
       write-dates-as-timestamps: false
     date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: Asia/Shanghai
+    time-zone: Asia/Hong_Kong
   
   data:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
-      password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
+      password: ${SPRING_REDIS_PASSWORD}
       timeout: 5000ms
   
   messages:
-    basename: i18n/messages
+    # platform-common's shared bundle, then the Developer Workstation's own (src/main/resources/i18n/dw-messages_*.properties)
+    basename: i18n/messages,i18n/dw-messages
     encoding: UTF-8
 
   servlet:
@@ -93,8 +94,8 @@ file:
 # Security
 security:
   jwt:
-    secret: ${JWT_SECRET:?JWT_SECRET is required}
-    expiration: ${JWT_EXPIRATION:2592000000}  # 30 days
+    secret: ${JWT_SECRET}
+    expiration: ${JWT_EXPIRATION}
   max-login-attempts: ${MAX_LOGIN_ATTEMPTS:5}
   lock-duration-minutes: ${LOCK_DURATION_MINUTES:30}
   
@@ -131,12 +132,12 @@ workflow-engine:
   url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
   enabled: true
   jwt:
-    secret: ${JWT_SECRET:?JWT_SECRET is required}
+    secret: ${JWT_SECRET}
 
 # JWT Configuration (used by AuthController)
 jwt:
-  secret: ${JWT_SECRET:?JWT_SECRET is required}
-  expiration: ${JWT_EXPIRATION:2592000000}
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
 
 # Platform Security JWT Configuration (used by platform-security JwtProperties)
 # developer-exchange-enabled=false 可在误部署到共享环境时关闭 SSO exchange（SIT/UAT/PROD 不应部署本服务）
@@ -146,9 +147,9 @@ platform:
     internal-token: ${SSO_INTERNAL_TOKEN:}
   security:
     jwt:
-      secret: ${JWT_SECRET:?JWT_SECRET is required}
-      expiration-ms: ${JWT_EXPIRATION:2592000000}
-      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      secret: ${JWT_SECRET}
+      expiration-ms: ${JWT_EXPIRATION}
+      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION}
       # 服务自有 cookie 名，避免与 user-portal / admin-center 在同源下互相覆盖。
       # 列表首项是本服务写出 Cookie 的名字；其它项用于读取（兼容老客户端 / 转发场景）。
       cookie-names:
@@ -159,7 +160,7 @@ platform:
       issuer: platform
       validate-issuer: false
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:?ENCRYPTION_SECRET_KEY is required}
+    secret-key: ${ENCRYPTION_SECRET_KEY}
 
 # OpenAPI
 springdoc:

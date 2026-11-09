@@ -49,15 +49,22 @@ const BUILT_IN_ICONS: Record<string, string> = {
   TRANSFER: 'switch',
   URGE: 'bell'
 }
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   isCompletedTask: boolean
   /** BU Role pool task the signed-in user does not hold: view only until they claim it. */
   claimLocked?: boolean
   actions: TaskActionInfo[] | undefined | null
-  canDelegate: boolean
+  /** The task can be delegated (D-56) and the signed-in user may delegate it (D-60). Not passed = hidden. */
+  canDelegate?: boolean
+  /** Nobody holds the task, or the signed-in user does (D-60). Not passed = hidden. */
+  canTransfer?: boolean
   getIconComponent: (iconName?: string) => Component | null
   getActionLabel: (action: TaskActionInfo) => string
-}>()
+}>(), {
+  claimLocked: false,
+  canDelegate: false,
+  canTransfer: false,
+})
 
 defineEmits<{
   (e: 'customAction', action: TaskActionInfo): void
@@ -67,14 +74,14 @@ function actionTypeOf(action: TaskActionInfo): string {
   return (action.actionType || '').trim().toUpperCase()
 }
 
-/** Delegate needs an assignee. Allowed Roles hide the button for the current session. */
+/** Delegate and Transfer show only when the page says so (D-56, D-60). Allowed Roles hide the button for the session. */
 const visibleActions = computed<TaskActionInfo[]>(() => {
   const user = getStoredUser()
   const roles = user?.roles ?? []
-  const systemAdministrator = user?.systemAdministrator === true
   return (props.actions || []).filter((action) => {
     if (actionTypeOf(action) === 'DELEGATE' && !props.canDelegate) return false
-    return isActionVisibleForSession(action.configJson, roles, systemAdministrator)
+    if (actionTypeOf(action) === 'TRANSFER' && !props.canTransfer) return false
+    return isActionVisibleForSession(action.configJson, roles)
   })
 })
 

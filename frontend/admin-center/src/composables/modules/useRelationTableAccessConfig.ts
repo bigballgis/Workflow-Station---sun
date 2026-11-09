@@ -2,13 +2,16 @@
  * Relation Table Access Config 业务逻辑 composable
  */
 import { ref, computed, type Ref } from 'vue'
-import { notifySuccess, notifyError } from '@/utils/notify'
+import { useI18n } from 'vue-i18n'
+import { notifySuccess } from '@/utils/notify'
+import { notifyUnreportedError } from '@/utils/notifyUnreportedError'
 import { relationTableStructureApi, type RelationTableAccess, type RelationPermissionLevel } from '@/api/relationTable'
 import { roleApi, type Role } from '@/api/role'
 import { businessUnitApi, type BusinessUnit } from '@/api/businessUnit'
 import { formatDate as fmtDate, roleTypeDisplayLabel, roleTagType } from '@/utils/format'
 
 export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) {
+  const { t } = useI18n()
   const loading = ref(false)
   const accessList = ref<RelationTableAccess[]>([])
   const allRoles = ref<Role[]>([])
@@ -42,12 +45,12 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
   const resolveRoleName = (roleId: string, fallbackName?: string | null) =>
     allRolesMap.value.get(roleId)?.name ?? fallbackName ?? roleId
   const resolveRoleTagType = (roleId: string) => {
-    const t = allRolesMap.value.get(roleId)?.type
-    return t ? roleTagType(t) : 'info'
+    const type = allRolesMap.value.get(roleId)?.type
+    return type ? roleTagType(type) : 'info'
   }
   const resolveRoleTypeLabel = (roleId: string) => {
-    const t = allRolesMap.value.get(roleId)?.type
-    return t ? roleTypeDisplayLabel(t) : '—'
+    const type = allRolesMap.value.get(roleId)?.type
+    return type ? roleTypeDisplayLabel(type) : '—'
   }
   const formatDate = (d: string | undefined) => (d ? fmtDate(d) : '')
 
@@ -127,11 +130,6 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     }
   }
 
-  const extractError = (e: unknown) =>
-    (e as { response?: { data?: { error?: { message?: string }; message?: string } } })?.response?.data?.error?.message
-    || (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-    || 'Failed'
-
   const handleAddRole = async () => {
     if (!entityId.value) return
     const level = selectedPermissionLevel.value
@@ -141,11 +139,11 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     adding.value = true
     try {
       await Promise.all(ids.map(id => relationTableStructureApi.addAccess(entityId.value!, id, level)))
-      notifySuccess(`Added ${ids.length} role(s)`)
+      notifySuccess(t('relationTable.access.added', { count: ids.length }))
       showAddRole.value = false
       await loadAccessList()
     } catch (e) {
-      notifyError(extractError(e))
+      notifyUnreportedError(e, t('common.failed'))
     } finally {
       adding.value = false
     }
@@ -155,9 +153,9 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     if (!entityId.value) return
     try {
       await relationTableStructureApi.updatePermissionLevel(entityId.value, access.id, access.permissionLevel)
-      notifySuccess('Permission updated')
+      notifySuccess(t('relationTable.access.permissionUpdated'))
     } catch (e) {
-      notifyError(extractError(e))
+      notifyUnreportedError(e, t('common.failed'))
       await loadAccessList() // revert UI to server state on failure
     }
   }
@@ -166,7 +164,7 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     if (!entityId.value) return
     try {
       await relationTableStructureApi.removeAccess(entityId.value, access.id)
-      notifySuccess('Removed')
+      notifySuccess(t('relationTable.access.removed'))
       await loadAccessList()
     } catch {
       /* silent */

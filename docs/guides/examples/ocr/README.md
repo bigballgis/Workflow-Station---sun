@@ -5,7 +5,7 @@ Exported from dev on 2026-10-07 as a migration sample (no credentials, no person
 | File | What | Import in the target environment |
 |---|---|---|
 | `flow-hermes-ocr-receipt-notice.json` | Automation flow `hermes-ocr-receipt-notice` (Webhook → Content Organizer · Extract Fields **1.0.2** → Code → Return Response) | Admin Center → **Automation Flows** → Import (publish). Import it **before** the FU |
-| `fu-receipt-notice-ocr.zip` | Function Unit "Receipt Notice OCR" (`receipt-notice-ocr-20261007-2tuhin`): BPMN, table, 3 forms, views | Admin Center → **Function Units** → Import → Validate → Deploy → Access (grant a role) |
+| `fu-receipt-notice-ocr.zip` | Function Unit "Receipt Notice OCR" (`receipt-notice-ocr-20261007-2tuhin`): BPMN, table, 3 forms, views | Admin Center → **Function Units** → Import (choose the owning team; it must exist in this environment) → Validate → Deploy → Access (grant a role) |
 
 The BPMN service task references the flow by its business key (`ap:flowKey = hermes-ocr-receipt-notice`), which the
 engine resolves to the target environment's flow id at deploy time, so neither file needs editing.

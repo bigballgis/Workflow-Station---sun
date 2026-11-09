@@ -166,13 +166,15 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD')")
     public FunctionUnit create(FunctionUnitRequest request) {
         if (functionUnitRepository.existsByName(request.getName())) {
             throw new DeveloperBusinessException("CONFLICT_NAME_EXISTS",
                     "Function unit name already exists: " + request.getName(),
                     "Please use a different name");
         }
+        // The one workspace the unit belongs to, checked before anything is written (§6.3).
+        String workspaceId = functionUnitWorkspaceAccessService.resolveTargetWorkspace(request.getVirtualGroupIds());
 
         // Generate unique code
         String code = codeGenerator.generateUniqueCode(request.getName());
@@ -198,11 +200,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
         functionUnit = functionUnitRepository.save(functionUnit);
 
-        // 创建时绑定所属团队（虚拟组）——决定 FU 的可见范围。此处不走 ASSIGN_DEV_GROUPS 工作区校验：
-        // 创建动作已由 @RequireDeveloperPermission(FUNCTION_UNIT_CREATE) + @PreAuthorize 校验，
-        // 且新 FU 尚未 inScope，无法在创建后再自助分配（否则陷入「不可见→不可分配」死锁）。
-        persistCreateTimeDevGroups(functionUnit.getId(),
-                functionUnitWorkspaceAccessService.resolveCreationTeamGroupIds(request.getVirtualGroupIds()));
+        // 创建时绑定所属团队（虚拟组）——决定 FU 的可见范围；目标已在上面按落位规则校验。
+        assignWorkspace(functionUnit.getId(), workspaceId);
 
         String initialBpmnXml = MinimalBpmnTemplate.build(functionUnit.getCode());
         ProcessDefinition initialProcess = ProcessDefinition.builder()
@@ -215,27 +214,18 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         return functionUnit;
     }
 
-    private void persistCreateTimeDevGroups(Long functionUnitId, List<String> virtualGroupIds) {
-        if (virtualGroupIds == null || virtualGroupIds.isEmpty()) {
-            return;
-        }
-        String operator = getCurrentOperator();
-        for (String gid : virtualGroupIds) {
-            if (gid == null || gid.isBlank()) {
-                continue;
-            }
-            functionUnitDevGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
-                    .functionUnitId(functionUnitId)
-                    .virtualGroupId(gid.trim())
-                    .createdAt(Instant.now())
-                    .createdBy(operator)
-                    .build());
-        }
+    private void assignWorkspace(Long functionUnitId, String workspaceId) {
+        functionUnitDevGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
+                .functionUnitId(functionUnitId)
+                .virtualGroupId(workspaceId)
+                .createdAt(Instant.now())
+                .createdBy(getCurrentOperator())
+                .build());
     }
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'DEVELOPER')")
     public FunctionUnit update(Long id, FunctionUnitRequest request) {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
         FunctionUnit functionUnit = getById(id);
@@ -271,7 +261,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD')")
     public void delete(Long id) {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.DELETE);
         FunctionUnit functionUnit = getById(id);
@@ -309,7 +299,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD')")
     public FunctionUnit restore(Long id) {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.RESTORE);
         FunctionUnit functionUnit = getById(id);
@@ -336,15 +326,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.VIEW);
         FunctionUnit entity = getById(id);
         FunctionUnitResponse response = toResponse(entity);
-        response.setCanModify(functionUnitWorkspaceAccessService.canAccess(id, WorkspaceAccessAction.MODIFY));
+        applyAccess(response, functionUnitWorkspaceAccessService.describe(List.of(id)).get(id));
         return response;
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean canAccessWorkspace() {
-        String userId = SecurityContextUtils.getCurrentUserId().orElse(null);
-        return functionUnitWorkspaceAccessService.canEnterWorkspace(userId);
     }
 
     @Override
@@ -355,7 +338,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .groups(functionUnitWorkspaceAccessService.getSelectableTeams(userId))
                 .canSeeAllGroups(functionUnitWorkspaceAccessService.canSeeAllGroups(userId))
                 .publicGroupId(com.developer.security.DevGroupConstants.PUBLIC_GROUP_ID)
-                .memberGroupIds(functionUnitWorkspaceAccessService.memberGroupIds(userId))
+                .canWritePublic(functionUnitWorkspaceAccessService.canWritePublic(userId))
                 .build();
     }
 
@@ -434,23 +417,39 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             }
         });
 
-        java.util.Set<Long> modifiable = functionUnitWorkspaceAccessService.modifiableFunctionUnitIds();
+        Map<Long, FunctionUnitWorkspaceAccessService.FunctionUnitAccess> access = functionUnitWorkspaceAccessService
+                .describe(page.getContent().stream().map(FunctionUnit::getId).toList());
         return page.map(entity -> {
             FunctionUnitResponse response = toResponse(entity);
-            response.setCanModify(modifiable == null || modifiable.contains(entity.getId()));
+            applyAccess(response, access.get(entity.getId()));
             return response;
         });
+    }
+
+    /** Where the unit sits and what the current user may do with it (platform access model §6.2). */
+    private static void applyAccess(FunctionUnitResponse response,
+                                    FunctionUnitWorkspaceAccessService.FunctionUnitAccess access) {
+        response.setCanModify(access.canModify());
+        response.setCanManage(access.canManage());
+        response.setWorkspaceId(access.workspace().groupId());
+        response.setWorkspaceName(access.workspace().name());
+        response.setWorkspaceStatus(access.workspace().status().name());
     }
 
     @Override
     @Transactional(readOnly = true)
     public java.util.List<String> getAllTags() {
-        return functionUnitRepository.findAllDistinctTags();
+        // The tags of the units this user can see, by the same rule as the list (platform access model §6.2).
+        java.util.Set<Long> visible = functionUnitWorkspaceAccessService.visibleFunctionUnitIds();
+        if (visible == null) {
+            return functionUnitRepository.findAllDistinctTags();
+        }
+        return visible.isEmpty() ? java.util.List.of() : functionUnitRepository.findDistinctTagsByIdIn(visible);
     }
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'DEVELOPER')")
     public FunctionUnit publish(Long id, String changeLog) {
         return doPublish(id, changeLog);
     }
@@ -512,9 +511,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD')")
-    public FunctionUnit clone(Long id, String newName) {
-        return cloner.clone(id, newName);
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SYS_ADMIN', 'TECH_LEAD')")
+    public FunctionUnit clone(Long id, String newName, String targetGroupId) {
+        return cloner.clone(id, newName, targetGroupId);
     }
 
     @Override
@@ -622,22 +621,21 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     public void replaceDevGroupAssignments(Long functionUnitId, DevGroupAssignmentRequest request) {
         functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.ASSIGN_DEV_GROUPS);
         getById(functionUnitId);
-        functionUnitDevGroupAssignmentRepository.deleteByFunctionUnitId(functionUnitId);
-        String operator = getCurrentOperator();
-        if (request.getVirtualGroupIds() == null) {
+        String target = functionUnitWorkspaceAccessService.resolveTargetWorkspace(request.getVirtualGroupIds());
+        List<FunctionUnitDevGroupAssignment> current = functionUnitDevGroupAssignmentRepository
+                .findByFunctionUnitId(functionUnitId);
+        if (current.size() == 1 && target.equals(current.get(0).getVirtualGroupId())) {
             return;
         }
-        for (String gid : request.getVirtualGroupIds()) {
-            if (gid == null || gid.isBlank()) {
-                continue;
-            }
-            functionUnitDevGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
-                    .functionUnitId(functionUnitId)
-                    .virtualGroupId(gid.trim())
-                    .createdAt(Instant.now())
-                    .createdBy(operator)
-                    .build());
-        }
+        // Moved in place: the one row of the unit points at the new workspace (unique per unit, §6.3).
+        FunctionUnitDevGroupAssignment assignment = current.isEmpty()
+                ? FunctionUnitDevGroupAssignment.builder().functionUnitId(functionUnitId).build()
+                : current.get(0);
+        assignment.setVirtualGroupId(target);
+        assignment.setCreatedAt(Instant.now());
+        assignment.setCreatedBy(getCurrentOperator());
+        functionUnitDevGroupAssignmentRepository.save(assignment);
+        log.info("Moved function unit {} to workspace {}", functionUnitId, target);
     }
 
     @Override

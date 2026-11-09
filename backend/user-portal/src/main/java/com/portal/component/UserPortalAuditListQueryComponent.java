@@ -23,6 +23,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -122,6 +123,7 @@ public class UserPortalAuditListQueryComponent {
                                UserPortalAuditListQueryRequest request) {
         appendChangeType(where, params, request.changeType());
         appendFunctionUnit(where, params, request.functionUnitCode());
+        appendFunctionUnitScope(where, params, request.functionUnitCodes());
         appendUsername(where, params, request.username());
         appendProcessKeyword(where, params, request);
         Instant start = parseIsoInstant(request.startTime());
@@ -150,6 +152,21 @@ public class UserPortalAuditListQueryComponent {
         }
         where.append(" AND pi.function_unit_code = ?");
         params.add(code.trim());
+    }
+
+    /** The units Admin limits the caller to: null = every unit, empty = none (§8.2). */
+    private static void appendFunctionUnitScope(StringBuilder where, List<Object> params, List<String> codes) {
+        if (codes == null) {
+            return;
+        }
+        if (codes.isEmpty()) {
+            where.append(" AND 1=0");
+            return;
+        }
+        where.append(" AND pi.function_unit_code IN (")
+                .append(String.join(",", Collections.nCopies(codes.size(), "?")))
+                .append(')');
+        params.addAll(codes);
     }
 
     private static void appendUsername(StringBuilder where, List<Object> params, String username) {

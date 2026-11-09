@@ -22,7 +22,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -155,14 +154,7 @@ public class TaskFormController {
     @ExceptionHandler(PortalException.class)
     public ApiResponse<Void> handlePortalException(PortalException e,
             jakarta.servlet.http.HttpServletResponse response) {
-        int statusCode = switch (e.getCode()) {
-            case "404" -> HttpStatus.NOT_FOUND.value();
-            case "403" -> HttpStatus.FORBIDDEN.value();
-            case "400" -> HttpStatus.BAD_REQUEST.value();
-            case "409" -> HttpStatus.CONFLICT.value();
-            default -> HttpStatus.INTERNAL_SERVER_ERROR.value();
-        };
-        response.setStatus(statusCode);
+        response.setStatus(com.portal.exception.PortalExceptionStatus.of(e));
         return ApiResponse.error(e.getCode(), e.getMessage());
     }
 }

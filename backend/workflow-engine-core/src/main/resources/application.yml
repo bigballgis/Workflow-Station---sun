@@ -17,7 +17,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
-    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -35,20 +35,20 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         jdbc:
-          time_zone: Asia/Shanghai
+          time_zone: Asia/Hong_Kong
 
   jackson:
     serialization:
       write-dates-as-timestamps: false
     date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: Asia/Shanghai
+    time-zone: Asia/Hong_Kong
 
   # Redis Configuration
   data:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
-      password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
+      password: ${SPRING_REDIS_PASSWORD}
       timeout: 5000ms
 
   # Kafka Configuration
@@ -102,7 +102,7 @@ service-task:
 
 # C-3 服务间共享密钥（与 admin-center 的 SERVICE_INTERNAL_TOKEN 同值）；flow-resolve 调用凭此过门禁
 service:
-  internal-token: ${SERVICE_INTERNAL_TOKEN:}
+  internal-token: ${SERVICE_INTERNAL_TOKEN}  # required: every Admin Center call is authorized (platform access model WP2)
 
 # 本地/开发联调测试账号（默认关闭 fail-closed；生产严禁设置这两个变量）
 # accounts 格式：user1:pass1,user2:pass2 —— 仅在 Redis 无该用户口令时回退匹配
@@ -114,17 +114,17 @@ workflow:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:?JWT_SECRET is required}
-  expiration: ${JWT_EXPIRATION:86400000}
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION}
 
 # Platform Configuration
 platform:
   security:
     jwt:
-      secret: ${JWT_SECRET:?JWT_SECRET is required}
-      expiration-ms: ${JWT_EXPIRATION:86400000}
-      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      secret: ${JWT_SECRET}
+      expiration-ms: ${JWT_EXPIRATION}
+      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION}
       # 引擎不签发 cookie，但接收三端代理过来的 REST / WebSocket 请求；
       # 需同时识别 up_/ac_/dw_ 前缀的 access cookie，避免按浏览器随机选中的同源 cookie 鉴权失败。
       cookie-names:
@@ -136,7 +136,7 @@ platform:
       issuer: platform
       validate-issuer: false
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:?ENCRYPTION_SECRET_KEY is required}
+    secret-key: ${ENCRYPTION_SECRET_KEY}
   workflow-engine:
     callback-base-url: ${WORKFLOW_ENGINE_CALLBACK_BASE_URL:http://localhost:8081}
 

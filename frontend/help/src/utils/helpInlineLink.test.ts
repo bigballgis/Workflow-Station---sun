@@ -18,6 +18,8 @@ test('resolves How to write events and Basic control paths', () => {
   assert.equal(helpInlineTitleKey('/action-email'), 'guides.actionEmail.title')
   assert.equal(helpInlineTitleKey('/action-allowed-roles'), 'guides.actionAllowedRoles.title')
   assert.equal(helpInlineTitleKey('/environment-variables'), 'guides.environmentVariables.title')
+  assert.equal(helpInlineTitleKey('/up-tasks-to-claim#lost-access'), 'upTasksToClaimGuide.lostTitle')
+  assert.equal(helpInlineTitleKey('/task-delegate'), 'guides.taskDelegate.title')
 })
 
 test('rejects unsafe or unknown tokens', () => {

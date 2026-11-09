@@ -3,6 +3,8 @@ package com.developer.controller;
 import com.platform.common.dto.ApiResponse;
 import com.developer.entity.ActionDefinition;
 import com.developer.repository.ActionDefinitionRepository;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 public class ActionQueryController {
     
     private final ActionDefinitionRepository actionDefinitionRepository;
+    private final FunctionUnitWorkspaceAccessService workspaceAccessService;
     
     @GetMapping("/batch")
     @Operation(summary = "Batch get action definitions", description = "Get action definitions by a list of action IDs")
@@ -39,6 +42,11 @@ public class ActionQueryController {
         
         // 批量查询
         List<ActionDefinition> actions = actionDefinitionRepository.findAllById(actionIds);
+        // The path names no unit: every unit the actions belong to must be visible to the caller (§6.1)
+        actions.stream()
+            .map(action -> action.getFunctionUnit().getId())
+            .distinct()
+            .forEach(unitId -> workspaceAccessService.assertCanAccess(unitId, WorkspaceAccessAction.VIEW));
         
         return ResponseEntity.ok(ApiResponse.success(actions));
     }

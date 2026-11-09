@@ -52,7 +52,7 @@ public class BuBoundedRoleActivationProperties {
                 virtualGroupRoleRepository,
                 userBusinessUnitRepository,
                 roleRepository,
-                mock(UserRoleRepository.class),
+                mock(UserRoleIdResolver.class),
                 mock(UserPreferenceRepository.class),
                 mock(BusinessUnitRepository.class),
                 roleHelper);

@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   notifySuccess: vi.fn(),
   notifyWarning: vi.fn(),
   notifyConfirm: vi.fn(),
-  hasPermission: vi.fn(),
   slaPolicyApi: {
     query: vi.fn(),
     update: vi.fn(),
@@ -27,10 +26,6 @@ vi.mock('@/utils/notify', () => ({
   notifySuccess: mocks.notifySuccess,
   notifyWarning: mocks.notifyWarning,
   notifyConfirm: mocks.notifyConfirm,
-}))
-
-vi.mock('@/utils/permission', () => ({
-  hasPermission: mocks.hasPermission,
 }))
 
 vi.mock('@/api/slaPolicy', () => ({
@@ -58,19 +53,13 @@ const row: SlaPolicyRow = {
   updatedAt: '2026-09-28T16:27:59Z',
   latestJobStatus: 'SUCCEEDED',
   latestJobId: 'job-3',
+  canEdit: true,
 }
 
 describe('useSlaPolicies', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.slaPolicyApi.query.mockResolvedValue({ columns: [], content: [], page: 0, size: 20, totalElements: 0 })
-  })
-
-  it('exposes edit rights from the sla:policy:edit permission', () => {
-    mocks.hasPermission.mockImplementation((p: string) => p === 'sla:policy:edit')
-    expect(useSlaPolicies().canEdit.value).toBe(true)
-    mocks.hasPermission.mockReturnValue(false)
-    expect(useSlaPolicies().canEdit.value).toBe(false)
   })
 
   it('saves a whole number of days with a trimmed reason, then reloads', async () => {

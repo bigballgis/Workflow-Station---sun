@@ -26,9 +26,11 @@ try {
   let taskId = process.env.FIXTURE_TASK_ID
   if (!taskId) {
     await loginViaDwPassword(page)
-    assert.ok((await dw('GET', '/function-units/50022')).tags.includes('batch-verification-synthetic'))
+    const source = await dw('GET', '/function-units/50022')
+    assert.ok(source.tags.includes('batch-verification-synthetic'))
+    if (!process.env.FIXTURE_UNIT_ID) assert.ok(source.workspaceId, 'Source has no workspace for its clone')
     const clone = process.env.FIXTURE_UNIT_ID ? await dw('GET', `/function-units/${process.env.FIXTURE_UNIT_ID}`)
-      : await dw('POST', `/function-units/50022/clone?newName=${encodeURIComponent(`Batch verification alternatefk${Date.now()}`)}`)
+      : await dw('POST', `/function-units/50022/clone?newName=${encodeURIComponent(`Batch verification alternatefk${Date.now()}`)}&targetGroupId=${encodeURIComponent(source.workspaceId)}`)
     assert.match(clone.name, /^Batch verification alternatefk/)
     console.log(JSON.stringify({ step: 'cloned', unitId: clone.id, code: clone.code }))
     const base = `/function-units/${clone.id}`

@@ -35,7 +35,6 @@ public class PermissionApprovalComponent {
             PermissionRequestType.BUSINESS_UNIT_EXIT);
 
     private final PermissionRequestRepository permissionRequestRepository;
-    private final RoleAccessComponent roleAccessComponent;
     private final VirtualGroupAccessComponent virtualGroupAccessComponent;
     private final I18nService i18nService;
     private final PermissionRequestEnrichmentComponent enrichmentComponent;
@@ -185,16 +184,6 @@ public class PermissionApprovalComponent {
                         }
                     }
                 }
-            } else if (request.getRequestType() == PermissionRequestType.ROLE_ASSIGNMENT) {
-                success = roleAccessComponent.assignRoleToUser(
-                        request.getApplicantId(),
-                        request.getRoleId(),
-                        approverId,
-                        "Approved: " + (comment != null ? comment : "")
-                );
-                if (!success) {
-                    errorMessage = "Failed to assign role";
-                }
             } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
                 success = virtualGroupAccessComponent.removeUserBusinessUnitRole(
                         request.getApplicantId(),
@@ -309,7 +298,8 @@ public class PermissionApprovalComponent {
         } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_EXIT) {
             return virtualGroupAccessComponent.isApproverForBusinessUnit(userId, request.getBusinessUnitId());
         }
-        // 角色分配暂时不需要审批（自动批准）
+        // No other type has an approver: a pending ROLE_ASSIGNMENT (removed with the platform access model) can only be
+        // withdrawn by its applicant.
         return false;
     }
 

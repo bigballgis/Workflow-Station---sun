@@ -2,6 +2,7 @@ package com.developer.service;
 
 import com.developer.component.impl.AiGenerationComponentImpl;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceRouteOwnership;
 import com.developer.dto.AiGeneratedData;
 import com.developer.dto.ApplyGeneratedDataRequest;
 import com.developer.dto.FunctionUnitContextDTO;
@@ -56,7 +57,7 @@ class AiUndoProperties {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                workspaceAccessService, taskExecutor, objectMapper);
+                workspaceAccessService, mock(WorkspaceRouteOwnership.class), taskExecutor, objectMapper);
 
         // Build a valid context DTO that serializeFunctionUnitContext would return
         FunctionUnitContextDTO contextDTO = FunctionUnitContextDTO.builder()
@@ -124,7 +125,7 @@ class AiUndoProperties {
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                workspaceAccessService, taskExecutor, objectMapper);
+                workspaceAccessService, mock(WorkspaceRouteOwnership.class), taskExecutor, objectMapper);
 
         // Build context for snapshot
         FunctionUnitContextDTO contextDTO = FunctionUnitContextDTO.builder()

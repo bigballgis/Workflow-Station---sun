@@ -30,11 +30,13 @@ final class SubTableBatchRoleOutcome {
     private static boolean inspect(SubTableBatchInitialMiOutcome.RoleTarget target, Map<?, ?> task, List<Issue> issues) {
         if (!task.containsKey("currentAssignee") || task.get("currentAssignee") != null
                 && !(task.get("currentAssignee") instanceof String person && person.isBlank())) return false;
-        for (String field : List.of("miAssigneeMode", "miRoleCode", "miBusinessUnitCode", "assignmentType")) {
+        for (String field : List.of("miAssigneeMode", "miBusinessUnitCode", "assignmentType")) {
             if (!(task.get(field) instanceof String value) || value.isBlank()) return false;
         }
+        if (!(task.get("miRoleCodes") instanceof List<?> roles) || roles.isEmpty()) return false;
         String id = (String) task.get("taskId");
-        if (!"role".equals(task.get("miAssigneeMode")) || !target.roleCode().equals(task.get("miRoleCode"))
+        // A batch row names one role, so its task's pool is exactly that role.
+        if (!"role".equals(task.get("miAssigneeMode")) || !List.of(target.roleCode()).equals(roles)
                 || !target.businessUnitCode().equals(task.get("miBusinessUnitCode"))) {
             issues.add(new Issue(id, "ROLE_TASK_CONTEXT_MISMATCH"));
             return true;

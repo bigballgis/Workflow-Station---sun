@@ -25,13 +25,7 @@ public class DeployRequest {
      * 部署环境
      */
     private DeployEnvironment environment;
-    
-    /**
-     * 冲突处理策略
-     */
-    @Size(max = 50)
-    private String conflictStrategy;
-    
+
     /**
      * 是否自动启用
      */

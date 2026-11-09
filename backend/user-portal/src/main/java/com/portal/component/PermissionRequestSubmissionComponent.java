@@ -27,57 +27,6 @@ public class PermissionRequestSubmissionComponent {
     private final VirtualGroupAccessComponent virtualGroupAccessComponent;
 
     /**
-     * 申请角色分配（自动批准）
-     */
-    public PermissionRequest requestRoleAssignment(String userId, String roleId, String organizationUnitId, String reason) {
-        // 获取角色信息
-        Map<String, Object> role = roleAccessComponent.getRoleById(roleId);
-        if (role == null) {
-            throw new IllegalArgumentException("Role does not exist: " + roleId);
-        }
-
-        // 获取组织单元信息（使用 BusinessUnit API）
-        Map<String, Object> orgUnit = virtualGroupAccessComponent.getBusinessUnitById(organizationUnitId);
-        if (orgUnit == null) {
-            throw new IllegalArgumentException("Organization unit does not exist: " + organizationUnitId);
-        }
-
-        // 创建申请记录
-        PermissionRequest request = PermissionRequest.builder()
-                .applicantId(userId)
-                .submittedByUserId(userId)
-                .requestType(PermissionRequestType.ROLE_ASSIGNMENT)
-                .roleId(roleId)
-                .roleName((String) role.get("name"))
-                .organizationUnitId(organizationUnitId)
-                .organizationUnitName((String) orgUnit.get("name"))
-                .reason(reason)
-                .status(PermissionRequestStatus.PENDING)
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        // 保存申请记录
-        request = permissionRequestRepository.save(request);
-
-        // 自动批准：调用 Admin Center API 分配角色
-        boolean success = roleAccessComponent.assignRoleToUser(userId, roleId, userId, reason);
-
-        if (success) {
-            request.setStatus(PermissionRequestStatus.APPROVED);
-            request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment("System auto-approved");
-            log.info("Role assignment auto-approved: user={}, role={}", userId, roleId);
-        } else {
-            request.setStatus(PermissionRequestStatus.REJECTED);
-            request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment("Role assignment failed");
-            log.error("Role assignment failed: user={}, role={}", userId, roleId);
-        }
-
-        return permissionRequestRepository.save(request);
-    }
-
-    /**
      * 申请加入虚拟组（需要审批）
      */
     public PermissionRequest requestVirtualGroupJoin(String userId, String virtualGroupId, String reason) {

@@ -26,6 +26,7 @@ import { functionUnitApi, type TableDefinition } from '@/api/functionUnit'
 import { resolveFormTableId } from '@/utils/formDesigner'
 import { relationTableBindingApi } from '@/api/relationTable'
 import { adminCenterApi, type BusinessUnitInfo, type RoleInfo } from '@/api/adminCenter'
+import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
 export interface MainTableViewDesignerProps {
   functionUnitId: number
@@ -735,13 +736,23 @@ async function persistView(): Promise<boolean> {
       },
       fields,
     })
-    ElMessage.success(t('mainTableView.saved'))
+    // Empty access is allowed but hides the view from everyone in Portal (platform access model D-04).
+    if (selectedBusinessUnitIds.value.length === 0 && selectedRoleIds.value.length === 0) {
+      ElMessage.warning(t('mainTableView.savedWithoutAccess'))
+    } else {
+      ElMessage.success(t('mainTableView.saved'))
+    }
     emit('saved', res.data)
     await nextTick()
     await hydrationPromise
     return true
   } catch (e: unknown) {
-    ElMessage.error((e instanceof Error ? e.message : undefined) || t('common.saveFailed'))
+    // The backend states why a save was refused (e.g. a View name already used in this unit).
+    ElMessage.error(
+      pickHttpErrorBodyMessage((e as { response?: { data?: unknown } } | undefined)?.response?.data)
+        || (e instanceof Error ? e.message : undefined)
+        || t('common.saveFailed'),
+    )
     return false
   } finally {
     saving.value = false

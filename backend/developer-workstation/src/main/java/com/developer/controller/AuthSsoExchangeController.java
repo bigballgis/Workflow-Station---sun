@@ -4,6 +4,7 @@ import com.developer.client.AdminCenterSsoClient;
 import com.developer.dto.LoginResponse;
 import com.developer.entity.User;
 import com.developer.repository.UserRepository;
+import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.developer.service.DeveloperSsoExchangeService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -45,17 +46,20 @@ public class AuthSsoExchangeController {
             AdminCenterSsoClient.SsoRedeemResult redeemed = adminCenterSsoClient.redeemDeveloperCode(body.getCode());
             User user = userRepository.findById(redeemed.userId())
                     .orElseThrow(() -> new IllegalArgumentException("User not found"));
-            if (user.isLocked()) {
+            // Same account rule as password sign-in: a locked or non-ACTIVE account gets no session.
+            if (!"ACTIVE".equals(user.getStatus()) || user.isLocked()) {
                 return ResponseEntity.badRequest().build();
             }
-            if ("DISABLED".equals(user.getStatus())) {
-                return ResponseEntity.badRequest().build();
-            }
+            // Entry is checked before any cookie is written; a refused exchange leaves no sign-in record.
+            LoginResponse session = developerSsoExchangeService.issueSession(user, response);
             user.resetFailedLoginCount();
             user.setLastLoginAt(LocalDateTime.now());
             user.setLastLoginIp(getClientIpAddress(httpRequest));
             userRepository.save(user);
-            return ResponseEntity.ok(developerSsoExchangeService.issueSession(user, response));
+            return ResponseEntity.ok(session);
+        } catch (FunctionUnitWorkspaceAccessDeniedException e) {
+            log.warn("Developer SSO exchange denied: {}", e.getMessage());
+            return ResponseEntity.status(403).build();
         } catch (IllegalArgumentException | IllegalStateException e) {
             log.warn("Developer SSO exchange failed: {}", e.getMessage());
             return ResponseEntity.badRequest().build();

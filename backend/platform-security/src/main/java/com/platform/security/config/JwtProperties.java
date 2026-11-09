@@ -1,5 +1,6 @@
 package com.platform.security.config;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -20,14 +21,15 @@ public class JwtProperties {
     private String secret = "";
     
     /**
-     * Token expiration time in milliseconds (default: 1 hour)
+     * Access token expiration time in milliseconds. Required: no in-code default, see {@link #validateRequiredSettings()}.
      */
-    private long expirationMs = 3600000;
-    
+    private long expirationMs;
+
     /**
-     * Refresh token expiration time in milliseconds (default: 7 days)
+     * Refresh token expiration time in milliseconds; also the session idle timeout and the auth cookies' max-age.
+     * Required: no in-code default, see {@link #validateRequiredSettings()}.
      */
-    private long refreshExpirationMs = 604800000;
+    private long refreshExpirationMs;
     
     /**
      * Token issuer
@@ -65,6 +67,37 @@ public class JwtProperties {
      * or a domain-scoped cookie can't be cleared on logout.
      */
     private String cookieDomain = "";
+
+    /**
+     * Secret and token lifetimes come only from configuration (JWT_SECRET / JWT_EXPIRATION /
+     * JWT_REFRESH_EXPIRATION); a service that forgot to bind them must fail at startup naming the
+     * variable, instead of silently running with a guessed value. An unset {@code ${JWT_SECRET}} reaches
+     * this binding as the literal placeholder text, hence the {@code "${"} check.
+     */
+    @PostConstruct
+    void validateRequiredSettings() {
+        if (secret == null || secret.isBlank() || secret.contains("${")) {
+            throw new IllegalStateException("platform.security.jwt.secret must be configured (JWT_SECRET)");
+        }
+        if (expirationMs <= 0) {
+            throw new IllegalStateException(
+                    "platform.security.jwt.expiration-ms must be configured (JWT_EXPIRATION) and > 0");
+        }
+        if (refreshExpirationMs <= 0) {
+            throw new IllegalStateException(
+                    "platform.security.jwt.refresh-expiration-ms must be configured (JWT_REFRESH_EXPIRATION) and > 0");
+        }
+    }
+
+    /**
+     * Max-age in seconds for both auth cookies: the session lifetime (refresh token lifetime). The access
+     * cookie deliberately outlives its token, so an expired access token still reaches the server, gets a
+     * 401 from {@code JwtAuthenticationFilter}, and the frontend renews the session; a cookie that vanished
+     * with its token would instead turn later requests anonymous.
+     */
+    public int getSessionCookieMaxAgeSeconds() {
+        return (int) (refreshExpirationMs / 1000);
+    }
 
     /**
      * Primary access cookie name for this service ({@link #cookieNames} first entry).

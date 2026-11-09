@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  * behavior is unchanged.
  */
 @Slf4j
-final class AssigneeUserIdNormalizer {
+public final class AssigneeUserIdNormalizer {
 
     /** Flowable ACT_RU/HI identity link USER_ID_/GROUP_ID_ columns are varchar(255). */
     static final int FLOWABLE_IDENTITY_USER_ID_MAX = 255;
@@ -43,6 +43,37 @@ final class AssigneeUserIdNormalizer {
             }
         }
         return null;
+    }
+
+    /**
+     * The user ids an {@code ASSIGNEE_FROM_VARIABLE} value names, in its order: a list (of ids, comma lists or user
+     * reference maps), one user reference map, or comma-separated text. Blank and over-long ids are dropped.
+     */
+    public static List<String> userIdsOfVariable(Object raw) {
+        List<String> ids = new ArrayList<>();
+        if (raw instanceof java.util.Collection<?> col) {
+            for (Object o : col) {
+                if (o instanceof Map<?, ?> m) {
+                    addUserReference(ids, m);
+                } else if (o != null) {
+                    ids.addAll(splitUserList(o.toString()));
+                }
+            }
+        } else if (raw instanceof Map<?, ?> map) {
+            addUserReference(ids, map);
+        } else if (raw != null) {
+            ids.addAll(splitUserList(raw.toString()));
+        }
+        return sanitizeFlowableUserIds(ids);
+    }
+
+    private static void addUserReference(List<String> ids, Map<?, ?> map) {
+        String uid = extractUserIdFromRefMap(map);
+        if (uid != null) {
+            ids.addAll(splitUserList(uid));
+        } else {
+            log.warn("ASSIGNEE_FROM_VARIABLE: map has no id/userId/user_id/value; skip (avoid Map#toString length overflow in Flowable identity link)");
+        }
     }
 
     static String normalizeFlowableUserIdValue(Object raw) {

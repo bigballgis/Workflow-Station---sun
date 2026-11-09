@@ -94,18 +94,19 @@ class FunctionUnitCloneBindingTest {
                 org.mockito.Mockito.mock(com.developer.repository.AiStudioThreadStateRepository.class)));
     }
 
+    /** D-35: the source only has to be visible to the caller; that is checked before anything is written. */
     @Test
-    void cloneChecksLeadCapabilityBeforeAnySequenceOrContentWrite() {
-        doThrow(new FunctionUnitWorkspaceAccessDeniedException("Clone requires workspace lead"))
-                .when(functionUnitWorkspaceAccessService).assertCanAccess(1L, WorkspaceAccessAction.CLONE);
-        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class, () -> component.clone(1L, "Copy"));
+    void cloneChecksTheSourceIsVisibleBeforeAnySequenceOrContentWrite() {
+        doThrow(new FunctionUnitWorkspaceAccessDeniedException("Not visible"))
+                .when(functionUnitWorkspaceAccessService).assertCanAccess(1L, WorkspaceAccessAction.VIEW);
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class, () -> component.clone(1L, "Copy", "vg-team-a"));
         verifyNoInteractions(sequenceSynchronizer);
         verify(functionUnitRepository, never()).save(any());
     }
 
-    /** A clone in no team is outside everyone's workspace scope; it must join the source's teams. */
+    /** The copy lands in the one workspace the caller chose, not in the source's (platform access model §6.3). */
     @Test
-    void cloneJoinsEveryTeamOfTheSource() {
+    void cloneLandsInTheChosenWorkspaceOnly() {
         FunctionUnit source = FunctionUnit.builder().id(1L).name("Source").build();
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(source));
         when(functionUnitRepository.existsByName("Copy")).thenReturn(false);
@@ -114,19 +115,26 @@ class FunctionUnitCloneBindingTest {
             fu.setId(2L);
             return fu;
         });
-        when(functionUnitDevGroupAssignmentRepository.findByFunctionUnitId(1L)).thenReturn(List.of(
-                com.developer.entity.FunctionUnitDevGroupAssignment.builder().functionUnitId(1L).virtualGroupId("vg-team-a").build(),
-                com.developer.entity.FunctionUnitDevGroupAssignment.builder().functionUnitId(1L).virtualGroupId("vg-dev-public").build()));
+        when(functionUnitWorkspaceAccessService.resolveTargetWorkspace(List.of("vg-team-b"))).thenReturn("vg-team-b");
 
-        component.clone(1L, "Copy");
+        component.clone(1L, "Copy", "vg-team-b");
 
         ArgumentCaptor<com.developer.entity.FunctionUnitDevGroupAssignment> saved =
                 ArgumentCaptor.forClass(com.developer.entity.FunctionUnitDevGroupAssignment.class);
-        verify(functionUnitDevGroupAssignmentRepository, times(2)).save(saved.capture());
-        assertEquals(List.of(2L, 2L), saved.getAllValues().stream()
-                .map(com.developer.entity.FunctionUnitDevGroupAssignment::getFunctionUnitId).toList());
-        assertEquals(List.of("vg-team-a", "vg-dev-public"), saved.getAllValues().stream()
-                .map(com.developer.entity.FunctionUnitDevGroupAssignment::getVirtualGroupId).toList());
+        verify(functionUnitDevGroupAssignmentRepository, times(1)).save(saved.capture());
+        assertEquals(2L, saved.getValue().getFunctionUnitId());
+        assertEquals("vg-team-b", saved.getValue().getVirtualGroupId());
+        verify(functionUnitDevGroupAssignmentRepository, never()).findByFunctionUnitId(1L);
+    }
+
+    @Test
+    void cloneIntoAWorkspaceTheCallerCannotCreateInWritesNothing() {
+        when(functionUnitWorkspaceAccessService.resolveTargetWorkspace(List.of("vg-dev-public")))
+                .thenThrow(new FunctionUnitWorkspaceAccessDeniedException("Only a System Administrator can add to Public"));
+
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class, () -> component.clone(1L, "Copy", "vg-dev-public"));
+        verifyNoInteractions(sequenceSynchronizer);
+        verify(functionUnitRepository, never()).save(any());
     }
 
     @Test
@@ -217,7 +225,7 @@ class FunctionUnitCloneBindingTest {
             return b;
         });
 
-        component.clone(1L, "Cloned");
+        component.clone(1L, "Cloned", "vg-team-a");
 
         ArgumentCaptor<FunctionUnit> functionUnitCaptor = ArgumentCaptor.forClass(FunctionUnit.class);
         verify(functionUnitRepository).save(functionUnitCaptor.capture());
@@ -345,7 +353,7 @@ class FunctionUnitCloneBindingTest {
             return b;
         });
 
-        component.clone(1L, "Cloned");
+        component.clone(1L, "Cloned", "vg-team-a");
 
         ArgumentCaptor<FormTableBinding> bindingCaptor = ArgumentCaptor.forClass(FormTableBinding.class);
         verify(formTableBindingRepository, atLeastOnce()).save(bindingCaptor.capture());

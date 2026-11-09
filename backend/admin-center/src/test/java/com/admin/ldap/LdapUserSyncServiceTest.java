@@ -82,7 +82,11 @@ class LdapUserSyncServiceTest {
         assertThat(audit.getSyncType()).isEqualTo("FULL");
         assertThat(audit.getTotalFetched()).isEqualTo(2);
         assertThat(audit.getUpserted()).isEqualTo(2);
+        assertThat(audit.getInsertCount()).isEqualTo(1);
+        assertThat(audit.getUpdateCount()).isEqualTo(1);
+        assertThat(audit.getSkippedMissingKey()).isEqualTo(0);
         assertThat(audit.getFailed()).isEqualTo(0);
+        assertThat(audit.getMessage()).isNull();
 
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
         org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.times(2)).save(saved.capture());
@@ -104,8 +108,8 @@ class LdapUserSyncServiceTest {
     }
 
     @Test
-    @DisplayName("无 employeeID 的行计入 failed，不调用 save")
-    void rowWithoutEmployeeIdCountedAsFailed() throws Exception {
+    @DisplayName("无 employeeID 的行按设计不入库：记为跳过，不计 failed，状态仍 SUCCESS，不调用 save")
+    void rowWithoutEmployeeIdIsSkippedNotFailed() throws Exception {
         Map<String, String> bad = new HashMap<>();
         bad.put("uid", "ghost");
         when(ldapClient.fetchAllUsers()).thenReturn(List.of(bad));
@@ -115,14 +119,62 @@ class LdapUserSyncServiceTest {
 
         assertThat(audit.getStatus()).isEqualTo("SUCCESS");
         assertThat(audit.getUpserted()).isEqualTo(0);
-        assertThat(audit.getFailed()).isEqualTo(1);
+        assertThat(audit.getSkippedMissingKey()).isEqualTo(1);
+        assertThat(audit.getFailed()).isEqualTo(0);
+        assertThat(audit.getMessage()).isEqualTo("Skipped without an employee ID (not stored): 1");
         org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never()).save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("写库失败的条目计入 failed，该次记 PARTIAL；同时有跳过的两条说明都写")
+    void rowThatCannotBeStoredMakesTheRunPartial() throws Exception {
+        Map<String, String> noKey = new HashMap<>();
+        noKey.put("uid", "ghost");
+        when(ldapClient.fetchAllUsers()).thenReturn(List.of(
+                row("100001", "alice", "Alice Anderson"), row("100002", "bob", "Bob Brown"), noKey));
+        when(auditRepository.save(any(LdapSyncAudit.class))).thenAnswer(i -> i.getArgument(0));
+        when(userRepository.findById("100001")).thenReturn(Optional.of(User.builder()
+                .id("100001").username("alice").status(UserStatus.ACTIVE).build()));
+        when(userRepository.findById("100002")).thenThrow(new IllegalStateException("connection reset"));
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+
+        LdapSyncAudit audit = service.runFullSync();
+
+        assertThat(audit.getStatus()).isEqualTo("PARTIAL");
+        assertThat(audit.getTotalFetched()).isEqualTo(3);
+        assertThat(audit.getUpdateCount()).isEqualTo(1);
+        assertThat(audit.getFailed()).isEqualTo(1);
+        assertThat(audit.getSkippedMissingKey()).isEqualTo(1);
+        assertThat(audit.getMessage()).isEqualTo("Could not be stored: 1 (not the starting point of the next "
+                + "incremental sync); Skipped without an employee ID (not stored): 1");
+    }
+
+    @Test
+    @DisplayName("有员工编号的条目一条都没存进去：记 FAILED，不是 PARTIAL；没有员工编号的仍记跳过")
+    void noEntryThatHadToBeStoredWasStoredMakesTheRunFailed() throws Exception {
+        Map<String, String> noKey = new HashMap<>();
+        noKey.put("uid", "ghost");
+        when(ldapClient.fetchAllUsers()).thenReturn(List.of(
+                row("100001", "alice", "Alice Anderson"), row("100002", "bob", "Bob Brown"), noKey));
+        when(auditRepository.save(any(LdapSyncAudit.class))).thenAnswer(i -> i.getArgument(0));
+        when(userRepository.findById(anyString())).thenThrow(new IllegalStateException("connection reset"));
+
+        LdapSyncAudit audit = service.runFullSync();
+
+        assertThat(audit.getStatus()).isEqualTo("FAILED");
+        assertThat(audit.getTotalFetched()).isEqualTo(3);
+        assertThat(audit.getInsertCount()).isZero();
+        assertThat(audit.getUpdateCount()).isZero();
+        assertThat(audit.getFailed()).isEqualTo(2);
+        assertThat(audit.getSkippedMissingKey()).isEqualTo(1);
+        assertThat(audit.getMessage()).isEqualTo("Could not be stored: 2 (not the starting point of the next "
+                + "incremental sync); Skipped without an employee ID (not stored): 1");
     }
 
     @Test
     @DisplayName("增量同步无成功基线时回退全量")
     void incrementalFallsBackToFullWhenNoBaseline() throws Exception {
-        when(auditRepository.findTopByStatusOrderByStartedAtDesc("SUCCESS"))
+        when(auditRepository.findTopBySyncTypeInAndStatusOrderByStartedAtDesc(List.of("FULL", "INCREMENTAL"), "SUCCESS"))
                 .thenReturn(Optional.empty());
         when(ldapClient.fetchAllUsers()).thenReturn(List.of());
         when(auditRepository.save(any(LdapSyncAudit.class))).thenAnswer(i -> i.getArgument(0));

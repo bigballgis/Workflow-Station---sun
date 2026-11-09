@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Internal API for service-to-service email connection credential lookup.
@@ -27,6 +29,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/internal/function-units")
 @Tag(name = "内部-邮件连接", description = "工作流引擎内部调用")
+@AdminAccess(AdminAudience.SERVICE)
 public class InternalEmailConnectionController {
 
     private final EmailConnectionSyncComponent emailConnectionSyncComponent;

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { installSessionRefresh, wasRetriedAfterSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 import type { VersionCompareResponse } from '@/types/versionCompare'
 import { getUser } from './auth'
 import i18n from '@/i18n'
@@ -27,6 +28,7 @@ export const functionUnitAxios = axios.create({
     }
   }
 })
+installSessionRefresh(functionUnitAxios, config => axios.request(config))
 
 functionUnitAxios.interceptors.request.use(config => {
   // Tell the backend which language this UI speaks. Without it its locale resolver falls back to
@@ -68,8 +70,8 @@ functionUnitAxios.interceptors.response.use(
   async error => {
     const { response } = error
     
-    // Handle 401 Unauthorized
-    if (response?.status === 401) {
+    // 401 that the session refresh could not fix: the session is gone.
+    if (response?.status === 401 && !wasRetriedAfterSessionRefresh(error.config)) {
       const { clearAuth } = await import('./auth')
       const { redirectToUnifiedLogin } = await import('@/utils/sso')
       clearAuth()
@@ -123,7 +125,19 @@ export interface FunctionUnit {
   processDefinition?: ProcessDefinition
   /** Backend resource-level write flag. Missing means not writable. */
   canModify?: boolean
+  /**
+   * Delete, restore, clone, move, or import a new version: the workspace's Technical Lead or a System
+   * Administrator (platform access model §6.2). Missing means no.
+   */
+  canManage?: boolean
+  /** The one workspace the unit belongs to, and its state. */
+  workspaceId?: string
+  workspaceName?: string
+  workspaceStatus?: WorkspaceStatus
 }
+
+/** PUBLIC; ACTIVE team; INACTIVE (disabled) team; MISSING (the team was deleted). */
+export type WorkspaceStatus = 'PUBLIC' | 'ACTIVE' | 'INACTIVE' | 'MISSING'
 
 export interface FunctionUnitResponse {
   id: number
@@ -145,6 +159,15 @@ export interface FunctionUnitResponse {
   hasProcess: boolean
   /** Backend resource-level write flag. Missing means not writable. */
   canModify?: boolean
+  /**
+   * Delete, restore, clone, move, or import a new version: the workspace's Technical Lead or a System
+   * Administrator (platform access model §6.2). Missing means no.
+   */
+  canManage?: boolean
+  /** The one workspace the unit belongs to, and its state. */
+  workspaceId?: string
+  workspaceName?: string
+  workspaceStatus?: WorkspaceStatus
 }
 
 /** One Function Unit called by the unit being inspected. */
@@ -217,7 +240,7 @@ export interface FunctionUnitRequest {
   /** Explicit clearing; absent iconId alone means keep the existing icon. */
   clearIcon?: boolean
   tags?: string[]
-  /** Team (virtual group) ids that own/see this FU. Only honoured on create. */
+  /** The one workspace (team or Public) the new unit belongs to. Only honoured on create. */
   virtualGroupIds?: string[]
   /** Omit to leave unchanged; new units default to `STANDALONE`. */
   startupMode?: FunctionUnitStartupMode
@@ -480,28 +503,24 @@ export interface Version {
 export interface DevGroupOption {
   id: string
   name: string
-  /** ACTIVE selectable; INACTIVE listed but disabled in the switcher */
+  /** ACTIVE selectable; INACTIVE only listed (disabled) for users who see every team */
   status?: string
+  /** The current user's lists in this team. */
+  techLead?: boolean
+  developer?: boolean
+  /** Whether the current user may create, import, clone or move function units into this team. */
+  canCreate?: boolean
 }
 
 export interface MyDevGroups {
   groups: DevGroupOption[]
   canSeeAllGroups: boolean
   publicGroupId: string
-  /** Teams the user belongs to, excluding Public. */
-  memberGroupIds?: string[]
+  /** Only System Administrators create in, or move into, Public. */
+  canWritePublic?: boolean
 }
 
 export const functionUnitApi = {
-  /**
-   * Whether the current user may enter the function unit workspace.
-   * True for DW capability roles or members of a team (virtual group) that owns at least
-   * one function unit (read-only baseline). Used by the router guard to admit role-less
-   * team members who would otherwise fail the role-based check.
-   */
-  getWorkspaceAccess: () =>
-    functionUnitAxios.get<any, { data: { canView: boolean } }>('/api/v1/function-units/workspace-access'),
-
   /**
    * Current user's selectable dev teams (for the entry dialog + header switcher), whether
    * they may view all function units (ADMIN), and the built-in Public group id.
@@ -536,18 +555,19 @@ export const functionUnitApi = {
   // POST /{id}/publish still exists on the backend, but only the Deploy flow calls it internally;
   // the DW frontend no longer publishes directly.
 
-  clone: (id: number, newName: string) => 
-    functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/clone`, null, { params: { newName } }),
+  clone: (id: number, newName: string, targetGroupId: string) =>
+    functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/clone`, null, { params: { newName, targetGroupId } }),
   
   validate: (id: number) => 
     functionUnitAxios.get<any, { data: ValidationResult }>(`/api/v1/function-units/${id}/validate`),
 
-  // Team (virtual dev group) assignments — controls FU visibility scope
+  // Team (virtual dev group) assignment — the one workspace a FU belongs to
   getDevGroups: (id: number) =>
     functionUnitAxios.get<any, { data: string[] }>(`/api/v1/function-units/${id}/dev-groups`),
 
-  replaceDevGroups: (id: number, virtualGroupIds: string[]) =>
-    functionUnitAxios.put<any, { data: void }>(`/api/v1/function-units/${id}/dev-groups`, { virtualGroupIds }),
+  /** Move the unit to one other workspace. */
+  moveToWorkspace: (id: number, workspaceId: string) =>
+    functionUnitAxios.put<any, { data: void }>(`/api/v1/function-units/${id}/dev-groups`, { virtualGroupIds: [workspaceId] }),
 
   // Table Definitions
   getTables: (functionUnitId: number) =>
@@ -744,14 +764,22 @@ export const functionUnitApi = {
   exportFunctionUnit: (functionUnitId: number) =>
     functionUnitAxios.get(`/api/v1/function-units/${functionUnitId}/export`, { responseType: 'blob' }),
 
+  exportVersion: (functionUnitId: number, versionId: number) =>
+    functionUnitAxios.get(`/api/v1/function-units/${functionUnitId}/versions/${versionId}/export`, { responseType: 'blob' }),
+
   // Name does not exist → new import; name exists → add a version. Optional changeLog is recorded on the version.
-  importFunctionUnit: (file: File, changeLog?: string) => {
+  // A new unit lands in the package's team; an old package without a team needs targetGroupId
+  // (the backend answers IMPORT_WORKSPACE_REQUIRED when it is missing).
+  importFunctionUnit: (file: File, changeLog?: string, targetGroupId?: string) => {
     const formData = new FormData()
     formData.append('file', file)
+    const params: Record<string, string> = {}
+    if (changeLog) params.changeLog = changeLog
+    if (targetGroupId) params.targetGroupId = targetGroupId
     return functionUnitAxios.post<any, { data: { status: string; message?: string; functionUnitId?: number; version?: string; versioned?: boolean; automationFlows?: AutomationFlowRestoreResult[] } }>(
       '/api/v1/export-import/import',
       formData,
-      { params: changeLog ? { changeLog } : {} }
+      { params }
     )
   },
   
@@ -782,7 +810,6 @@ export interface AutomationFlowRestoreResult {
 export interface DeployRequest {
   targetUrl?: string
   environment?: 'DEVELOPMENT' | 'TESTING' | 'PRODUCTION'
-  conflictStrategy?: string
   autoEnable?: boolean
   changeLog?: string
 }

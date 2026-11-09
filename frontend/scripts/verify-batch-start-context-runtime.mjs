@@ -27,8 +27,12 @@ function instances(code) {
 async function overwriteClone(dwPage, admin, id) {
   const exported = await dwPage.request.get(`http://localhost:3000/api/v1/export-import/function-units/${id}/export`)
   assert.ok(exported.ok())
+  const fileContent = (await exported.body()).toString('base64')
+  // The import dialog's API takes the team; the export names it (platform access model §8.1).
+  const { packageTeam } = await admin('POST', '/function-units/import/preview', { fileName: 'synthetic-context.zip', fileContent })
+  assert.ok(packageTeam?.code, 'Exported package names no team')
   return admin('POST', '/function-units/import', {
-    fileName: 'synthetic-context.zip', fileContent: (await exported.body()).toString('base64'), enableOnImport: true,
+    fileName: 'synthetic-context.zip', fileContent, enableOnImport: true, teamCode: packageTeam.code,
   })
 }
 try {
@@ -46,10 +50,11 @@ try {
   const source = await dw('GET', `/function-units/${sourceId}`)
   assert.match(source.name, /^Batch verification /)
   assert.ok(source.tags.includes('batch-verification-synthetic'))
-  const clone = await dw('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(`Batch verification startcontext${Date.now()}`)}`)
+  assert.ok(source.workspaceId, 'Source has no workspace for its clone')
+  const clone = await dw('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(`Batch verification startcontext${Date.now()}`)}&targetGroupId=${encodeURIComponent(source.workspaceId)}`)
   assert.notEqual(clone.code, source.code)
   const deployed = await dw('POST', `/function-units/${clone.id}/deploy`, {
-    environment: 'DEVELOPMENT', autoEnable: true, conflictStrategy: 'FAIL', changeLog: 'Synthetic start context verification',
+    environment: 'DEVELOPMENT', autoEnable: true, changeLog: 'Synthetic start context verification',
   })
   await waitForFixtureDeployment(dw, deployed.deploymentId)
   const catalog = await admin('GET', `/function-units/by-process-key/${encodeURIComponent(clone.code)}`)

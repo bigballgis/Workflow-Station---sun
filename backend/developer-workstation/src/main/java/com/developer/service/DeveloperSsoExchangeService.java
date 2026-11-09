@@ -2,6 +2,8 @@ package com.developer.service;
 
 import com.developer.dto.LoginResponse;
 import com.developer.entity.User;
+import com.developer.security.DeveloperWorkstationEntitlement;
+import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.service.UserRoleService;
@@ -12,7 +14,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import com.developer.security.LegacyVirtualGroupRoleLookup;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -31,14 +32,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DeveloperSsoExchangeService {
 
-    private final LegacyVirtualGroupRoleLookup legacyVirtualGroupRoleLookup;
     private final UserRoleService userRoleService;
     private final JwtProperties jwtProperties;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    @Value("${jwt.expiration:2592000000}")
+    @Value("${jwt.expiration}")
     private long jwtExpiration;
 
     public LoginResponse issueSession(User user, HttpServletResponse response) {
@@ -47,8 +47,9 @@ public class DeveloperSsoExchangeService {
                 .map(UserEffectiveRole::getRoleCode)
                 .distinct()
                 .collect(Collectors.toList());
-        if (roles.isEmpty()) {
-            roles = legacyVirtualGroupRoleLookup.findRoleCodes(user.getId());
+        // Platform access model §6.1: only SYS_ADMIN, AUDITOR and the lists of an active team enter DW.
+        if (!DeveloperWorkstationEntitlement.isEntitled(roles)) {
+            throw new FunctionUnitWorkspaceAccessDeniedException("No Developer Workstation access");
         }
         List<String> permissions = getPermissionsForRoles(roles);
         List<LoginResponse.RoleWithSource> rolesWithSources = buildRolesWithSources(effectiveRoles);
@@ -61,7 +62,7 @@ public class DeveloperSsoExchangeService {
         accessTokenCookie.setHttpOnly(true);
         accessTokenCookie.setSecure(false);
         accessTokenCookie.setPath("/");
-        accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
+        accessTokenCookie.setMaxAge(jwtProperties.getSessionCookieMaxAgeSeconds());
         accessTokenCookie.setAttribute("SameSite", "Lax");
         response.addCookie(accessTokenCookie);
 
@@ -69,7 +70,7 @@ public class DeveloperSsoExchangeService {
         refreshTokenCookie.setHttpOnly(true);
         refreshTokenCookie.setSecure(false);
         refreshTokenCookie.setPath("/");
-        refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
+        refreshTokenCookie.setMaxAge(jwtProperties.getSessionCookieMaxAgeSeconds());
         refreshTokenCookie.setAttribute("SameSite", "Lax");
         response.addCookie(refreshTokenCookie);
         
@@ -141,7 +142,7 @@ public class DeveloperSsoExchangeService {
 
     private String generateRefreshToken(String userId) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + 604800000);
+        Date expiry = new Date(now.getTime() + jwtProperties.getRefreshExpirationMs());
         return Jwts.builder()
                 .subject(userId)
                 .claim("type", "refresh")

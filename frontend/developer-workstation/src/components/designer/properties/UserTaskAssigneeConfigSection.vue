@@ -70,21 +70,6 @@
     </el-form-item>
 
     <div
-      v-if="assigneeType === 'BU_UNBOUNDED_ROLE'"
-      class="claim-tip"
-    >
-      <el-alert
-        type="warning"
-        :closable="false"
-        show-icon
-      >
-        <template #title>
-          {{ t('properties.buUnboundedDeprecated') }}
-        </template>
-      </el-alert>
-    </div>
-
-    <div
       v-if="assigneeLabel"
       class="assignee-label"
     >

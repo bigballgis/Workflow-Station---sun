@@ -16,6 +16,7 @@
  * workspaces, so a key must be unique platform-wide (see {@link checkAutomationFlowKey}).
  */
 import axios from 'axios'
+import { installSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 import { getAutomationWorkspaceId } from '@/utils/automationWorkspace'
 
 /* ------------------------------------------------------------------------- *
@@ -46,6 +47,7 @@ const adminAxios = axios.create({
   timeout: 30000,
   withCredentials: true,
 })
+installSessionRefresh(adminAxios, config => axios.request(config))
 
 // Which workspace this session is for. A hint only: the backend re-validates that the caller is
 // a member of that team before scoping to it, so a forged value gets 403 rather than someone

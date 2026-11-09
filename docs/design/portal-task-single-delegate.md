@@ -64,7 +64,7 @@
 - 不改 UBR「代办申请」、Admin 权限委托、Owner 控件。
 - 不做取消/收回、不做被委托人再委托、不做候选池未认领任务委托。
 - 不委托给虚拟组、不委托「仅 BU」或「仅 Role」。
-- 不把 View 的 SYS_ADMIN 全量可见套到委托任务上（没有该 UBR 就看不见）。
+- 委托任务的可见性只按 UBR 判断，没有该 UBR 就看不见（View 也早已没有 SYS_ADMIN 全量可见，平台访问模型 D-05）。
 - 不在本期做站立规则的 `ruleMatches` / `process_types` 过滤（可复用 `onBehalfOfUserId`）。
 - 不改 `platform-common`、不碰 MI 语义层。
 - MVP **不**按 DW Action 显隐按钮。

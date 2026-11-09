@@ -136,8 +136,9 @@ try {
   const source = await dw('GET', `/function-units/${sourceId}`)
   assert.match(source.name, /^Batch verification /)
   assert.ok(source.tags.includes('batch-verification-synthetic'))
+  assert.ok(source.workspaceId, 'Source has no workspace for its clone')
   const originals = await forms(dw, sourceId)
-  const clone = await dw('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(`Batch verification portability${Date.now()}`)}`)
+  const clone = await dw('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(`Batch verification portability${Date.now()}`)}&targetGroupId=${encodeURIComponent(source.workspaceId)}`)
   assert.notEqual(String(clone.id), sourceId)
   const copies = await forms(dw, clone.id)
   compareClone(originals, copies)
@@ -146,8 +147,11 @@ try {
   assert.equal(exported.ok(), true)
   const zip = await exported.body()
   assert.equal(zip.subarray(0, 2).toString(), 'PK')
+  // The import dialog's API takes the team; the export names it (platform access model §8.1).
+  const { packageTeam } = await admin('POST', '/function-units/import/preview', { fileName: 'synthetic-batch.zip', fileContent: zip.toString('base64') })
+  assert.ok(packageTeam?.code, 'Exported package names no team')
   const imported = await admin('POST', '/function-units/import', {
-    fileName: 'synthetic-batch.zip', fileContent: zip.toString('base64'), enableOnImport: false,
+    fileName: 'synthetic-batch.zip', fileContent: zip.toString('base64'), enableOnImport: false, teamCode: packageTeam.code,
   })
   assert.equal(imported.success, true)
   const catalogId = imported.functionUnit.id

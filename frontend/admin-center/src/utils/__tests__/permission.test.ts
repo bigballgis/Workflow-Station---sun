@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { USER_KEY } from '@/api/auth'
 import type { UserInfo } from '@/api/auth'
-import { hasPermission, PERMISSIONS } from '../permission'
+import type { RouteMeta } from 'vue-router'
+import { accessLevel, canAccessRoute, canRead, canWrite, isTeamScoped } from '../permission'
 
 function user(partial: Partial<UserInfo>): UserInfo {
   return {
@@ -17,7 +18,7 @@ function user(partial: Partial<UserInfo>): UserInfo {
   }
 }
 
-describe('admin-center permission', () => {
+describe('admin-center permission (capabilities from the backend)', () => {
   const storage = new Map<string, string>()
 
   beforeEach(() => {
@@ -41,26 +42,40 @@ describe('admin-center permission', () => {
     storage.set(USER_KEY, JSON.stringify(info))
   }
 
-  it('grants auditor the default read permissions', () => {
-    setUser(user({ roles: ['AUDITOR'] }))
-    expect(hasPermission(PERMISSIONS.USER_READ)).toBe(true)
-    expect(hasPermission(PERMISSIONS.AUDIT_READ)).toBe(true)
-    expect(hasPermission(PERMISSIONS.DASHBOARD)).toBe(true)
-  })
-
-  it('denies auditor write permissions even if the token lists them', () => {
+  it('reads only the capability table, never the roles or permission codes', () => {
     setUser(user({
-      roles: ['AUDITOR'],
-      permissions: [PERMISSIONS.USER_WRITE, PERMISSIONS.ROLE_WRITE, PERMISSIONS.SYSTEM_ADMIN],
+      roles: ['SYS_ADMIN'],
+      permissions: ['system:admin', 'user:write'],
+      adminAccess: { users: 'READ' },
     }))
-    expect(hasPermission(PERMISSIONS.USER_WRITE)).toBe(false)
-    expect(hasPermission(PERMISSIONS.ROLE_WRITE)).toBe(false)
-    expect(hasPermission(PERMISSIONS.SYSTEM_ADMIN)).toBe(false)
+    expect(canRead('users')).toBe(true)
+    expect(canWrite('users')).toBe(false)
+    expect(canRead('functionUnits')).toBe(false)
   })
 
-  it('lets SYS_ADMIN bypass the auditor deny-list when roles are stacked', () => {
-    setUser(user({ roles: ['SYS_ADMIN', 'AUDITOR'] }))
-    expect(hasPermission(PERMISSIONS.USER_WRITE)).toBe(true)
-    expect(hasPermission(PERMISSIONS.SYSTEM_ADMIN)).toBe(true)
+  it('treats TEAM as writable but team-scoped', () => {
+    setUser(user({ adminAccess: { functionUnits: 'TEAM', organization: 'WRITE', systemConfig: 'READ' } }))
+    expect(canWrite('functionUnits')).toBe(true)
+    expect(isTeamScoped('functionUnits')).toBe(true)
+    expect(canWrite('organization')).toBe(true)
+    expect(isTeamScoped('organization')).toBe(false)
+    expect(canWrite('systemConfig')).toBe(false)
+    expect(canRead('systemConfig')).toBe(true)
+  })
+
+  it('denies everything for a profile stored before the capability table existed', () => {
+    setUser(user({ roles: ['AUDITOR'] }))
+    expect(accessLevel('users')).toBe('NONE')
+    expect(canRead('auditAdminCenter')).toBe(false)
+  })
+
+  it('opens a route by its feature and a write route only with write access', () => {
+    setUser(user({ adminAccess: { users: 'READ', relationTables: 'TEAM' } }))
+    const route = (meta: RouteMeta) => ({ matched: [{ meta: { requiresAuth: true } as RouteMeta }, { meta }] })
+    expect(canAccessRoute(route({}))).toBe(true)
+    expect(canAccessRoute(route({ feature: 'users' }))).toBe(true)
+    expect(canAccessRoute(route({ feature: 'users', write: true }))).toBe(false)
+    expect(canAccessRoute(route({ feature: 'relationTables', write: true }))).toBe(true)
+    expect(canAccessRoute(route({ feature: 'systemConfig' }))).toBe(false)
   })
 })

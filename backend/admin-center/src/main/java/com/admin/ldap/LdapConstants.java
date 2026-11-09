@@ -33,43 +33,20 @@ public final class LdapConstants {
      */
     public static final String PAGED_RESULTS_CONTROL_OID = "1.2.840.113556.1.4.319";
 
-    // ==================== Hermes AD Group 同步常量 ====================
+    // ==================== AD 组同步常量 ====================
 
-    /** Hermes AD 组全量同步审计类型。 */
+    /** AD 组同步审计类型：手动触发。 */
     public static final String SYNC_TYPE_HERMES_AD_GROUP = "HERMES_AD_GROUP";
 
-    /** Hermes AD 组增量同步审计类型。 */
+    /** AD 组同步审计类型：启动与定时。 */
     public static final String SYNC_TYPE_HERMES_AD_INCR = "HERMES_AD_INCR";
 
-    /** 虚拟组成员添加者标识（AD 组同步）。 */
+    /** AD 组同步写入的成员行的 {@code added_by}（来源以 {@code source = AD} 为准）。 */
     public static final String HERMES_SYNC_MEMBER_ADDED_BY = "HERMES_AD_SYNC";
 
-    /** 系统预定义角色编码。 */
-    public static final String ROLE_SYSTEM_ADMIN = "SYS_ADMIN";
-    public static final String ROLE_AUDITOR = "AUDITOR";
-    public static final String ROLE_TECH_LEAD = "TECH_LEAD";
-    public static final String ROLE_TEAM_LEAD = "TEAM_LEAD";
-    public static final String ROLE_DEVELOPER = "DEVELOPER";
-    
-    /** Hermes 预定义虚拟组编码（复用现有系统组 code，避免定时同步额外建组）。 */
-    public static final String VG_SYSTEM_ADMINISTRATORS = "SYSTEM_ADMINISTRATORS";
-    public static final String VG_AUDITORS = "AUDITORS";
-    public static final String VG_TECH_LEADS = "TECH_LEADS";
-    public static final String VG_TEAM_LEADS = "TEAM_LEADS";
-    public static final String VG_DEVELOPERS = "DEVELOPERS";
-    public static final String VG_HERMES_USERS = "HERMES_DEFAULT_USERS";
-
-    /** 默认角色编码（用户无命中组时的兜底虚拟组）。 */
-    public static final String VG_DEFAULT_USERS = "HERMES_DEFAULT_USERS";
-
-    /** AD 属性：用户所属组列表。 */
-    public static final String AD_ATTR_MEMBER_OF = "memberOf";
-
-    /** 内部属性键：用户命中的 AD 组 CN 列表（逗号分隔）。 */
-    public static final String INTERNAL_ATTR_HIT_GROUPS = "_hitGroupCn";
-
-    /** 角色 → AD 组角色标识 的映射键（Admin / User / Developer）。 */
-    public static final String GROUP_ROLE_KEY_ADMIN = "Admin";
-    public static final String GROUP_ROLE_KEY_USER = "User";
-    public static final String GROUP_ROLE_KEY_DEVELOPER = "Developer";
+    /**
+     * Note of a user or group sync record, followed by how many directory entries it skipped because they have no
+     * employee ID: such accounts are not stored by design, so they are neither failures nor a reason to retry.
+     */
+    public static final String SKIPPED_WITHOUT_EMPLOYEE_ID = "Skipped without an employee ID (not stored): ";
 }

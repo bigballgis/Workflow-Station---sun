@@ -82,11 +82,12 @@ public class FunctionUnitImporter {
      *       再用导入包内容替换现有功能单元的子内容，currentVersion 递增。</li>
      * </ul>
      *
-     * @param file      导入包
-     * @param changeLog 同名加版本时写入版本记录的变更说明，可空
+     * @param file          导入包
+     * @param changeLog     同名加版本时写入版本记录的变更说明，可空
+     * @param targetGroupId 新功能单元的 Workspace，只用于不带团队的旧包；带团队的包按团队 code 落位
      */
     @Transactional
-    public Map<String, Object> importFunctionUnit(MultipartFile file, String changeLog) {
+    public Map<String, Object> importFunctionUnit(MultipartFile file, String changeLog, String targetGroupId) {
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> packageData = packageParser.parseImportPackage(file);
 
@@ -122,16 +123,12 @@ public class FunctionUnitImporter {
         FunctionUnit existing = functionUnitRepository.findByName(name).orElse(null);
         final boolean versioned = existing != null;
         if (versioned) {
-            workspaceAccessService.assertCanAccess(existing.getId(), WorkspaceAccessAction.MODIFY);
+            // A new version of an existing unit keeps its workspace; adding one is a Technical Lead action (§6.2).
+            workspaceAccessService.assertCanAccess(existing.getId(), WorkspaceAccessAction.IMPORT_VERSION);
         }
-        // A new unit must land in a workspace, resolved exactly as on create (the selected team,
-        // or the admin's choice). Without it the unit has no dev-group assignment and no workspace
-        // lists it. Resolved before any content is written so an import with no team selected
-        // (e.g. an admin on "All Groups") fails instead of leaving an orphan behind. A new version
-        // of an existing unit keeps the unit's assignments.
-        List<String> creationGroupIds = versioned
-                ? List.of()
-                : workspaceAccessService.resolveCreationTeamGroupIds(null);
+        // A new unit lands in exactly one workspace, resolved before any content is written so a refused
+        // import leaves nothing behind (§6.3).
+        String workspaceId = versioned ? null : resolveImportWorkspace(manifest, targetGroupId);
         // Sequence synchronization changes database state too; authorize before it or any content write.
         sequenceSynchronizer.synchronizeAll();
         FunctionUnit functionUnit;
@@ -155,7 +152,7 @@ public class FunctionUnitImporter {
                     .build();
             applyImportedStartupMode(functionUnit, manifest);
             functionUnit = functionUnitRepository.save(functionUnit);
-            assignDevGroups(functionUnit.getId(), creationGroupIds);
+            assignWorkspace(functionUnit.getId(), workspaceId);
         }
 
         basicPortability.restore(functionUnit, manifest);
@@ -426,16 +423,40 @@ public class FunctionUnitImporter {
         }
     }
 
-    private void assignDevGroups(Long functionUnitId, List<String> groupIds) {
-        String operator = SecurityContextUtils.getCurrentUsername().orElse("system");
-        for (String groupId : groupIds) {
-            devGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
-                    .functionUnitId(functionUnitId)
-                    .virtualGroupId(groupId)
-                    .createdAt(Instant.now())
-                    .createdBy(operator)
-                    .build());
+    private void assignWorkspace(Long functionUnitId, String workspaceId) {
+        devGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
+                .functionUnitId(functionUnitId)
+                .virtualGroupId(workspaceId)
+                .createdAt(Instant.now())
+                .createdBy(SecurityContextUtils.getCurrentUsername().orElse("system"))
+                .build());
+    }
+
+    /**
+     * The workspace of a new unit (§6.3): the package's team, matched by code in this environment; an old package
+     * without a team needs the workspace the user chose. A choice that contradicts the package's team is refused.
+     */
+    private String resolveImportWorkspace(Map<String, Object> manifest, String targetGroupId) {
+        String teamCode = null;
+        String teamName = null;
+        if (manifest.get("team") instanceof Map<?, ?> team) {
+            teamCode = team.get("code") instanceof String code && !code.isBlank() ? code.trim() : null;
+            teamName = team.get("name") instanceof String name ? name : null;
         }
+        boolean chosen = targetGroupId != null && !targetGroupId.isBlank();
+        if (teamCode == null) {
+            if (!chosen) {
+                throw new DeveloperBusinessException("IMPORT_WORKSPACE_REQUIRED",
+                        "This package does not say which team it belongs to; choose the workspace to import it into");
+            }
+            return workspaceAccessService.resolveTargetWorkspace(List.of(targetGroupId));
+        }
+        String workspaceId = workspaceAccessService.resolvePackageWorkspace(teamCode, teamName);
+        if (chosen && !workspaceId.equals(targetGroupId.trim())) {
+            throw new DeveloperBusinessException("IMPORT_WORKSPACE_CONFLICT",
+                    "This package belongs to team " + teamCode + "; it cannot be imported into another workspace");
+        }
+        return workspaceId;
     }
 
     /**

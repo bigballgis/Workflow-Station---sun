@@ -43,7 +43,7 @@ class SubTableBatchRoleEligibilityTest {
     }
     @Test void admissionAndCurrentDirectoryStateAreRequired() {
         for (String sql : List.of("UPDATE sys_business_units SET status='DISABLED'", "UPDATE sys_roles SET status='INACTIVE'",
-                "UPDATE sys_roles SET type='BU_UNBOUNDED'", "DELETE FROM sys_business_unit_roles",
+                "UPDATE sys_roles SET type='DEVELOPER'", "DELETE FROM sys_business_unit_roles",
                 "UPDATE sys_users SET status='INACTIVE'", "UPDATE sys_users SET deleted=true",
                 "DELETE FROM sys_user_business_unit_roles")) {
             new org.springframework.transaction.support.TransactionTemplate(

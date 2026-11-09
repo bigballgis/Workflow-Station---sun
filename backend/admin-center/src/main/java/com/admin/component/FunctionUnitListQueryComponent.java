@@ -9,6 +9,7 @@ import com.admin.list.FunctionUnitColumnSpec;
 
 import com.admin.list.ListQuerySupport;
 import com.admin.repository.FunctionUnitRepository;
+import com.admin.security.AdminTeamScope;
 import com.admin.service.UserReferenceResolver;
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListFilterSql;
@@ -19,6 +20,8 @@ import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -28,6 +31,9 @@ import java.util.stream.Collectors;
  * Function Unit list and archive: DISTINCT ON (code) picks the highest version first,
  * then COUNT(*) / groups / LIMIT share the keyword + column-filter predicate.
  * Grouping writes {@link FunctionUnitInfo} only.
+ *
+ * <p>A Technical Lead sees only the codes of the teams they lead, each row saying whether the caller may change it
+ * ({@code canManage}); both come from {@link AdminTeamScope} (§8.2, D-45).</p>
  */
 @Slf4j
 @Component
@@ -40,6 +46,7 @@ public class FunctionUnitListQueryComponent {
     private final JdbcTemplate jdbcTemplate;
     private final FunctionUnitRepository functionUnitRepository;
     private final UserReferenceResolver userReferenceResolver;
+    private final AdminTeamScope teamScope;
 
     public AdminListPage<FunctionUnitInfo> queryList(FunctionUnitListQueryRequest request) {
         return query(request, false);
@@ -60,6 +67,7 @@ public class FunctionUnitListQueryComponent {
                 : FunctionUnitColumnSpec.sql();
         List<Object> params = new ArrayList<>();
         StringBuilder where = new StringBuilder(FunctionUnitColumnSpec.latestFrom(archived));
+        AdminTeamScope.appendCodeFilter(where, params, "fu.code", teamScope.visibleFunctionUnitCodes());
         appendKeyword(where, params, request.keyword());
         where.append(filterSql.whereClause(request.filters(), params));
 
@@ -104,12 +112,43 @@ public class FunctionUnitListQueryComponent {
             if (entity == null) {
                 throw new IllegalStateException("function-unit page referenced missing unit " + id);
             }
-            ordered.add(FunctionUnitInfo.fromEntity(entity));
+            FunctionUnitInfo row = FunctionUnitInfo.fromEntity(entity);
+            row.setCanManage(teamScope.mayManageFunctionUnit(entity.getCode()));
+            ordered.add(row);
         }
         if (archived) {
             enrichUpdatedBy(ordered);
         }
+        enrichTeams(ordered);
         return ordered;
+    }
+
+    /** The team of each row's code: its latest imported version row's team (§8.1); one query per page. */
+    private void enrichTeams(List<FunctionUnitInfo> rows) {
+        List<Object> codes = new ArrayList<>(rows.stream().map(FunctionUnitInfo::getCode).distinct().toList());
+        String placeholders = String.join(",", Collections.nCopies(codes.size(), "?"));
+        Map<String, String[]> teams = ListQuerySupport.query(jdbcTemplate,
+                "SELECT latest.code, latest.team_code, vg.name AS team_name FROM"
+                        + " (SELECT DISTINCT ON (code) code, team_code FROM sys_function_units"
+                        + " WHERE code IN (" + placeholders + ")"
+                        + " ORDER BY code, " + FunctionUnitRepository.LATEST_IMPORT_ORDER + ") latest"
+                        + " LEFT JOIN sys_virtual_groups vg ON vg.code = latest.team_code AND vg.type = 'DEVELOPER'",
+                codes, rs -> {
+                    Map<String, String[]> byCode = new HashMap<>();
+                    while (rs.next()) {
+                        byCode.put(rs.getString("code"),
+                                new String[]{rs.getString("team_code"), rs.getString("team_name")});
+                    }
+                    return byCode;
+                });
+        for (FunctionUnitInfo row : rows) {
+            String[] team = teams.get(row.getCode());
+            if (team != null) {
+                row.setTeamCode(team[0]);
+                row.setTeamName(team[1]);
+                row.setTeam(team[1] != null ? team[1] : team[0]);
+            }
+        }
     }
 
     private void enrichUpdatedBy(List<FunctionUnitInfo> rows) {

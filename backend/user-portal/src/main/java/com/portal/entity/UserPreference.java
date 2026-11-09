@@ -50,7 +50,7 @@ public class UserPreference {
 
     @Column(name = "timezone", length = 50)
     @Builder.Default
-    private String timezone = "Asia/Shanghai";
+    private String timezone = "Asia/Hong_Kong";
 
     @Column(name = "date_format", length = 20)
     @Builder.Default

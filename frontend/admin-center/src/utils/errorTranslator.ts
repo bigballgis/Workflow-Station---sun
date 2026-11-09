@@ -32,11 +32,6 @@ const ERROR_I18N_MAP: Record<AppErrorCodeType, string> = {
   // ---- Config ----
   [AppErrorCode.CONFIG_SAVE_FAILED]:                 'errors.configSaveFailed',
 
-  // ---- Permission ----
-  [AppErrorCode.PERMISSION_LOAD_ROLE_FAILED]:        'errors.permissionLoadRoleFailed',
-  [AppErrorCode.PERMISSION_SAVE_FAILED]:             'errors.permissionSaveFailed',
-  [AppErrorCode.PERMISSION_LOAD_LIST_FAILED]:        'errors.permissionLoadListFailed',
-
   // ---- Permission Request ----
   [AppErrorCode.PERMISSION_REQUEST_FAILED]:          'errors.permissionRequestFailed',
 

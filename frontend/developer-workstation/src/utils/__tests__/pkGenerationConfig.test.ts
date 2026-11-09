@@ -101,7 +101,7 @@ describe('customFormat', () => {
     })
   })
 
-  it('previews year-day-month in Asia/Shanghai', () => {
+  it('previews year-day-month in Asia/Hong_Kong', () => {
     const june8 = new Date('2026-06-08T04:00:00Z')
     expect(formatCustomPkPreview('{DATETIME:yyyy-dd-MM}-{SEQNUM:4}', 1000, june8))
       .toBe('2026-08-06-1000')
@@ -145,7 +145,7 @@ describe('customFormat', () => {
 })
 
 describe('formatDailyDateSequencePreview', () => {
-  it('formats YYYYMMDD plus padded start in Asia/Shanghai', () => {
+  it('formats YYYYMMDD plus padded start in Asia/Hong_Kong', () => {
     // 2026-07-14 23:30 Shanghai == 15:30 UTC
     const still14 = new Date('2026-07-14T15:30:00Z')
     expect(formatDailyDateSequencePreview(4, 1, still14)).toBe('202607140001')
@@ -163,7 +163,7 @@ describe('formatDailyDateSequencePreview', () => {
 })
 
 describe('formatMonthlyDateSequencePreview', () => {
-  it('formats YYYYMM plus padded start in Asia/Shanghai', () => {
+  it('formats YYYYMM plus padded start in Asia/Hong_Kong', () => {
     const stillAugust = new Date('2026-08-31T15:30:00Z')
     expect(formatMonthlyDateSequencePreview(4, 1, stillAugust)).toBe('2026080001')
 

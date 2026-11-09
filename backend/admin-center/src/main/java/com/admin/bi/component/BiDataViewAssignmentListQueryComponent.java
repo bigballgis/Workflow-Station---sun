@@ -6,6 +6,7 @@ import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.BiDataViewAssignmentListQueryRequest;
 import com.admin.list.BiDataViewAssignmentColumnSpec;
 import com.admin.list.ListQuerySupport;
+import com.admin.security.AdminTeamScope;
 import com.platform.common.list.ListFilterSql;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,28 +27,29 @@ public class BiDataViewAssignmentListQueryComponent {
     private static final String LIST_KEY = "admin-bi-data-view-assignments";
     private final JdbcTemplate jdbcTemplate;
     private final BiDataViewMetadataRepository metadata;
+    private final AdminTeamScope teamScope;
 
     @Transactional(readOnly = true)
     public AdminListPage<DataViewAssignmentResponse> query(BiDataViewAssignmentListQueryRequest request) {
         long started = System.nanoTime();
         ListFilterSql filterSql = BiDataViewAssignmentColumnSpec.sql();
-        List<Object> params = new ArrayList<>();
+        // Every row is listed, also those whose View the unit's active release no longer publishes (unavailable).
+        BiDataViewMetadataRepository.ReleaseJoin release = metadata.releaseJoin();
+        List<Object> params = new ArrayList<>(release.params());
         StringBuilder where = new StringBuilder("""
                  FROM bi_data_view_assignment a
                  JOIN bi_dashboard_registry d ON d.id = a.dashboard_id
-                 JOIN dw_function_units fu ON fu.id = a.function_unit_id
-                 LEFT JOIN dw_table_definitions t ON t.id = a.table_id AND t.function_unit_id = a.function_unit_id
-                 LEFT JOIN dw_main_table_view_configs v ON v.id = a.view_id
-                   AND v.function_unit_id = a.function_unit_id AND v.main_table_id = a.table_id
-                 WHERE 1=1
-                """);
+                """).append(release.sql()).append(" WHERE 1=1");
+        // A Technical Lead sees the assignments of the teams they lead: the code from this query, its team from the
+        // Admin catalog (D-46); each row says whether the caller may change it.
+        AdminTeamScope.appendCodeFilter(where, params, "a.function_unit_code", teamScope.visibleFunctionUnitCodes());
         if (request.dashboardTitle() != null && !request.dashboardTitle().isBlank()) {
             where.append(" AND d.dashboard_title").append(ListFilterSql.ILIKE);
             params.add("%" + ListFilterSql.escapeLike(request.dashboardTitle().trim()) + "%");
         }
-        if (request.functionUnitId() != null) {
-            where.append(" AND a.function_unit_id = ?");
-            params.add(request.functionUnitId());
+        if (request.functionUnitCode() != null && !request.functionUnitCode().isBlank()) {
+            where.append(" AND a.function_unit_code = ?");
+            params.add(request.functionUnitCode());
         }
         where.append(filterSql.whereClause(request.filters(), params));
         String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
@@ -67,6 +69,7 @@ public class BiDataViewAssignmentListQueryComponent {
         List<DataViewAssignmentResponse> rows = ids.stream().map(id -> {
             DataViewAssignmentResponse row = byId.get(id);
             if (row == null) throw new IllegalStateException("Data View Assignment page referenced missing row " + id);
+            row.setCanEdit(teamScope.mayManageFunctionUnit(row.getFunctionUnitCode()));
             return row;
         }).toList();
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);

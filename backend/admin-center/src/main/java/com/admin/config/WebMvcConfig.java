@@ -1,5 +1,6 @@
 package com.admin.config;
 
+import com.admin.security.AdminAccessInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -22,34 +23,15 @@ import org.springframework.web.util.pattern.PathPatternParser;
 @RequiredArgsConstructor
 public class WebMvcConfig implements WebMvcConfigurer {
 
-    private final OrganizationMutationAccessInterceptor organizationMutationAccessInterceptor;
-    private final ConfigMutationAccessInterceptor configMutationAccessInterceptor;
-    private final SlaPolicyAccessInterceptor slaPolicyAccessInterceptor;
-    
+    private final AdminAccessInterceptor adminAccessInterceptor;
+
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:3001}")
     private String allowedOrigins;
-    
+
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(organizationMutationAccessInterceptor)
-                .addPathPatterns(
-                        "/business-units",
-                        "/business-units/**",
-                        "/virtual-groups",
-                        "/virtual-groups/**",
-                        "/approvers",
-                        "/approvers/**",
-                        "/exit",
-                        "/exit/**")
-                .excludePathPatterns(
-                        "/virtual-groups/*/tasks/*/claim",
-                        "/virtual-groups/tasks/*/delegate");
-        registry.addInterceptor(configMutationAccessInterceptor)
-                .addPathPatterns("/configs", "/configs/**")
-                // Read-only impact preview that happens to be a POST.
-                .excludePathPatterns("/configs/*/assess-impact");
-        registry.addInterceptor(slaPolicyAccessInterceptor)
-                .addPathPatterns("/sla-policies", "/sla-policies/**");
+        // Every endpoint declares its audience with @AdminAccess; undeclared means SYS_ADMIN only.
+        registry.addInterceptor(adminAccessInterceptor).addPathPatterns("/**");
     }
 
     @Override

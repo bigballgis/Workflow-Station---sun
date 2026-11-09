@@ -45,7 +45,7 @@ public class VirtualGroupTargetResolver implements TargetResolver {
     public List<ResolvedUser> resolveUsers(String targetId) {
         try {
             return jdbcTemplate.query(
-                "SELECT u.id, u.username, u.display_name, u.full_name, u.employee_id, u.email " +
+                "SELECT DISTINCT u.id, u.username, u.display_name, u.full_name, u.employee_id, u.email " +
                 "FROM sys_virtual_group_members vgm " +
                 "JOIN sys_users u ON vgm.user_id = u.id " +
                 "WHERE vgm.group_id = ? " +
@@ -84,7 +84,7 @@ public class VirtualGroupTargetResolver implements TargetResolver {
     public long getUserCount(String targetId) {
         try {
             Long count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM sys_virtual_group_members vgm " +
+                "SELECT COUNT(DISTINCT u.id) FROM sys_virtual_group_members vgm " +
                 "JOIN sys_users u ON vgm.user_id = u.id " +
                 "WHERE vgm.group_id = ? " +
                 "AND u.deleted = false AND u.status = 'ACTIVE'",

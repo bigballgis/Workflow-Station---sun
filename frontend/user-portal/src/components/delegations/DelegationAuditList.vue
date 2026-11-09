@@ -91,6 +91,12 @@
                 v-if="col.field === 'createdAt'"
                 style="white-space: nowrap;"
               >{{ formatDate(row.createdAt) }}</span>
+              <template v-else-if="col.field === 'delegatorId'">
+                {{ row.delegatorName || row.delegatorId || '-' }}
+              </template>
+              <template v-else-if="col.field === 'delegateId'">
+                {{ row.delegateName || row.delegateId || '-' }}
+              </template>
               <template v-else>
                 {{ row[col.field as keyof DelegationAudit] || '-' }}
               </template>

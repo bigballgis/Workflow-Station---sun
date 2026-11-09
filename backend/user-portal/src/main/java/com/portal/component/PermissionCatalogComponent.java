@@ -182,13 +182,6 @@ public class PermissionCatalogComponent {
         return roleAccessComponent.getUserBusinessRoles(userId);
     }
 
-    /**
-     * 获取用户当前的虚拟组成员身份
-     */
-    public List<Map<String, Object>> getUserCurrentVirtualGroups(String userId) {
-        return virtualGroupAccessComponent.getUserVirtualGroups(userId);
-    }
-
     private void assertActiveBeneficiary(String beneficiaryUserId) {
         if (!roleAccessComponent.isActivePortalUser(beneficiaryUserId)) {
             throw new IllegalArgumentException("Beneficiary does not exist or account is not available");

@@ -1,7 +1,6 @@
 package com.portal.client;
 
-import com.platform.security.config.JwtProperties;
-import jakarta.servlet.http.Cookie;
+import com.platform.security.filter.JwtAuthenticationFilter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpEntity;
@@ -12,22 +11,16 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.List;
+import jakarta.servlet.http.Cookie;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
+/** The engine receives exactly the token the portal's JwtAuthenticationFilter accepted for this request. */
 class WorkflowEngineClientTest {
 
     private final WorkflowEngineClient client = new WorkflowEngineClient(
-            new RestTemplate(), buildJwtProperties(), org.mockito.Mockito.mock(com.platform.common.i18n.I18nService.class));
-
-    private static JwtProperties buildJwtProperties() {
-        JwtProperties props = new JwtProperties();
-        // 与 user-portal application.yml 中 platform.security.jwt.cookie-names 默认一致
-        props.setCookieNames(List.of("up_access_token"));
-        props.setRefreshCookieName("up_refresh_token");
-        return props;
-    }
+            new RestTemplate(), org.mockito.Mockito.mock(com.platform.common.i18n.I18nService.class));
 
     @AfterEach
     void clearRequestContext() {
@@ -35,24 +28,25 @@ class WorkflowEngineClientTest {
     }
 
     @Test
-    void authorizedGetEntityForwardsAuthorizationHeader() {
+    void authorizedGetEntityForwardsTheAuthenticatedToken() {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer header-token");
+        request.setAttribute(JwtAuthenticationFilter.AUTHENTICATED_TOKEN_ATTRIBUTE, "accepted-token");
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 
         HttpEntity<Void> entity = ReflectionTestUtils.invokeMethod(client, "authorizedGetEntity");
 
-        assertEquals("Bearer header-token", entity.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
+        assertEquals("Bearer accepted-token", entity.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
     }
 
     @Test
-    void authorizedGetEntityFallsBackToAccessTokenCookie() {
+    void presentButUnacceptedCookieIsNotForwarded() {
+        // e.g. a service call admitted by X-Service-Token while carrying an expired cookie.
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setCookies(new Cookie("up_access_token", "cookie-token"));
+        request.setCookies(new Cookie("up_access_token", "expired-token"));
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 
         HttpEntity<Void> entity = ReflectionTestUtils.invokeMethod(client, "authorizedGetEntity");
 
-        assertEquals("Bearer cookie-token", entity.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
+        assertNull(entity.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
     }
 }

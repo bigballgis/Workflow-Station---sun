@@ -1,6 +1,8 @@
 import { MAX_UPLOAD_CONCURRENCY, sharedUploadQueue } from './uploadQueue'
 import { refreshUploadAuth, UPLOAD_HTTP_UNAUTHORIZED } from './uploadAuthRefresh'
 
+const UNAUTHORIZED = 401
+
 /**
  * Subset of Element Plus {@code UploadRequestOptions} used by the shared XHR.
  *
@@ -84,14 +86,24 @@ async function runQueuedPost(
 ): Promise<void> {
   if (session.aborted) return
   session.sent = true
-  await postOneFile(xhr, options, session)
+  if ((await postOneFile(xhr, options, session)) !== UNAUTHORIZED) return
+  // The short-lived access token expired mid-session: renew once, then resend on the same XHR
+  // (el-upload still holds it for abort). The auth cookie is replaced by the refresh call.
+  const renewed = await refreshUploadAuth()
+  if (session.aborted) {
+    notifyError(options, session, new Error('UPLOAD_ABORTED'))
+    return
+  }
+  if (renewed && (await postOneFile(xhr, options, session)) !== UNAUTHORIZED) return
+  notifyError(options, session, new Error(UPLOAD_HTTP_UNAUTHORIZED))
 }
 
+/** Resolves with the HTTP status on load (a 401 is left to the caller), or null on error / abort. */
 function postOneFile(
   xhr: XMLHttpRequest,
   options: QueuedUploadRequestOptions,
   session: { aborted: boolean; notified: boolean },
-): Promise<void> {
+): Promise<number | null> {
   return new Promise((resolve) => {
     xhr.open((options.method || 'post').toUpperCase(), options.action)
     xhr.withCredentials = options.withCredentials !== false
@@ -102,16 +114,16 @@ function postOneFile(
       }
     }
     xhr.onload = () => {
-      if (!session.aborted) finishXhr(xhr, options, session)
-      resolve()
+      if (!session.aborted && xhr.status !== UNAUTHORIZED) finishXhr(xhr, options, session)
+      resolve(xhr.status)
     }
     xhr.onerror = () => {
       notifyError(options, session, new Error('UPLOAD_FAILED'))
-      resolve()
+      resolve(null)
     }
     xhr.onabort = () => {
       notifyError(options, session, new Error('UPLOAD_ABORTED'))
-      resolve()
+      resolve(null)
     }
     xhr.send(buildUploadBody(options))
   })
@@ -149,12 +161,6 @@ function finishXhr(
   options: QueuedUploadRequestOptions,
   session: { notified: boolean },
 ): void {
-  if (xhr.status === 401) {
-    void refreshUploadAuth().finally(() => {
-      notifyError(options, session, new Error(UPLOAD_HTTP_UNAUTHORIZED))
-    })
-    return
-  }
   if (xhr.status < 200 || xhr.status >= 300) {
     notifyError(options, session, new Error(`UPLOAD_HTTP_${xhr.status}`))
     return

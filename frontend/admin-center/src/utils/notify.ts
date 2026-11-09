@@ -21,6 +21,7 @@
  */
 
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { VNode } from 'vue'
 
 // ============================================================
 // Types
@@ -97,13 +98,14 @@ export function notifyInfo(message: string, options?: NotifyOptions): void {
 /**
  * 确认弹窗。成功时 resolve，用户取消时 reject('cancel')。
  * 保持与 ElMessageBox.confirm 的 reject 行为一致，便于现有 try/catch 迁移。
+ * message 可以是 VNode（例如附带“被以下 FU 引用”的提示）。
  */
 export async function notifyConfirm(
-  message: string,
+  message: string | VNode,
   title?: string,
   options?: ConfirmOptions,
 ): Promise<void> {
-  log('confirm', message, undefined)
+  log('confirm', typeof message === 'string' ? message : '[content]', undefined)
   try {
     await ElMessageBox.confirm(message, title ?? '', {
       type: options?.type ?? 'warning',

@@ -58,11 +58,17 @@ class RecordNoteUploadSourceResolverTest {
         assertEquals(UploadSourceKind.MY_REQUEST,resolver.resolve("initiator",target).kind());
         target.setSourceView("AUDIT");
         assertThrows(RecordNoteException.class,()->resolver.resolve("initiator",target));
-        when(access.canAuditFunctionUnitAsActiveRole("initiator","generic-fu")).thenReturn(true);
+        when(access.canAuditFunctionUnit("initiator","generic-fu")).thenReturn(true);
         assertEquals(UploadSourceKind.AUDIT,resolver.resolve("initiator",target).kind());
         target.setSourceView("REQUEST");
-        when(access.canAuditFunctionUnitAsActiveRole("auditor","generic-fu")).thenReturn(true);
+        when(access.canAuditFunctionUnit("auditor","generic-fu")).thenReturn(true);
         assertEquals(UploadSourceKind.AUDIT,resolver.resolve("auditor",target).kind());
+    }
+    /** Platform access model D-05: no System Administrator shortcut for the Audit upload source. */
+    @Test void systemAdministratorWithoutAnActiveRoleAuditGrantIsNotAnAuditSource() {
+        target.setSourceView("AUDIT");
+        assertThrows(RecordNoteException.class,()->resolver.resolve("admin",target));
+        verify(access).canAuditFunctionUnit("admin","generic-fu");
     }
     @Test void auditHintCannotGrantPermissionOrInventSourceNames() {
         target.setSourceView("AUDIT");

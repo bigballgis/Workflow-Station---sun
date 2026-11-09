@@ -43,4 +43,12 @@ also run AFTER the seed step**:
    sub-step (currently `[5f/6]`). The runner is a **whitelist loader**, not
    a `*.sql` wildcard — unregistered files will silently be ignored.
 3. Keep the script idempotent (safe to re-run).
-4. Avoid public-schema DDL here. DDL belongs in `00-schema/`.
+4. Avoid public-schema DDL here. DDL belongs in `00-schema/`. The exceptions
+   are `04-platform-access-model-switch.sql`, which replaces two unique keys that
+   can only change after it has cleaned up the seed data and runs once, and
+   `05-platform-access-model-drop-bu-unbounded-roles.sql`, which narrows the
+   `sys_roles.type` CHECK constraint once no BU_UNBOUNDED role is left.
+5. The read-only inventory, precheck and assertion scripts for the platform
+   access model switch, and the per-environment switch configuration template,
+   live in `deploy/maintenance/platform-access-model/` (operations scripts, not
+   run by the init).

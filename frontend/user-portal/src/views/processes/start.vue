@@ -756,11 +756,7 @@ const initActionButtons = async (actionIds: string[] | null) => {
       if (Array.isArray(actions) && actions.length > 0) {
         const user = getUser()
         const visible = actions.filter((action: { configJson?: unknown }) =>
-          isActionVisibleForSession(
-            action.configJson,
-            user?.roles ?? [],
-            user?.systemAdministrator === true,
-          ),
+          isActionVisibleForSession(action.configJson, user?.roles ?? []),
         )
         const submitMode = startSubmitMode(actions, visible)
         if (submitMode === 'blocked') {

@@ -39,6 +39,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ProcessDesignComponentImpl implements ProcessDesignComponent {
 
+    static final String PROPERTY_INVALID = "BPMN_PROPERTY_INVALID";
+
     private final ProcessDefinitionRepository processDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
 
@@ -49,6 +51,10 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     private final ProcessBpmnFormStageBindingSync formStageBindingSync;
     /** Null in the test-only constructor below, like {@code formStageBindingSync}. */
     private final CallActivityBpmnValidator callActivityValidator;
+    /** Required by {@code save()}; the test-only constructor below has none, its tests never save. */
+    private final ProcessBpmnEmailReferenceGuard emailReferenceGuard;
+    /** Required by {@code save()} like {@code emailReferenceGuard}. */
+    private final I18nService i18nService;
 
     @Autowired
     public ProcessDesignComponentImpl(
@@ -59,7 +65,9 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
             ProcessSimulationHelper simulationHelper,
             ProcessDebugProbeRunner debugProbeRunner,
             ProcessBpmnFormStageBindingSync formStageBindingSync,
-            CallActivityBpmnValidator callActivityValidator) {
+            CallActivityBpmnValidator callActivityValidator,
+            ProcessBpmnEmailReferenceGuard emailReferenceGuard,
+            I18nService i18nService) {
         this.processDefinitionRepository = processDefinitionRepository;
         this.functionUnitRepository = functionUnitRepository;
         this.staleIdFixer = staleIdFixer;
@@ -68,6 +76,8 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
         this.debugProbeRunner = debugProbeRunner;
         this.formStageBindingSync = formStageBindingSync;
         this.callActivityValidator = callActivityValidator;
+        this.emailReferenceGuard = emailReferenceGuard;
+        this.i18nService = i18nService;
     }
 
     /**
@@ -93,6 +103,8 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
                 new ProcessSimulationHelper(tableDefinitionRepository),
                 new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null),
                 null,
+                null,
+                null,
                 null);
     }
 
@@ -111,8 +123,20 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
 
 
-        // Auto-correct stale IDs (formId, subTableId, actionIds) using name lookup
-        bpmnXml = fixStaleIds(functionUnitId, bpmnXml);
+        // Send tasks may only mail through this unit's own connections and templates (§6.1, §6.2). The guard parses
+        // the XML first, so XML that does not parse is refused here as the caller's error (400
+        // BPMN_XML_NOT_WELL_FORMED) before anything else reads it. fixStaleIds does not change send task properties.
+        emailReferenceGuard.requireInUnit(functionUnitId, bpmnXml);
+
+        // Auto-correct stale IDs (formId, subTableId, actionIds) using name lookup. Every value it reads comes from
+        // the request body (action id / name lists, form and table ids): one it cannot read is the caller's error.
+        try {
+            bpmnXml = fixStaleIds(functionUnitId, bpmnXml);
+        } catch (IllegalArgumentException e) {
+            log.warn("Refused process save for functionUnitId={}: {}", functionUnitId, e.getMessage());
+            throw new DeveloperBusinessException(PROPERTY_INVALID,
+                    i18nService.getMessage("process.bpmn.property_invalid", e.getMessage()));
+        }
 
         ProcessDefinition existing = processDefinitionRepository
                 .findByFunctionUnitId(functionUnitId)

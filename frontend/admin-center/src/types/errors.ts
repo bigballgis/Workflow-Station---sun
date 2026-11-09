@@ -82,11 +82,6 @@ export const AppErrorCode = {
   // ---- Config ----
   CONFIG_SAVE_FAILED:                 'CONFIG_SAVE_FAILED',
 
-  // ---- Permission ----
-  PERMISSION_LOAD_ROLE_FAILED:        'PERMISSION_LOAD_ROLE_FAILED',
-  PERMISSION_SAVE_FAILED:             'PERMISSION_SAVE_FAILED',
-  PERMISSION_LOAD_LIST_FAILED:        'PERMISSION_LOAD_LIST_FAILED',
-
   // ---- Permission Request ----
   PERMISSION_REQUEST_FAILED:          'PERMISSION_REQUEST_FAILED',
 

@@ -25,7 +25,9 @@ async function configs(id) {
     .map(action => [action.actionName, action.configJson]))
 }
 async function clone(source) {
-  const unit = await api('POST', `/function-units/${source.id}/clone?newName=${encodeURIComponent(`Action mail clone QA ${phase} ${Date.now()}`)}`)
+  const { workspaceId } = await api('GET', `/function-units/${source.id}`)
+  assert(workspaceId, `Function unit ${source.id} has no workspace for its clone`)
+  const unit = await api('POST', `/function-units/${source.id}/clone?newName=${encodeURIComponent(`Action mail clone QA ${phase} ${Date.now()}`)}&targetGroupId=${encodeURIComponent(workspaceId)}`)
   evidence.units.push(unit); await persist()
   return unit
 }

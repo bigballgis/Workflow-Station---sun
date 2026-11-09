@@ -21,7 +21,7 @@ export default {
     fUpdatedBy: 'Who saved the current lead time.',
     fUpdatedAt: 'When it was saved, in your browser time zone.',
     fJob: 'Latest recalculation: Pending, Running, Succeeded, Partial (some cases skipped or failed), Failed, or Superseded (a newer save replaced it).',
-    fActions: 'Edit and Recalculate need edit permission; Recalculate appears only when a lead time is set. Details opens history and jobs. Export downloads the selected rows, or the current page when none is selected.',
+    fActions: 'Edit and Recalculate appear only on rows you can change (see Who can do what); Recalculate also needs a lead time. Details opens history and jobs. Export downloads the selected rows, or the current page when none is selected.',
     editTitle: 'Set the lead time',
     editBody:
       'Click Edit on the row, type the lead time, optionally a change reason, and Save. Open cases (Running and Suspended) are recalculated in the background; completed and withdrawn cases keep their due date. New and saved cases always get the due date from the current lead time.',
@@ -49,7 +49,7 @@ export default {
     fHistDispatch: 'Recalculation start: Started, Pending, or Failed to start (hover for the hint). Failed to start means the lead time is saved but no job ran; click Recalculate once the portal is reachable.',
     permTitle: 'Who can do what',
     permBody:
-      'System Administrator can do everything. Role permission sla:policy:edit can view, edit and recalculate. sla:policy:view can only view; the Auditor role has it. An Auditor never edits or recalculates, even with edit permission. Permission changes apply after the person signs in again.',
+      'System Administrator sees every Function Unit and can Edit and Recalculate all of them. A Technical Lead sees only the Function Units of the teams they lead, and can Edit and Recalculate those. An Auditor sees every Function Unit read-only: Details and Export, no Edit or Recalculate. An Auditor who also leads a team can change that team’s Function Units. A Function Unit that Admin Center has no team for yet is listed only for System Administrators and Auditors.',
     ruleTitle: 'How due dates are derived',
     ruleBody:
       'The platform writes the due date when a case is submitted or saved, and the person cannot change it. When no date can be derived the field keeps its current value.',
@@ -61,7 +61,7 @@ export default {
     failBody: 'What you see, and what to do.',
     failNotListed: 'The Function Unit is not listed: its main table has no SLA due date mapping, or it is not deployed. See [[/table-design#sla-due-date]].',
     failInvalid: 'Enter a whole number between 1 and 3650: the lead time is blank, 0, a decimal, or above 3650.',
-    failNoPermission: 'No permission: your role lacks sla:policy:edit (or you are an Auditor).',
+    failNoPermission: 'No Edit or Recalculate on a row: you are an Auditor, or the Function Unit is not one of your teams’. As a Technical Lead, a Function Unit of another team, or one without a team yet, is not listed at all.',
     failDispatch: 'Lead time saved, but the recalculation could not be started: the portal was unreachable. Click Recalculate later.',
     failPartial: 'Job Partial: open Details, click the job, read Reason on the Skipped or Failed cases.',
   },

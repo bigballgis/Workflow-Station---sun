@@ -13,6 +13,7 @@ import {
   type UserPortalAuditQueryRequest,
   type FunctionUnitOption,
 } from '@/api/user-portal-audit'
+import { localDayRangeToIso } from '@/utils/dateRange'
 
 interface SortState {
   field: string
@@ -59,8 +60,7 @@ export const useUserPortalAuditStore = defineStore('userPortalAudit', () => {
   const buildQueryRequest = (): UserPortalAuditQueryRequest => {
     const req: UserPortalAuditQueryRequest = { ...query }
     if (dateRange.value && dateRange.value.length === 2) {
-      req.startTime = dateRange.value[0] + 'T00:00:00+08:00'
-      req.endTime = dateRange.value[1] + 'T23:59:59+08:00'
+      Object.assign(req, localDayRangeToIso(dateRange.value[0], dateRange.value[1]))
     }
     Object.keys(req).forEach((key) => {
       if (!req[key as keyof UserPortalAuditQueryRequest]) {

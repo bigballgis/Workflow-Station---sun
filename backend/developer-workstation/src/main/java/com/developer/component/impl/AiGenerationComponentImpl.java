@@ -10,8 +10,10 @@ import com.developer.enums.AiPhase;
 import com.developer.enums.AiSessionStatus;
 import com.developer.exception.AiGenerationException;
 import com.developer.exception.AiValidationFailedException;
+import com.developer.exception.ResourceNotFoundException;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.security.WorkspaceRouteOwnership;
 import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
@@ -52,6 +54,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     private final AiValidationService aiValidationService;
     private final AiWriteService aiWriteService;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    private final WorkspaceRouteOwnership routeOwnership;
     private final Executor taskExecutor;
     private final ObjectMapper objectMapper;
 
@@ -84,6 +87,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                                      AiValidationService aiValidationService,
                                      AiWriteService aiWriteService,
                                      FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
+                                     WorkspaceRouteOwnership routeOwnership,
                                      Executor taskExecutor,
                                      ObjectMapper objectMapper) {
         this.aiGenerationService = aiGenerationService;
@@ -91,6 +95,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         this.aiValidationService = aiValidationService;
         this.aiWriteService = aiWriteService;
         this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
+        this.routeOwnership = routeOwnership;
         this.taskExecutor = taskExecutor;
         this.objectMapper = objectMapper;
     }
@@ -110,6 +115,8 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
             session = aiGenerationService.createSession(request.getFunctionUnitId(), userId, request.getMode());
         } else {
             session = aiGenerationService.restoreSession(request.getSessionId());
+            routeOwnership.requireInUnit(WorkspaceRouteOwnership.Owned.AI_SESSION, session.getSessionId(),
+                    request.getFunctionUnitId());
         }
 
         // 3. Save the user message
@@ -348,12 +355,16 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
 
     @Override
     public com.developer.entity.AiDocument saveDocument(Long functionUnitId, AiDocumentType documentType, String content, String userId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
         return aiGenerationService.saveDocument(functionUnitId, documentType, content, "User manual edit", userId);
     }
 
     @Override
     public void applyGeneratedData(Long functionUnitId, ApplyGeneratedDataRequest request, String userId) {
         functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
+        // The session completed at the end is named by the body: it must be one of this unit's, checked before writing
+        routeOwnership.requireInUnit(WorkspaceRouteOwnership.Owned.AI_SESSION, sessionUuid(request.getSessionId()),
+                functionUnitId);
         // 1. Renew the lock
         aiLockService.extendLock(functionUnitId, userId);
 
@@ -435,6 +446,18 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         errorData.put("message", message);
         aiGenerationService.sendEventNotification(functionUnitId,
                 AiChatSseEvent.builder().eventType("write_error").data(errorData).build());
+    }
+
+    /** A missing session id, or one that is not a UUID, names no session (the 404 a path with such an id gets). */
+    private static UUID sessionUuid(String sessionId) {
+        if (sessionId == null) {
+            throw new ResourceNotFoundException("AiSession", "null");
+        }
+        try {
+            return UUID.fromString(sessionId);
+        } catch (IllegalArgumentException e) {
+            throw new ResourceNotFoundException("AiSession", sessionId);
+        }
     }
 
     /** Deepest cause message, capped — a JDBC constraint violation is wrapped several layers deep. */

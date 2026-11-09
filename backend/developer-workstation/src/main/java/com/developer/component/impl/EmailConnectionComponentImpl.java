@@ -17,20 +17,16 @@ import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.util.SmtpMailSender;
 import com.platform.common.mail.MailDiagnostics;
-import com.platform.common.security.SsrfProtection;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -45,10 +41,6 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     private final AdminCenterSystemImapClient adminCenterSystemImapClient;
     private final AdminCenterEnvironmentClient adminCenterEnvironmentClient;
     private final EmailResourceUsageChecker emailResourceUsageChecker;
-
-    /** Corporate SMTP relays / internal hosts permitted (same config as webhook SSRF allowlist). */
-    @Value("${ssrf.allowed-hosts:localhost,activepieces}")
-    private List<String> ssrfAllowedHosts;
 
     @Override
     @Transactional(readOnly = true)
@@ -213,7 +205,6 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
         Map<String, Object> result = new HashMap<>();
         try {
-            validateSmtpHost(endpoint.host());
             SmtpMailSender.SmtpConfig config = toSmtpConfig(connection, endpoint);
             SmtpMailSender.send(config, testRecipient, null,
                     "Workflow Platform - Connection Test",
@@ -232,23 +223,6 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
             result.put("causeChain", causeChain);
         }
         return result;
-    }
-
-    private void validateSmtpHost(String host) {
-        try {
-            SsrfProtection.validateHostname(host, allowedSmtpHosts());
-        } catch (SsrfProtection.SsrfException ex) {
-            throw new DeveloperBusinessException("SSRF_SMTP_HOST_BLOCKED", ex.getMessage());
-        }
-    }
-
-    private Set<String> allowedSmtpHosts() {
-        if (ssrfAllowedHosts == null || ssrfAllowedHosts.isEmpty()) {
-            return Set.of();
-        }
-        return ssrfAllowedHosts.stream()
-                .filter(h -> h != null && !h.isBlank())
-                .collect(java.util.stream.Collectors.toCollection(HashSet::new));
     }
 
     private ResolvedSmtpEndpoint resolveSmtpEndpoint(
@@ -276,7 +250,9 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         try {
             AdminCenterSystemSmtpClient.SystemSmtpEndpoint endpoint =
                     adminCenterSystemSmtpClient.fetchSystemSmtpEndpoint();
-            validateSmtpHost(endpoint.host());
+            // The global smtp.host is validated once, by Admin, when it serves this endpoint
+            // (SystemSmtpConfigResolver: intranet relays allowed). DW's SSRF allowlist is for addresses
+            // a function unit's designer types in, not for the operator's mail relay.
             return new ResolvedSmtpEndpoint(endpoint.host(), endpoint.port(), endpoint.useTls());
         } catch (IllegalStateException ex) {
             throw new DeveloperBusinessException(

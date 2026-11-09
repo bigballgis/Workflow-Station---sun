@@ -17,10 +17,23 @@
         {{ t('role.addMember') }}
       </el-button>
     </div>
-    
+
+    <!-- A team has a Developer and a Technical Lead list (platform access model 5.4) -->
+    <el-tabs
+      v-if="lists.length > 1"
+      v-model="activeList"
+    >
+      <el-tab-pane
+        v-for="list in lists"
+        :key="list"
+        :label="`${listLabel(list)} (${countOf(list)})`"
+        :name="list"
+      />
+    </el-tabs>
+
     <el-table
       v-loading="loading"
-      :data="members"
+      :data="listMembers"
       max-height="400"
       table-layout="auto"
       style="width: 100%"
@@ -45,16 +58,19 @@
         show-overflow-tooltip
       />
       <el-table-column
-        prop="role"
-        :label="t('user.role')"
-        min-width="110"
+        prop="sources"
+        :label="t('virtualGroup.source')"
+        min-width="130"
       >
-        <template #default>
+        <template #default="{ row }">
           <el-tag
-            type="info"
+            v-for="source in row.sources"
+            :key="source"
+            :type="source === 'AD' ? 'primary' : 'info'"
             size="small"
+            class="source-tag"
           >
-            {{ t('role.members') }}
+            {{ source === 'AD' ? t('virtualGroup.sourceAd') : t('virtualGroup.sourceManual') }}
           </el-tag>
         </template>
       </el-table-column>
@@ -70,25 +86,29 @@
       <el-table-column
         v-if="!readOnly"
         :label="t('common.operation')"
-        min-width="80"
+        min-width="130"
         fixed="right"
       >
         <template #default="{ row }">
           <el-button
+            v-if="row.sources.includes('MANUAL')"
             link
             type="danger"
-            @click="removeMember(row)"
+            @click="revokeManual(row)"
           >
-            {{ t('common.delete') }}
+            {{ t('virtualGroup.revokeManual') }}
           </el-button>
         </template>
       </el-table-column>
     </el-table>
-    
+    <div class="members-note">
+      {{ t('virtualGroup.adMembersNote') }}
+    </div>
+
     <el-dialog
       v-model="showAddDialog"
       :title="t('role.addMember')"
-      width="400px"
+      width="440px"
       append-to-body
     >
       <el-form
@@ -96,9 +116,9 @@
         label-position="left"
       >
         <el-form-item :label="t('role.selectUser')">
-          <el-select 
-            v-model="newMember.userId" 
-            filterable 
+          <el-select
+            v-model="newMember.userId"
+            filterable
             remote
             reserve-keyword
             :placeholder="t('virtualGroup.searchUserPlaceholder')"
@@ -107,23 +127,25 @@
             style="width: 100%"
             @focus="loadDefaultUsers"
           >
-            <el-option 
-              v-for="user in userOptions" 
-              :key="user.id" 
-              :label="`${user.fullName} (${user.username})`" 
-              :value="user.id" 
+            <el-option
+              v-for="user in userOptions"
+              :key="user.id"
+              :label="`${user.fullName} (${user.username})`"
+              :value="user.id"
             />
           </el-select>
         </el-form-item>
-        <el-form-item :label="t('user.role')">
+        <el-form-item :label="t('virtualGroup.list')">
           <el-select
-            v-model="newMember.role"
+            v-model="newMember.listType"
             style="width: 100%"
-            disabled
+            :disabled="lists.length === 1"
           >
             <el-option
-              :label="t('role.members')"
-              value="MEMBER"
+              v-for="list in lists"
+              :key="list"
+              :label="listLabel(list)"
+              :value="list"
             />
           </el-select>
         </el-form-item>
@@ -148,13 +170,15 @@
 import { watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVirtualGroupMembers } from '@/composables/modules/useVirtualGroupMembers'
+import type { VirtualGroup } from '@/api/virtualGroup'
 
-const props = defineProps<{ modelValue: boolean; group: any; readOnly?: boolean }>()
+const props = defineProps<{ modelValue: boolean; group: VirtualGroup | null; readOnly?: boolean }>()
 const emit = defineEmits(['update:modelValue'])
 const { t } = useI18n()
 
-const { loading, members, showAddDialog, addLoading, searchLoading, userOptions, newMember,
-  loadMembers, openAddDialog, loadDefaultUsers, searchUsers, addMember, removeMember }
+const { loading, showAddDialog, addLoading, searchLoading, userOptions, newMember,
+  lists, activeList, listMembers, listLabel, countOf,
+  loadMembers, openAddDialog, loadDefaultUsers, searchUsers, addMember, revokeManual }
   = useVirtualGroupMembers(toRef(props, 'group'))
 
 watch(() => props.modelValue, async (val) => { if (val && props.group) await loadMembers() })
@@ -162,4 +186,10 @@ watch(() => props.modelValue, async (val) => { if (val && props.group) await loa
 
 <style scoped>
 .members-header { margin-bottom: 15px; }
+.source-tag + .source-tag { margin-left: 6px; }
+.members-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
 </style>

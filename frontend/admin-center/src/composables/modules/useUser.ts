@@ -13,7 +13,7 @@ import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import type { User } from '@/api/user'
 import { userApi } from '@/api/user'
 import { extractErrorDetail } from '@/utils/errorTranslator'
-import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { canWrite } from '@/utils/permission'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
 const ACTIONS_COL_WIDTH = 140
@@ -21,8 +21,9 @@ const ACTIONS_COL_WIDTH = 140
 export function useUser() {
   const { t } = useI18n()
 
-  const canWriteUser = hasPermission(PERMISSIONS.USER_WRITE)
-  const canDeleteUser = hasPermission(PERMISSIONS.USER_DELETE)
+  // User accounts are SYS_ADMIN's; Technical Leads and Auditors read them (§8.2).
+  const canWriteUser = canWrite('users')
+  const canDeleteUser = canWrite('users')
 
   const loading = ref(false)
   const query = reactive({ keyword: '', status: '' })

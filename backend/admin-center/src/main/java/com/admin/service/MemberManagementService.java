@@ -16,11 +16,13 @@ import com.platform.security.entity.UserBusinessUnitRole;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -43,7 +45,9 @@ public class MemberManagementService {
     private final MemberChangeLogRepository memberChangeLogRepository;
     private final ApproverService approverService;
     private final ObjectMapper objectMapper;
-    
+    private final I18nService i18nService;
+    private final ClaimPoolResyncService claimPoolResyncService;
+
     /**
      * 处理审批通过的申请
      */
@@ -97,15 +101,21 @@ public class MemberManagementService {
     public void addUserToVirtualGroup(String userId, String virtualGroupId, String operatorId) {
         log.info("Adding user {} to virtual group {}", userId, virtualGroupId);
         
-        // 检查是否已是成员
-        if (virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, userId)) {
-            log.warn("User {} is already a member of virtual group {}", userId, virtualGroupId);
+        // 验证虚拟组和用户存在
+        VirtualGroup group = virtualGroupRepository.findById(virtualGroupId)
+                .orElseThrow(() -> new VirtualGroupNotFoundException(virtualGroupId));
+        // Approval only grants Portal access groups: SYSTEM membership would grant platform roles and team
+        // lists are maintained by SYS_ADMIN (platform access model 5.2, 5.4).
+        if (!"CUSTOM".equals(group.getType())) {
+            throw new AdminBusinessException("APPROVAL_CUSTOM_GROUP_ONLY",
+                    "Only CUSTOM virtual groups can be joined by approval: " + group.getCode());
+        }
+
+        // 检查是否已是人工成员（AD 成员可以再加为人工成员）
+        if (hasManualMembership(virtualGroupId, userId)) {
+            log.warn("User {} is already a manual member of virtual group {}", userId, virtualGroupId);
             return;
         }
-        
-        // 验证虚拟组和用户存在
-        virtualGroupRepository.findById(virtualGroupId)
-                .orElseThrow(() -> new VirtualGroupNotFoundException(virtualGroupId));
         userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
         
@@ -129,7 +139,8 @@ public class MemberManagementService {
     @Transactional
     public void addUserToBusinessUnitWithRoles(String userId, String businessUnitId, List<String> roleIds, String operatorId) {
         log.info("Adding user {} to business unit {} with roles {}", userId, businessUnitId, roleIds);
-        
+
+        List<String> granted = new ArrayList<>();
         for (String roleId : roleIds) {
             // 检查是否已有该角色
             if (userBusinessUnitRoleRepository.existsByUserIdAndBusinessUnitIdAndRoleId(userId, businessUnitId, roleId)) {
@@ -145,8 +156,10 @@ public class MemberManagementService {
                     .roleId(roleId)
                     .build();
             userBusinessUnitRoleRepository.save(assignment);
+            granted.add(roleId);
         }
-        
+        claimPoolResyncService.ubrChanged(businessUnitId, granted);
+
         // 记录变更日志
         String roleIdsJson = serializeRoleIds(roleIds);
         logMemberChange(MemberChangeType.JOIN, ApproverTargetType.BUSINESS_UNIT, businessUnitId, userId, roleIdsJson, operatorId, "审批通过加入");
@@ -166,9 +179,9 @@ public class MemberManagementService {
             throw new AdminBusinessException("NOT_APPROVER", "You are not an approver for this virtual group");
         }
         
-        // 删除成员
-        virtualGroupMemberRepository.deleteByGroupIdAndUserId(virtualGroupId, userId);
-        
+        // 只删人工来源；AD 来源由 AD 同步维护（5.5）
+        virtualGroupMemberRepository.deleteAll(requireManualMemberships(virtualGroupId, userId));
+
         // 记录变更日志
         logMemberChange(MemberChangeType.REMOVED, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId, userId, null, approverId, "审批人清退");
         
@@ -191,7 +204,10 @@ public class MemberManagementService {
         
         // 删除角色分配
         userBusinessUnitRoleRepository.findByUserIdAndBusinessUnitIdAndRoleId(userId, businessUnitId, roleId)
-                .ifPresent(userBusinessUnitRoleRepository::delete);
+                .ifPresent(row -> {
+                    userBusinessUnitRoleRepository.delete(row);
+                    claimPoolResyncService.ubrChanged(businessUnitId, List.of(roleId));
+                });
         
         // 记录变更日志
         logMemberChange(MemberChangeType.REMOVED, ApproverTargetType.BUSINESS_UNIT, businessUnitId, userId, 
@@ -222,11 +238,12 @@ public class MemberManagementService {
         List<UserBusinessUnitRole> roleAssignments = userBusinessUnitRoleRepository.findByUserIdAndBusinessUnitId(userId, businessUnitId);
         if (!roleAssignments.isEmpty()) {
             userBusinessUnitRoleRepository.deleteAll(roleAssignments);
+            claimPoolResyncService.ubrChanged(businessUnitId, roleIdsOf(roleAssignments));
             log.info("Also removed {} role assignments for user {} in business unit {}", roleAssignments.size(), userId, businessUnitId);
         }
-        
+
         // 记录变更日志
-        logMemberChange(MemberChangeType.REMOVED, ApproverTargetType.BUSINESS_UNIT, businessUnitId, userId, 
+        logMemberChange(MemberChangeType.REMOVED, ApproverTargetType.BUSINESS_UNIT, businessUnitId, userId,
                 null, approverId, "审批人清退业务单元成员");
         
         log.info("User {} removed from business unit {} by approver {}", userId, businessUnitId, approverId);
@@ -238,9 +255,9 @@ public class MemberManagementService {
     @Transactional
     public void exitVirtualGroup(String virtualGroupId, String userId) {
         log.info("User {} exiting virtual group {}", userId, virtualGroupId);
-        
-        // 删除成员
-        virtualGroupMemberRepository.deleteByGroupIdAndUserId(virtualGroupId, userId);
+
+        // 只删人工来源；AD 来源由 AD 同步维护（5.5）
+        virtualGroupMemberRepository.deleteAll(requireManualMemberships(virtualGroupId, userId));
         
         // 记录变更日志
         logMemberChange(MemberChangeType.EXIT, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId, userId, null, userId, "用户主动退出");
@@ -257,10 +274,15 @@ public class MemberManagementService {
     public void exitBusinessUnitRoles(String businessUnitId, String userId, List<String> roleIds) {
         log.info("User {} exiting roles {} from business unit {}", userId, roleIds, businessUnitId);
         
+        List<String> revoked = new ArrayList<>();
         for (String roleId : roleIds) {
             userBusinessUnitRoleRepository.findByUserIdAndBusinessUnitIdAndRoleId(userId, businessUnitId, roleId)
-                    .ifPresent(userBusinessUnitRoleRepository::delete);
+                    .ifPresent(row -> {
+                        userBusinessUnitRoleRepository.delete(row);
+                        revoked.add(roleId);
+                    });
         }
+        claimPoolResyncService.ubrChanged(businessUnitId, revoked);
         
         // 检查是否还有其他角色，如果没有则自动移除用户与业务单元的关联
         List<UserBusinessUnitRole> remainingRoles = userBusinessUnitRoleRepository.findByUserIdAndBusinessUnitId(userId, businessUnitId);
@@ -292,11 +314,12 @@ public class MemberManagementService {
         List<UserBusinessUnitRole> roleAssignments = userBusinessUnitRoleRepository.findByUserIdAndBusinessUnitId(userId, businessUnitId);
         if (!roleAssignments.isEmpty()) {
             userBusinessUnitRoleRepository.deleteAll(roleAssignments);
+            claimPoolResyncService.ubrChanged(businessUnitId, roleIdsOf(roleAssignments));
             log.info("Also removed {} role assignments for user {} in business unit {}", roleAssignments.size(), userId, businessUnitId);
         }
-        
+
         // 记录变更日志
-        logMemberChange(MemberChangeType.EXIT, ApproverTargetType.BUSINESS_UNIT, businessUnitId, userId, 
+        logMemberChange(MemberChangeType.EXIT, ApproverTargetType.BUSINESS_UNIT, businessUnitId, userId,
                 null, userId, "用户主动退出业务单元");
         
         log.info("User {} exited business unit {} successfully", userId, businessUnitId);
@@ -385,6 +408,41 @@ public class MemberManagementService {
                 .orElse(List.of());
     }
     
+    private static List<String> roleIdsOf(List<UserBusinessUnitRole> rows) {
+        return rows.stream().map(UserBusinessUnitRole::getRoleId).toList();
+    }
+
+    private boolean hasManualMembership(String virtualGroupId, String userId) {
+        return !manualMemberships(virtualGroupId, userId).isEmpty();
+    }
+
+    /**
+     * The user's manual rows in a CUSTOM group. Exit and clearing apply to Portal access groups only: members of SYSTEM
+     * groups and team lists are kept by System Administrators on the Virtual Group page, which guards the last
+     * administrator and audits each change (§5.2, §5.5, AC-12). No manual row means there is nothing this path may
+     * remove (AD rows follow the AD sync).
+     */
+    private List<VirtualGroupMember> requireManualMemberships(String virtualGroupId, String userId) {
+        VirtualGroup group = virtualGroupRepository.findById(virtualGroupId)
+                .orElseThrow(() -> new VirtualGroupNotFoundException(virtualGroupId));
+        if (!"CUSTOM".equals(group.getType())) {
+            throw new AdminBusinessException("EXIT_CUSTOM_GROUP_ONLY",
+                    i18nService.getMessage("admin.vg.exit_custom_group_only"));
+        }
+        List<VirtualGroupMember> rows = manualMemberships(virtualGroupId, userId);
+        if (rows.isEmpty()) {
+            throw new AdminBusinessException("MANUAL_MEMBER_NOT_FOUND",
+                    i18nService.getMessage("admin.vg.manual_member_not_found"));
+        }
+        return rows;
+    }
+
+    private List<VirtualGroupMember> manualMemberships(String virtualGroupId, String userId) {
+        return virtualGroupMemberRepository.findByGroupIdAndSource(virtualGroupId, VirtualGroupMember.SOURCE_MANUAL).stream()
+                .filter(m -> m.getUserId().equals(userId))
+                .toList();
+    }
+
     /**
      * 记录成员变更日志
      */

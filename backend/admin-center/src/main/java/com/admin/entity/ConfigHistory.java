@@ -15,7 +15,7 @@ import java.time.Instant;
         @Index(name = "idx_config_history_time", columnList = "changedAt")
 })
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class ConfigHistory {

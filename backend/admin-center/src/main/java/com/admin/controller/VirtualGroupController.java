@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import com.platform.common.i18n.I18nService;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Virtual Group Management RESTful API
@@ -32,6 +34,7 @@ import com.platform.common.i18n.I18nService;
 @RequestMapping("/virtual-groups")
 @RequiredArgsConstructor
 @Tag(name = "Virtual Group Management", description = "Virtual group creation, member management and task query APIs")
+@AdminAccess(value = AdminAudience.WORKSTATION, services = true)
 public class VirtualGroupController {
     
     private final VirtualGroupManagerComponent virtualGroupManager;
@@ -60,6 +63,7 @@ public class VirtualGroupController {
         return ResponseEntity.ok(groups);
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/query")
     @Operation(summary = "Page virtual groups", description = "Shared list: COUNT(*) and the page share one predicate")
     public ResponseEntity<AdminListPage<VirtualGroupInfo>> queryVirtualGroups(
@@ -107,6 +111,7 @@ public class VirtualGroupController {
         return ResponseEntity.ok(members);
     }
     
+    @AdminAccess(value = AdminAudience.SYS_ADMIN, services = true)
     @PostMapping("/{groupId}/members")
     @Operation(summary = "Add member", description = "Add member to virtual group")
     public ResponseEntity<VirtualGroupResult> addMember(
@@ -117,13 +122,16 @@ public class VirtualGroupController {
         return ResponseEntity.ok(result);
     }
     
+    @AdminAccess(value = AdminAudience.SYS_ADMIN, services = true)
     @DeleteMapping("/{groupId}/members/{userId}")
-    @Operation(summary = "Remove member", description = "Remove member from virtual group")
+    @Operation(summary = "Revoke manual member",
+            description = "Removes the manual membership of one list; AD membership is kept (platform access model 5.5)")
     public ResponseEntity<VirtualGroupResult> removeMember(
             @Parameter(description = "Virtual group ID") @PathVariable String groupId,
-            @Parameter(description = "User ID") @PathVariable String userId) {
+            @Parameter(description = "User ID") @PathVariable String userId,
+            @Parameter(description = "A team list: DEVELOPER or TECH_LEAD") @RequestParam(required = false) String listType) {
         log.info("Removing member {} from virtual group: {}", userId, groupId);
-        VirtualGroupResult result = virtualGroupManager.removeMember(groupId, userId);
+        VirtualGroupResult result = virtualGroupManager.removeMember(groupId, userId, listType);
         return ResponseEntity.ok(result);
     }
     

@@ -80,10 +80,7 @@ public class LdapProperties {
     /** LDAP 属性名映射（默认 HSBC AD 命名；本地 mock 可经 env 覆盖为标准 schema 属性名）。 */
     private Attributes attributes = new Attributes();
 
-    /** Hermes 环境名（DEV/UAT/PPD/PRD）。未显式配置时从 spring profile 推断。 */
-    private String hermesEnv = "";
-
-    /** 第二阶段：Hermes AD 组→角色/虚拟组同步配置。 */
+    /** AD 组同步的目录参数。 */
     private GroupSync groupSync = new GroupSync();
 
     /**
@@ -137,20 +134,12 @@ public class LdapProperties {
     }
 
     /**
-     * 第二阶段预留：AD 组→角色/虚拟组同步。本期不实现具体绑定逻辑，仅承接配置以便平滑演进。
+     * AD 组同步的目录参数。哪个 AD 组同步进哪个虚拟组 / 名单，配置在虚拟组上，不在这里。
      */
     @Data
     public static class GroupSync {
-        /** 环境名（DEV/UAT/PPD/PRD），用于组名 pattern 渲染。 */
-        private String env = "";
         /** 组搜索基准 DN。 */
         private String searchBaseDn = "";
-        /** role=ADGroup 形式的显式映射（逗号分隔）。 */
-        private String groups = "";
-        /** 角色清单（与 pattern 配合）。 */
-        private String roles = "";
-        /** 组名 pattern，支持 {env}、{role} 占位。 */
-        private String pattern = "";
         /** 用户 upsert 批大小。 */
         private int batchSize = 20;
     }

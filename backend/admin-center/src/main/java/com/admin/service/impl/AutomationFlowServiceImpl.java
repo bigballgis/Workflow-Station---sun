@@ -132,10 +132,8 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
      * （明文直接 LIKE 命中 + 所有非 '<' 开头的 base64 行），最终判定在 Java 里
      * smartDecode 后做——只用 LIKE 会漏掉全部 base64 行，得出"无引用"的假结论。
      *
-     * <p><b>两个来源都必须扫</b>：prod 只有 admin-center 的 FU（DW 不部署），但
-     * dev/uat 里 DW 侧的 {@code dw_process_definitions} 同样引用 flow，且它整表都是
-     * base64——只扫 admin-center 会让"仅被 DW FU 引用"的 flow 被判成无引用而误删。
-     * {@code to_regclass} 让本查询在 DW 表缺失的环境下也能安全跑。</p>
+     * <p>只扫已部署到 Admin 的 FU（{@code sys_function_unit_contents}）：运行时不读 DW 设计表
+     * （WP12，用户 2026-11-06 定）；只被 DW 未部署设计引用的 flow 不在保护范围内。</p>
      */
     private static final String PROCESS_CONTENT_CANDIDATES_SQL = """
             SELECT fu.name AS "unitName", c.content_data AS "bpmn"
@@ -145,14 +143,6 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
               AND c.content_data IS NOT NULL
               AND (c.content_data LIKE ? OR c.content_data LIKE ?
                    OR left(ltrim(c.content_data), 1) <> '<')
-            UNION ALL
-            SELECT dfu.name AS "unitName", d.bpmn_xml AS "bpmn"
-            FROM dw_process_definitions d
-            JOIN dw_function_units dfu ON dfu.id = d.function_unit_id
-            WHERE to_regclass('public.dw_process_definitions') IS NOT NULL
-              AND d.bpmn_xml IS NOT NULL
-              AND (d.bpmn_xml LIKE ? OR d.bpmn_xml LIKE ?
-                   OR left(ltrim(d.bpmn_xml), 1) <> '<')
             """;
 
     private static final int EXPORT_FORMAT_VERSION = 1;
@@ -436,7 +426,7 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         String firstLike = "%" + refs.get(0) + "%";
         String lastLike = "%" + refs.get(refs.size() - 1) + "%";
         List<Map<String, Object>> candidates = jdbcTemplate.queryForList(
-                PROCESS_CONTENT_CANDIDATES_SQL, firstLike, lastLike, firstLike, lastLike);
+                PROCESS_CONTENT_CANDIDATES_SQL, firstLike, lastLike);
 
         List<String> hits = new ArrayList<>();
         for (Map<String, Object> row : candidates) {

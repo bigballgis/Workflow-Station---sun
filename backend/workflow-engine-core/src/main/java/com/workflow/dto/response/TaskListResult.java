@@ -126,11 +126,20 @@ public class TaskListResult {
         /**
          * MI 按角色分派信号（来自 ExtendedTaskInfo.extendedProperties）：
          * assigneeMode=role 表示该 MI 子任务是按角色分派（共享认领池），portal 据此做 workspace 可见性收敛
-         * （role 分派只在用户切到该 role 的 workspace 时可见）；roleCode/businessUnitCode 是分派的角色/BU code。
+         * （role 分派只在用户切到该 role 的 workspace 时可见）；roleCodes/businessUnitCode 是分派的全部角色 / BU code。
          */
         private String miAssigneeMode;
-        private String miRoleCode;
+        private List<String> miRoleCodes;
         private String miBusinessUnitCode;
+
+        /**
+         * How the task's people were chosen ({@code NONE} / {@code PEOPLE} / {@code MEMBERSHIP}, see
+         * {@link com.workflow.util.TaskPoolKinds}); the Portal's lost-entry flags read it instead of repeating the rule.
+         */
+        private String poolKind;
+
+        /** The task can be delegated for this one task (D-56, see {@link com.workflow.util.TaskDelegability}). */
+        private Boolean delegable;
 
         /**
          * Assignment target

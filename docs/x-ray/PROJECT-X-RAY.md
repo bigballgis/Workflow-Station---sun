@@ -164,7 +164,7 @@ Allowed runtime calls (only three forms): **HTTP** REST between backends (`ApiRe
 
 | Module | Role | Size | Status | Deep dive |
 |---|---|---|---|---|
-| **admin-center** (BE+FE) | Identity/RBAC, deployment target, BI, audit, LDAP sync | 419 + 56 vue | Confirmed core; conflict-resolution & LDAP-UI gaps | [modules/admin-center.md](modules/admin-center.md) |
+| **admin-center** (BE+FE) | Identity/RBAC, deployment target, BI, audit, LDAP sync | 419 + 56 vue | Confirmed core | [modules/admin-center.md](modules/admin-center.md) |
 | **developer-workstation** (BE+FE) | Design-time FU designer (thin FE shell, tabbed edit page) | 345 + 100 vue | Confirmed; DMN execution disconnected; unreachable import button | [modules/developer-workstation.md](modules/developer-workstation.md) |
 | **user-portal** (BE+FE) | End-user runtime: form engine, tasks, approvals, views, notes | 198 + 51 vue | Confirmed happy-path; many 403-blocked legacy endpoints | [modules/user-portal.md](modules/user-portal.md) |
 | **workflow-engine-core** | Flowable 7 runtime, task assignment, service tasks, email | 214 | Confirmed core; 404 history endpoint, WS path mismatch | [architecture/workflow-engine.md](architecture/workflow-engine.md) |
@@ -197,10 +197,10 @@ Key facts: explicit FK graphs are clean within each prefix; **cross-prefix links
 | DW | AI-generate whole FU | ✅ | ✅ | ✅ | ✅ | ✅ | **Confirmed (dev e2e)** | AiGeneration* + Activepieces flow |
 | DW | Email connection/template/monitor design | ✅ | ✅ | ✅ | ✅ | — | **Confirmed** | dw_email_* + designers |
 | AC | User/Role/Permission/BU/VG mgmt | ✅ | ✅ | ✅ | ✅ | — | **Confirmed** | sys_* + controllers |
-| AC | Permission conflict detect/resolve | ? | ✅ | ✅ | ✅ | — | **Backend Only?** | endpoints exist, UI unconfirmed |
+| AC | Permission conflict detect/resolve | — | — | — | — | — | **Removed** | no caller; deleted in WP10 (2026-11) |
 | AC | FU deployment target (ZIP→sys_*) | ✅ | ✅ | ✅ | ✅ | — | **Confirmed** | FunctionUnitImportController |
 | AC | BI / Superset embed | ✅ | ✅ | ✅ | ✅ | ✅ | **Confirmed (dev)** | BiGuestTokenController, bi_* |
-| AC | LDAP sync | ❌ | ✅ | ✅ | ✅ | ✅ | **Backend Only** (scheduled, no UI) | LdapSyncController, ac_ldap_sync_audit |
+| AC | LDAP sync | ✅ | ✅ | ✅ | ✅ | ✅ | **Confirmed** (scheduled + SYS_ADMIN API; read-only records page) | LdapSyncController, LdapSyncRecordController, ac_ldap_sync_audit |
 | AC | Audit logging | ✅ | ✅ | ✅ | ✅ | — | **Partial** (uneven coverage) | SecurityAudit/Log controllers |
 | UP | Start request / form runtime | ✅ | ✅ | ✅ | ✅ | ✅ | **Confirmed** | ProcessStartComponent, form engine |
 | UP | Tasks / approvals / delegation | ✅ | ✅ | ✅ | ✅ | ✅ | **Confirmed** | TaskController, WE clients |
@@ -219,7 +219,7 @@ Key facts: explicit FK graphs are clean within each prefix; **cross-prefix links
 
 ## 10. User Journey Analysis (loop closure)
 
-- **Admin journey** (login → users/roles/permissions/BU/VG → deploy FUs → BI) — **Closed.** RBAC is real; deployment target works; SYS_ADMIN bypass consistent. Gap: LDAP-sync and possibly permission-conflict resolution lack UI surfaces.
+- **Admin journey** (login → users/roles/permissions/BU/VG → deploy FUs → BI) — **Closed.** RBAC is real (every Admin endpoint declares `@AdminAccess`; Technical Leads are scoped to their team); deployment target works; SYS_ADMIN has no business bypass in the Portal (D-05). LDAP sync records are shown read-only at `/audit/ldap-sync`; when `ldap.enabled` and `ldap.sync-enabled` are both on, a sync runs at startup and on `ldap.sync-cron` (default every 2 h), and a SYS_ADMIN can start one through `POST /ldap-sync/full|incremental|hermes-groups[/incremental]`; the page has no trigger.
 - **Developer journey** (login → FU list → design tables/forms/process/actions/views/email → validate → deploy → version) — **Closed for design & deploy.** Two dead ends inside it: BPMN *import* is unreachable, and DMN decisions can be designed/validated but **never execute at runtime**.
 - **End-user journey** (login → discover FU → start → fill dynamic form → submit → approve/complete → notify → view in my-applications/views) — **Closed.** This is the strongest loop. Frays: process-history detail via the 404 endpoint is empty; live sub-table updates degrade to polling; urge delivers no actual notification.
 - **AI-assistant journey** (open panel → chat REQUIREMENTS→DESIGN→GENERATION → preview + quality score → apply → 30s undo) — **Closed (dev-verified).** Depends on Activepieces + deepseek being reachable; degrades to draft-save on failure.
@@ -245,7 +245,7 @@ Key facts: explicit FK graphs are clean within each prefix; **cross-prefix links
 
 ## 12. Security Audit (see [architecture/authentication-authorization.md](architecture/authentication-authorization.md))
 
-Authentication is solid in shape: JWT (HS256) issued/validated by `platform-security`, httpOnly cookie session, OAuth-code-style SSO through the unified login app, Redis token blacklist (fail-closed), min-32-byte secret enforced at startup, real LDAP login+sync (gated by `ldap.enabled`). But the **enforcement perimeter has holes**:
+Authentication is solid in shape: JWT (HS256) issued/validated by `platform-security`, httpOnly cookie session, OAuth-code-style SSO through the unified login app, Redis token blacklist (fail-closed), min-32-byte secret enforced at startup, real LDAP login+sync (login gated by `ldap.enabled`; sync also needs `ldap.sync-enabled`). But the **enforcement perimeter has holes**:
 
 | # | Finding | Severity |
 |---|---|---|
@@ -268,7 +268,7 @@ Good patterns exist too: SSRF allowlists (DW AI + AP task executor), constant-ti
 
 **Performance** — JSON-row storage trades physical-table joins for JSONB + `pg_trgm` GIN search; lookup fields load the *entire* referenced table client-side (cap 10000 w/ truncation warning); portal previously fired tens of thousands of duplicate metadata queries (now memoized). Read timeouts are very long (portal 600s, AI 300s) to tolerate slow webhooks — a thread-pool exhaustion risk under a wedged Activepieces.
 
-**Scalability** — user-portal is stateless and runs 2 replicas + HPA (capped `max=2` by a documented Postgres connection budget; PgBouncer named as the real fix). Everything else is single-replica by necessity: workflow-engine (Flowable), admin-center (LDAP-sync cron would double-run), DW (in-memory SSE emitters), Kafka RF=1, Redis single. Portal WS fan-out across replicas leans on Kafka-backed messaging.
+**Scalability** — user-portal is stateless and runs 2 replicas + HPA (capped `max=2` by a documented Postgres connection budget; PgBouncer named as the real fix). Everything else is single-replica by necessity: workflow-engine (Flowable), DW (in-memory SSE emitters), Kafka RF=1, Redis single. admin-center also runs one replica in the manifests, but LDAP sync is not a reason: its startup, scheduled and manual runs share one ShedLock lock (the BI syncs are ShedLock-guarded too), so a second replica would not double-run it; running admin-center multi-replica is otherwise unverified. Portal WS fan-out across replicas leans on Kafka-backed messaging.
 
 **Observability** — `micrometer-prometheus` + `micrometer-tracing-brave` are wired and expose `/actuator/prometheus` with traceId/spanId in logs and Kong correlation-ids — **but nothing collects them**: no Prometheus/ServiceMonitor, no span exporter/collector, no logback config or log shipper, no alerting. Health probes are good (except Superset k8s Deployment has none). Data on Kafka/Redis PVCs has no backup; n8n/AP use emptyDir (data lost on reschedule).
 
@@ -293,7 +293,7 @@ Quality signals: only 8 files >1000 lines but they are load-bearing God-componen
 | **High** | Observability collection missing | Metrics/traces exposed but blind in prod; no alerting | Medium (add Prometheus/ServiceMonitor + OTLP exporter + logback JSON) |
 | **Medium** | Silent-fallback debt (714/922/294) | Errors swallowed → hard to diagnose; correctness risk | High (ongoing per fallback-audit skill) |
 | **Medium** | Dead code: 4 MFEs, packages/core, n8n, dead tables/columns | Confusion, image bloat, false "it exists" signals | Low (delete) |
-| **Medium** | Single-replica engine/admin + no PgBouncer | Scaling ceiling; LDAP cron double-run risk | Medium |
+| **Medium** | Single-replica engine/admin + no PgBouncer | Scaling ceiling | Medium |
 | **Low** | God-components (FormDesigner etc.), stray console.logs, doc drift | Maintainability | Low–Medium |
 
 ---
@@ -318,7 +318,7 @@ Quality signals: only 8 files >1000 lines but they are load-bearing God-componen
 - Burn down the silent-fallback debt on the highest-risk paths; delete dead MFEs/n8n/tables.
 
 **Phase 3 — Product completeness**
-- Finish partials: real urge notifications, LDAP-sync UI, permission-conflict UI, prod Superset `/bi` convergence, AP action-mode UI.
+- Finish partials: real urge notifications, prod Superset `/bi` convergence, AP action-mode UI.
 
 ---
 
@@ -328,4 +328,4 @@ Quality signals: only 8 files >1000 lines but they are load-bearing God-componen
 - **Feature blueprint (design intent):** `docs/design/feature-blueprint.md`.
 - **Schema source of truth:** `deploy/init-scripts/00-schema/` (append-only; Flyway retired).
 - **Governance rules/skills:** `.cursor/rules/*.mdc`, `.claude/skills/*` (fallback-audit, function-unit-portability, version-rollback, view-access-control, secure-coding-sast, portal-dialog-form-labels).
-- **Method note:** this report was produced by fanning out parallel reverse-engineering passes over each subsystem, each writing an evidence-linked companion doc, then cross-checking findings against the repo's own blueprint. Where a subsystem pass could not verify a claim, it is labelled `Unknown` rather than guessed. A handful of "backend exists, UI unconfirmed" items (permission-conflict UI, some Exit wrappers) are flagged for a targeted follow-up read rather than asserted either way.
+- **Method note:** this report was produced by fanning out parallel reverse-engineering passes over each subsystem, each writing an evidence-linked companion doc, then cross-checking findings against the repo's own blueprint. Where a subsystem pass could not verify a claim, it is labelled `Unknown` rather than guessed. A handful of "backend exists, UI unconfirmed" items (some Exit wrappers; the permission-conflict endpoints were later removed in WP10) are flagged for a targeted follow-up read rather than asserted either way.

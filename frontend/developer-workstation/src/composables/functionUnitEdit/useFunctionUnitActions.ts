@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import type { ValidationResult } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
 import type { useFunctionUnitStore } from '@/stores/functionUnit'
+import { pickBlobHttpErrorMessage } from '@/utils/httpErrorMessage'
 
 type FunctionUnitStore = ReturnType<typeof useFunctionUnitStore>
 
@@ -55,8 +56,8 @@ export function useFunctionUnitActions(options: UseFunctionUnitActionsOptions) {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
       ElMessage.success(t('functionUnit.exportSuccess'))
-    } catch (e: any) {
-      ElMessage.error(e.response?.data?.message || t('functionUnit.exportFailed'))
+    } catch (e: unknown) {
+      ElMessage.error((await pickBlobHttpErrorMessage(e)) || t('functionUnit.exportFailed'))
     } finally {
       exporting.value = false
     }

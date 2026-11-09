@@ -17,8 +17,10 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Function unit access permission component
- * Filters accessible function units based on the user's business roles
+ * Function unit access permission component.
+ * Launch, view and audit access follow the user's <em>current</em> workspace role only, like every
+ * other Portal business check (platform access model §7.2); no role bypasses the access
+ * configuration, System Administrator included (D-05).
  */
 @Slf4j
 @Component
@@ -36,25 +38,20 @@ public class FunctionUnitAccessComponent {
     private static final String LOWERCASE_UUID_REGEX =
             "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
-    private final Map<String, CachedData<Set<String>>> userRolesCache = Collections.synchronizedMap(
+    /**
+     * The user's portal roles as admin-center lists them (id + code), keyed by user. Workspace
+     * independent: the current role is picked out after reading, so a workspace switch applies at once.
+     */
+    private final Map<String, CachedData<List<Map<String, Object>>>> userRolePayloadsCache = Collections.synchronizedMap(
             new LinkedHashMap<>(64, 0.75f, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<String, CachedData<Set<String>>> eldest) {
+                protected boolean removeEldestEntry(Map.Entry<String, CachedData<List<Map<String, Object>>>> eldest) {
                     return size() > MAX_CACHE_SIZE;
                 }
             });
 
     /** Code-keyed cache for New-Request visibility filtering (role code matching, stable across environments). */
     private final Map<String, CachedData<Set<String>>> userRoleCodesCache = Collections.synchronizedMap(
-            new LinkedHashMap<>(64, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, CachedData<Set<String>>> eldest) {
-                    return size() > MAX_CACHE_SIZE;
-                }
-            });
-
-    /** Keyed by {@code profileContext|userId} — backs {@link #isSystemAdministrator} on every permission check. */
-    private final Map<String, CachedData<Set<String>>> roleCodesByProfileCache = Collections.synchronizedMap(
             new LinkedHashMap<>(64, 0.75f, true) {
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<String, CachedData<Set<String>>> eldest) {
@@ -71,6 +68,8 @@ public class FunctionUnitAccessComponent {
             });
     
     private static final long CACHE_TTL = TimeUnit.MINUTES.toMillis(5);
+    /** A cached role list missing the session's current role is read again once it is this old. */
+    private static final long ROLE_MISS_REFETCH_AFTER_MS = TimeUnit.SECONDS.toMillis(10);
 
     /**
      * Short TTL for "could not resolve" results. Keeps repeated list/detail requests from re-running
@@ -78,30 +77,17 @@ public class FunctionUnitAccessComponent {
      */
     private static final long UNRESOLVED_CACHE_TTL = TimeUnit.SECONDS.toMillis(30);
 
-    /** Platform role code for System Administrator — bypasses FU and View access restrictions. */
-    public static final String SYS_ADMIN_ROLE_CODE = "SYS_ADMIN";
-
     /**
      * Must include {@code profileContext=PORTAL} so admin-center merges UBR roles
      * ({@code sys_user_business_unit_roles}), not only virtual-group inheritance.
      */
     private static final String USER_BUSINESS_ROLES_QUERY = "profileContext=PORTAL";
 
-    public boolean isSystemAdministrator(String userId) {
-        if (userId == null || userId.isBlank()) {
-            return false;
-        }
-        // SYS_ADMIN is ADMIN-type; profileContext=PORTAL excludes it from business-role APIs.
-        return getUserRoleCodesForProfile(userId, "ADMIN").contains(SYS_ADMIN_ROLE_CODE);
-    }
-    
     /**
-     * Check if a user can access a specified function unit
+     * Check if a user can access a specified function unit: its access roles must include the user's
+     * current workspace role (same keys as the New Request catalog, {@link #resolveNewRequestRoleKeys}).
      */
     public boolean canAccessFunctionUnit(String userId, String functionUnitIdOrCode) {
-        if (isSystemAdministrator(userId)) {
-            return true;
-        }
         String resolvedId = resolveFunctionUnitId(functionUnitIdOrCode);
         // Access rows live on deployed catalog IDs; dw codes / process keys must be resolved first.
         Set<String> allowedRoleCodes = getFunctionUnitAllowedRoleCodes(resolvedId);
@@ -111,17 +97,8 @@ public class FunctionUnitAccessComponent {
             return false;
         }
 
-        // Get the user's business role CODE list (matched by code, stable across environments)
-        Set<String> userRoleCodes = getUserBusinessRoleCodes(userId);
-
-        // Check if there is any intersection
-        for (String roleCode : userRoleCodes) {
-            if (allowedRoleCodes.contains(roleCode)) {
-                return true;
-            }
-        }
-
-        return false;
+        String activeRoleId = PortalUserSecurityUtils.getCurrentActiveRoleId().orElse(null);
+        return hasAnyRole(resolveNewRequestRoleKeys(userId, activeRoleId), allowedRoleCodes);
     }
     
     /**
@@ -417,7 +394,8 @@ public class FunctionUnitAccessComponent {
     
     /**
      * New Request catalog: enabled FUs whose access roles intersect the current workspace role.
-     * When JWT has no {@code activeRoleId} (no UBR workspace), falls back to all portal business roles.
+     * Without an {@code activeRoleId} only a permission self-service session uses all its portal roles; any other
+     * session gets none (see {@link #resolveNewRequestRoleKeys}).
      */
     public List<Map<String, Object>> filterAccessibleFunctionUnits(String userId, List<Map<String, Object>> functionUnits) {
         String activeRoleId = PortalUserSecurityUtils.getCurrentActiveRoleId().orElse(null);
@@ -425,7 +403,8 @@ public class FunctionUnitAccessComponent {
     }
 
     /**
-     * @param activeRoleId JWT workspace role id; blank means "no workspace" (all portal roles)
+     * @param activeRoleId JWT workspace role id; blank means "no workspace" (all portal roles in a permission
+     *                     self-service session, none otherwise)
      */
     public List<Map<String, Object>> filterAccessibleFunctionUnits(
             String userId, List<Map<String, Object>> functionUnits, String activeRoleId) {
@@ -459,18 +438,33 @@ public class FunctionUnitAccessComponent {
     }
 
     /**
-     * Workspace mode: only the selected role (id + code). No workspace: all portal role codes.
+     * Workspace mode: only the selected role (id + code). A permission self-service session has no workspace and keeps
+     * all its portal role codes (it only reaches its own requests); any other session without a current role gets
+     * none — the user's roles are never combined across workspaces (platform access model §7.2).
      */
     Set<String> resolveNewRequestRoleKeys(String userId, String activeRoleId) {
         if (activeRoleId == null || activeRoleId.isBlank()) {
-            return getUserBusinessRoleCodes(userId);
+            return PortalUserSecurityUtils.isCurrentSessionSelfService() ? getUserBusinessRoleCodes(userId) : Set.of();
         }
         return matchKeysForActiveRole(userId, activeRoleId.trim());
     }
 
     private Set<String> matchKeysForActiveRole(String userId, String activeRoleId) {
+        Set<String> keys = keysOfRole(fetchUserPortalRolePayloads(userId), activeRoleId);
+        CachedData<List<Map<String, Object>>> cached = userRolePayloadsCache.get(userId);
+        if (keys.isEmpty() && cached != null
+                && System.currentTimeMillis() - cached.timestamp > ROLE_MISS_REFETCH_AFTER_MS) {
+            // The session's role is newer than this replica's list (granted since, or the cache was cleared on
+            // another replica when switching workspace): read the list again rather than refuse for the whole TTL.
+            userRolePayloadsCache.remove(userId);
+            keys = keysOfRole(fetchUserPortalRolePayloads(userId), activeRoleId);
+        }
+        return keys;
+    }
+
+    private static Set<String> keysOfRole(List<Map<String, Object>> rolePayloads, String activeRoleId) {
         Set<String> keys = new HashSet<>();
-        for (Map<String, Object> role : fetchUserPortalRolePayloads(userId)) {
+        for (Map<String, Object> role : rolePayloads) {
             String id = (String) role.get("id");
             if (!activeRoleId.equals(id)) {
                 continue;
@@ -484,7 +478,15 @@ public class FunctionUnitAccessComponent {
         return keys;
     }
 
+    /**
+     * Cached per user (same TTL as the other role caches here, cleared on sign-in): the menu and the
+     * All Requests scope run the FU check once per function unit. A failed fetch is not cached.
+     */
     private List<Map<String, Object>> fetchUserPortalRolePayloads(String userId) {
+        CachedData<List<Map<String, Object>>> cached = userRolePayloadsCache.get(userId);
+        if (cached != null && !cached.isExpired()) {
+            return cached.data;
+        }
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId)
                     + "/roles?" + USER_BUSINESS_ROLES_QUERY;
@@ -495,6 +497,7 @@ public class FunctionUnitAccessComponent {
                     new ParameterizedTypeReference<List<Map<String, Object>>>() {}
             );
             if (response.getBody() != null) {
+                userRolePayloadsCache.put(userId, new CachedData<>(response.getBody()));
                 return response.getBody();
             }
         } catch (Exception e) {
@@ -524,99 +527,6 @@ public class FunctionUnitAccessComponent {
         return Collections.emptyList();
     }
     
-    /**
-     * Get the user's business role ID list
-     */
-    public Set<String> getUserBusinessRoleIds(String userId) {
-        log.info("Getting business roles for user: {}", userId);
-        
-        CachedData<Set<String>> cached = userRolesCache.get(userId);
-        if (cached != null && !cached.isExpired()) {
-            log.info("Returning cached roles for user {}: {}", userId, cached.data);
-            return cached.data;
-        }
-        
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles?" + USER_BUSINESS_ROLES_QUERY;
-            log.info("Fetching user roles from: {}", url);
-            
-            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
-            );
-            
-            Set<String> roleIds = new HashSet<>();
-            if (response.getBody() != null) {
-                log.info("Got {} roles for user {}", response.getBody().size(), userId);
-                for (Map<String, Object> role : response.getBody()) {
-                    String roleId = (String) role.get("id");
-                    log.info("User {} has role: {}", userId, roleId);
-                    roleIds.add(roleId);
-                }
-            }
-
-            userRolesCache.put(userId, new CachedData<>(roleIds));
-            return roleIds;
-
-        } catch (Exception e) {
-            log.error("Failed to get user business roles for user {}: {}", userId, e.getMessage(), e);
-            if (cached != null) {
-                return cached.data;
-            }
-            return Collections.emptySet();
-        }
-    }
-
-    /**
-     * Role codes for a user under a specific admin-center profile filter.
-     * PORTAL = business roles only; ADMIN = includes {@link #SYS_ADMIN_ROLE_CODE}.
-     */
-    private Set<String> getUserRoleCodesForProfile(String userId, String profileContext) {
-        // isSystemAdministrator() runs this several times per request on every menu/detail path;
-        // cached with the same TTL/semantics as getUserBusinessRoleCodes below.
-        String cacheKey = profileContext + '|' + userId;
-        CachedData<Set<String>> cached = roleCodesByProfileCache.get(cacheKey);
-        if (cached != null && !cached.isExpired()) {
-            return cached.data;
-        }
-
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles?profileContext="
-                    + profileContext;
-            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
-            );
-
-            Set<String> roleCodes = new HashSet<>();
-            if (response.getBody() != null) {
-                for (Map<String, Object> role : response.getBody()) {
-                    String roleCode = (String) role.get("code");
-                    String key = (roleCode != null && !roleCode.isBlank())
-                            ? roleCode
-                            : (String) role.get("id");
-                    if (key != null) {
-                        roleCodes.add(key);
-                    }
-                }
-            }
-            roleCodesByProfileCache.put(cacheKey, new CachedData<>(roleCodes));
-            return roleCodes;
-        } catch (Exception e) {
-            log.error("Failed to get user role codes (profile={}) for user {}: {}",
-                    profileContext, userId, e.getMessage(), e);
-            // Same failure semantics as before (empty set); a stale-but-valid entry is preferred if present.
-            if (cached != null) {
-                return cached.data;
-            }
-            return Collections.emptySet();
-        }
-    }
-
     /**
      * Get the user's business role CODE list (for New-Request visibility filtering).
      * Falls back to role id when a role has no code (legacy/edge roles), so it stays
@@ -789,54 +699,16 @@ public class FunctionUnitAccessComponent {
     }
 
     /**
-     * Whether the user holds a role granted audit access to this function unit.
+     * Whether the user's <em>currently selected</em> workspace role is granted audit access to this
+     * function unit. Covers what the All Requests menu lists, which requests may be opened, and
+     * writing a note as an auditor: all of them follow the role the user switched to, never the
+     * user's other roles (platform access model §7.2). Mirrors {@link #resolveNewRequestRoleKeys}:
+     * without a workspace role (no UBR context) there is no selection to honour, so it falls back to
+     * all portal roles.
      *
      * @param functionUnitIdOrCode function unit id or code
      */
     public boolean canAuditFunctionUnit(String userId, String functionUnitIdOrCode) {
-        if (userId == null || userId.isBlank() || functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
-            return false;
-        }
-        String resolvedId = resolveFunctionUnitId(functionUnitIdOrCode);
-        if (resolvedId == null) {
-            log.warn("Audit check denied: cannot resolve function unit '{}'", functionUnitIdOrCode);
-            return false;
-        }
-        Set<String> auditRoleCodes = getFunctionUnitAuditRoleCodes(resolvedId);
-        if (auditRoleCodes.isEmpty()) {
-            log.debug("Audit check denied for user {}: function unit {} has no audit grants",
-                    userId, functionUnitIdOrCode);
-            return false;
-        }
-        Set<String> userRoleCodes = getUserBusinessRoleCodes(userId);
-        for (String roleCode : userRoleCodes) {
-            if (auditRoleCodes.contains(roleCode)) {
-                return true;
-            }
-        }
-        log.debug("Audit check denied for user {}: roles {} do not intersect audit grants {} of unit {}",
-                userId, userRoleCodes, auditRoleCodes, functionUnitIdOrCode);
-        return false;
-    }
-
-    /**
-     * Whether the user's <em>currently selected</em> workspace role is granted audit access to this
-     * function unit.
-     *
-     * <p>Deliberately separate from {@link #canAuditFunctionUnit}, which intersects <em>all</em> of
-     * the user's business roles: that is the right rule for what the All Requests menu lists and
-     * which requests may be opened, but writing a note is an act performed <em>as</em> a role, so it
-     * must follow the role the user actually switched to. Mirrors
-     * {@link #resolveNewRequestRoleKeys}: without a workspace role (no UBR context) there is no
-     * selection to honour, so it falls back to all portal roles.
-     *
-     * <p>Resolves roles through the uncached {@code fetchUserPortalRolePayloads} rather than
-     * {@code getUserBusinessRoleCodes}, whose cache is keyed by user alone and would answer for the
-     * previously selected role right after a switch.
-     *
-     * @param functionUnitIdOrCode function unit id or code
-     */
-    public boolean canAuditFunctionUnitAsActiveRole(String userId, String functionUnitIdOrCode) {
         if (userId == null || userId.isBlank() || functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
             return false;
         }
@@ -867,7 +739,7 @@ public class FunctionUnitAccessComponent {
      * Clear user role cache
      */
     public void clearUserRolesCache(String userId) {
-        userRolesCache.remove(userId);
+        userRolePayloadsCache.remove(userId);
         userRoleCodesCache.remove(userId);
     }
     
@@ -889,7 +761,7 @@ public class FunctionUnitAccessComponent {
      * Clear all caches
      */
     public void clearAllCache() {
-        userRolesCache.clear();
+        userRolePayloadsCache.clear();
         userRoleCodesCache.clear();
         processKeyCache.clear();
     }

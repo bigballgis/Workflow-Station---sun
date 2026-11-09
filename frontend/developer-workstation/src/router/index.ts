@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
-import { hasAnyRole, isAuditorBlockedFromWorkstation } from '@/utils/permission'
+import { DW_ENTRY_ROLES, hasAnyRole } from '@/utils/permission'
 import i18n from '@/i18n'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 import { COMPUTED_FIELD_GUIDE_ROUTE_NAME } from '@/utils/computedFieldGuide'
@@ -28,7 +28,7 @@ const routes: RouteRecordRaw[] = [
     path: '/function-units/:id/ai-studio',
     name: 'AiStudioWorkspace',
     component: () => import('@/views/function-unit/AiStudioWorkspace.vue'),
-    meta: { titleKey: 'ai.studio.entryButton', requiresAuth: true, requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+    meta: { titleKey: 'ai.studio.entryButton', requiresAuth: true, requiredRoles: DW_ENTRY_ROLES }
   },
   {
     path: '/',
@@ -40,25 +40,25 @@ const routes: RouteRecordRaw[] = [
         path: 'function-units',
         name: 'FunctionUnits',
         component: () => import('@/views/function-unit/FunctionUnitList.vue'),
-        meta: { titleKey: 'functionUnit.title', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+        meta: { titleKey: 'functionUnit.title', requiredRoles: DW_ENTRY_ROLES }
       },
       {
         path: 'function-units/:id',
         name: 'FunctionUnitEdit',
         component: () => import('@/views/function-unit/FunctionUnitEdit.vue'),
-        meta: { titleKey: 'functionUnit.edit', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+        meta: { titleKey: 'functionUnit.edit', requiredRoles: DW_ENTRY_ROLES }
       },
       {
         path: 'automation',
         name: 'Automation',
         component: () => import('@/views/automation/AutomationPage.vue'),
-        meta: { titleKey: 'automation.title', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+        meta: { titleKey: 'automation.title', requiredRoles: DW_ENTRY_ROLES }
       },
       {
         path: 'automation/:flowId',
         name: 'AutomationFlowEdit',
         component: () => import('@/views/automation/AutomationFlowEdit.vue'),
-        meta: { titleKey: 'automation.title', hidden: true, requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+        meta: { titleKey: 'automation.title', hidden: true, requiredRoles: DW_ENTRY_ROLES }
       },
       {
         path: 'profile',
@@ -88,23 +88,6 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
-
-// Cache the backend workspace-access decision for the session to avoid an extra request
-// on every navigation. Only consulted for users without a DW capability role.
-let workspaceAccessCache: boolean | null = null
-async function resolveWorkspaceAccess(): Promise<boolean> {
-  if (workspaceAccessCache !== null) {
-    return workspaceAccessCache
-  }
-  try {
-    const { functionUnitApi } = await import('@/api/functionUnit')
-    const res = await functionUnitApi.getWorkspaceAccess()
-    workspaceAccessCache = res?.data?.canView === true
-  } catch {
-    workspaceAccessCache = false
-  }
-  return workspaceAccessCache
-}
 
 // 路由守卫
 router.beforeEach(async (to, _from, next) => {
@@ -146,36 +129,12 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Pure Auditor: do not enter DW (including the workspace-access fallback).
-  // Overlay users with a capability role still enter; keep AUDITOR out of requiredRoles
-  // so this gate can be removed later without touching backend read-only logic.
-  if (isAuditorBlockedFromWorkstation() && to.name !== 'Forbidden') {
+  // Platform access model §6.1: SYS_ADMIN, AUDITOR (read-only) and the Technical Lead / Developer lists of
+  // active teams enter; the backend refuses everyone else at sign-in and refresh as well.
+  const requiredRoles = to.meta.requiredRoles as string[] | undefined
+  if (requiredRoles && requiredRoles.length > 0 && !hasAnyRole(requiredRoles)) {
     next('/403')
     return
-  }
-
-  const requiredRoles = to.meta.requiredRoles as string[] | undefined
-  if (requiredRoles && requiredRoles.length > 0) {
-    if (!hasAnyRole(requiredRoles)) {
-      // Members of a team (virtual group) that owns function units have no DW capability
-      // role but may still enter the workspace read-only. The backend is the source of
-      // truth (it knows team→FU ownership); ask it before denying access.
-      // FR-B23 (supersedes FR-B15): Automation now joins the fallback. FR-B15 kept it out
-      // because flows were platform-wide — a team member would have seen every team's
-      // flows. Flows are workspace-scoped now, and the bridge signs a Viewer session for
-      // members without a capability role, so entering read-only shows their own team's
-      // flows only and AP itself refuses every write.
-      // AI Studio joins too (FU_VIEWER was removed); its copilot is read-only when the thread
-      // state reports canModify=false.
-      const workspaceFallbackApplies =
-        to.name === 'FunctionUnits' || to.name === 'FunctionUnitEdit' || to.name === 'AiStudioWorkspace'
-        || to.name === 'Automation' || to.name === 'AutomationFlowEdit'
-      const canView = workspaceFallbackApplies && (await resolveWorkspaceAccess())
-      if (!canView) {
-        next('/403')
-        return
-      }
-    }
   }
   
   next()

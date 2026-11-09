@@ -52,7 +52,9 @@ class VirtualGroupManagerComponentCreateTypeTest {
                 roleRepository,
                 userRepository,
                 jdbcTemplate,
-                userBusinessUnitRepository);
+                userBusinessUnitRepository,
+                org.mockito.Mockito.mock(com.platform.common.i18n.I18nService.class),
+                org.mockito.Mockito.mock(com.platform.security.service.UserRoleService.class));
     }
 
     @Test
@@ -72,7 +74,7 @@ class VirtualGroupManagerComponentCreateTypeTest {
     }
 
     @Test
-    @DisplayName("create accepts DEVELOPER type")
+    @DisplayName("create accepts DEVELOPER type and makes the code from the name")
     void createAcceptsDeveloperType() {
         when(virtualGroupRepository.existsByName(anyString())).thenReturn(false);
         when(virtualGroupRepository.existsByCode(anyString())).thenReturn(false);
@@ -80,7 +82,6 @@ class VirtualGroupManagerComponentCreateTypeTest {
 
         VirtualGroupCreateRequest request = VirtualGroupCreateRequest.builder()
                 .name("Dev Team A")
-                .code("DEV_TEAM_A")
                 .type(VirtualGroupType.DEVELOPER)
                 .build();
 
@@ -90,10 +91,11 @@ class VirtualGroupManagerComponentCreateTypeTest {
         ArgumentCaptor<VirtualGroup> captor = ArgumentCaptor.forClass(VirtualGroup.class);
         verify(virtualGroupRepository).save(captor.capture());
         assertThat(captor.getValue().getType()).isEqualTo("DEVELOPER");
+        assertThat(captor.getValue().getCode()).isEqualTo("DEV_TEAM_A");
     }
 
     @Test
-    @DisplayName("update rejects changing a CUSTOM group to SYSTEM")
+    @DisplayName("update rejects changing the type of a group")
     void updateRejectsSystemType() {
         VirtualGroup existing = VirtualGroup.builder()
                 .id("vg-1")
@@ -111,6 +113,6 @@ class VirtualGroupManagerComponentCreateTypeTest {
 
         assertThatThrownBy(() -> component.updateVirtualGroup("vg-1", request))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("CUSTOM or DEVELOPER");
+                .extracting("errorCode").isEqualTo("VIRTUAL_GROUP_TYPE_IMMUTABLE");
     }
 }

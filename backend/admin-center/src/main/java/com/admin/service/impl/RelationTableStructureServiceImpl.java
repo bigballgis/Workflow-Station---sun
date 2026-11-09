@@ -221,8 +221,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         RelationTableDefinition tableDefinition = tableDefinitionRepository.findById(id)
                 .orElseThrow(() -> new RelationTableNotFoundException(id));
 
-        // 检查是否有绑定关系（查询 developer-workstation 的 dw_form_table_bindings 表）
-        if (hasBindings(tableDefinition.getTableName())) {
+        if (isReferencedByAnyRelease(id)) {
             throw new RelationTableBindingExistsException(id);
         }
 
@@ -454,23 +453,30 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
     }
 
     /**
-     * 检查 Relation Table 是否有绑定关系
-     * 通过查询 developer-workstation 的 dw_form_table_bindings 表
-     * 其中 binding_type = 'RELATED' 且 table 的 table_name 匹配
+     * Whether any released Function Unit version uses this relation table: a link of the version, a RELATED form
+     * binding, or a RELATION data table in its published content. Every version counts, also deprecated and archived
+     * ones, because their requests keep reading the release they were started on.
      */
-    private boolean hasBindings(String tableName) {
-        try {
-            String sql = "SELECT COUNT(*) FROM dw_form_table_bindings ftb " +
-                    "JOIN dw_table_definitions td ON ftb.table_id = td.id " +
-                    "WHERE ftb.binding_type = 'RELATED' AND td.table_name = ?";
-            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tableName);
-            return count != null && count > 0;
-        } catch (Exception e) {
-            log.warn("Failed to check bindings for table '{}': {}", tableName, e.getMessage());
-            // If the table doesn't exist yet or query fails, assume no bindings
-            return false;
-        }
+    private boolean isReferencedByAnyRelease(Long tableId) {
+        Boolean referenced = jdbcTemplate.queryForObject(RELEASE_REFERENCE_SQL, Boolean.class,
+                tableId, String.valueOf(tableId), String.valueOf(tableId));
+        return Boolean.TRUE.equals(referenced);
     }
+
+    public static final String RELEASE_REFERENCE_SQL = """
+            SELECT EXISTS (SELECT 1 FROM rt_table_function_units l WHERE l.relation_table_id = ?)
+                OR EXISTS (
+                    SELECT 1 FROM sys_function_unit_contents c
+                    CROSS JOIN LATERAL jsonb_array_elements(CASE
+                        WHEN jsonb_typeof(c.content_data::jsonb -> 'tableBindings') = 'array'
+                        THEN c.content_data::jsonb -> 'tableBindings' ELSE '[]'::jsonb END) b(binding)
+                    WHERE c.content_type = 'FORM' AND b.binding ->> 'bindingType' = 'RELATED'
+                      AND b.binding ->> 'relationTableId' = ?)
+                OR EXISTS (
+                    SELECT 1 FROM sys_function_unit_contents c
+                    WHERE c.content_type = 'DATA_TABLE' AND c.content_data::jsonb ->> 'tableType' = 'RELATION'
+                      AND c.content_data::jsonb ->> 'relationTableId' = ?)
+            """;
 
     @Override
     public boolean isTableNameAvailable(String tableName, Long excludeTableId) {
@@ -494,18 +500,19 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         } else if (tableDefinitionRepository.existsByTableNameIgnoreCase(tableName)) {
             return true;
         }
-        return existsInDwTables(tableName);
+        return isReleasedDataTableName(tableName);
     }
 
     /**
-     * Case-insensitive: Postgres unquoted DDL folds identifiers to lowercase, so a case-only-different
-     * name here would still collide with an existing Table Design table at the physical layer.
+     * Whether a released Function Unit version has a data table of its own (not a relation table) by this name,
+     * case-insensitively: release snapshots bind tables by name, so the two must never share one.
      */
-    private boolean existsInDwTables(String tableName) {
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM dw_table_definitions WHERE lower(table_name) = lower(?)",
-                Integer.class,
-                tableName);
-        return count != null && count > 0;
+    private boolean isReleasedDataTableName(String tableName) {
+        Boolean taken = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM sys_function_unit_contents c
+                    WHERE c.content_type = 'DATA_TABLE' AND c.content_data::jsonb ->> 'tableType' <> 'RELATION'
+                      AND lower(c.content_data::jsonb ->> 'tableName') = lower(?))
+                """, Boolean.class, tableName);
+        return Boolean.TRUE.equals(taken);
     }
 }

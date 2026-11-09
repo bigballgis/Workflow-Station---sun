@@ -6,8 +6,6 @@ import com.admin.util.EntityTypeConverter;
 import com.platform.security.entity.User;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.BusinessUnit;
-import com.platform.security.entity.VirtualGroup;
-import com.platform.security.entity.VirtualGroupMember;
 import com.platform.security.entity.UserBusinessUnitRole;
 import com.platform.security.entity.BusinessUnitRole;
 import com.admin.exception.BusinessUnitNotFoundException;
@@ -53,15 +51,6 @@ class TaskAssignmentQueryServiceTest {
     private UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     
     @Mock
-    private VirtualGroupRoleRepository virtualGroupRoleRepository;
-    
-    @Mock
-    private VirtualGroupMemberRepository virtualGroupMemberRepository;
-
-    @Mock
-    private VirtualGroupRepository virtualGroupRepository;
-    
-    @Mock
     private BusinessUnitRoleRepository businessUnitRoleRepository;
     
     @InjectMocks
@@ -74,7 +63,6 @@ class TaskAssignmentQueryServiceTest {
     private static final String PARENT_BU_CODE = "BU_HQ";
     private static final String ROLE_ID = "role-001";
     private static final String ROLE_CODE = "ROLE_MANAGER";
-    private static final String VG_ID = "vg-001";
 
     private static BusinessUnit bu(String id, String code) {
         BusinessUnit b = new BusinessUnit();
@@ -274,7 +262,7 @@ class TaskAssignmentQueryServiceTest {
         @DisplayName("Should return empty list when role is not BU_BOUNDED")
         void shouldReturnEmptyListWhenRoleNotBuBounded() {
             when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
-            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_UNBOUNDED)));
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.DEVELOPER)));
 
             List<String> result = service.getUsersByBusinessUnitAndRole(BU_CODE, ROLE_CODE);
 
@@ -299,104 +287,6 @@ class TaskAssignmentQueryServiceTest {
 
             assertThatThrownBy(() -> service.getUsersByBusinessUnitAndRole(BU_CODE, ROLE_CODE))
                     .isInstanceOf(RoleNotFoundException.class);
-        }
-    }
-    
-    @Nested
-    @DisplayName("getUsersByUnboundedRole Tests")
-    class GetUsersByUnboundedRoleTests {
-        
-        @Test
-        @DisplayName("Should return user IDs through virtual groups (by role code)")
-        void shouldReturnUserIdsThroughVirtualGroups() {
-            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_UNBOUNDED)));
-            when(virtualGroupRoleRepository.findVirtualGroupIdsByRoleId(ROLE_ID))
-                    .thenReturn(Arrays.asList(VG_ID, "vg-002"));
-            when(virtualGroupMemberRepository.findUserIdsByVirtualGroupIds(anyList()))
-                    .thenReturn(Arrays.asList("user-001", "user-002", "user-003"));
-
-            List<String> result = service.getUsersByUnboundedRole(ROLE_CODE);
-
-            assertThat(result).containsExactly("user-001", "user-002", "user-003");
-        }
-
-        @Test
-        @DisplayName("Should return empty list when no virtual groups bound to role")
-        void shouldReturnEmptyListWhenNoVirtualGroups() {
-            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_UNBOUNDED)));
-            when(virtualGroupRoleRepository.findVirtualGroupIdsByRoleId(ROLE_ID))
-                    .thenReturn(Collections.emptyList());
-
-            List<String> result = service.getUsersByUnboundedRole(ROLE_CODE);
-
-            assertThat(result).isEmpty();
-            verify(virtualGroupMemberRepository, never()).findUserIdsByVirtualGroupIds(anyList());
-        }
-
-        @Test
-        @DisplayName("Should return empty list when role is not BU_UNBOUNDED")
-        void shouldReturnEmptyListWhenRoleNotBuUnbounded() {
-            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_BOUNDED)));
-
-            List<String> result = service.getUsersByUnboundedRole(ROLE_CODE);
-
-            assertThat(result).isEmpty();
-            verify(virtualGroupRoleRepository, never()).findVirtualGroupIdsByRoleId(any());
-        }
-
-        @Test
-        @DisplayName("Should throw exception when role code not found")
-        void shouldThrowExceptionWhenRoleNotFound() {
-            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> service.getUsersByUnboundedRole(ROLE_CODE))
-                    .isInstanceOf(RoleNotFoundException.class);
-        }
-    }
-
-    @Nested
-    @DisplayName("getUsersByVirtualGroupCode Tests")
-    class GetUsersByVirtualGroupCodeTests {
-
-        @Test
-        @DisplayName("Should return distinct user IDs for virtual group code")
-        void shouldReturnUserIdsForCode() {
-            VirtualGroup vg = new VirtualGroup();
-            vg.setId("vg-doc-verifiers");
-            vg.setCode("DOCUMENT_VERIFIERS");
-
-            VirtualGroupMember m1 = new VirtualGroupMember();
-            m1.setUserId("user-001");
-            m1.setGroupId(vg.getId());
-            VirtualGroupMember m2 = new VirtualGroupMember();
-            m2.setUserId("user-002");
-            m2.setGroupId(vg.getId());
-
-            when(virtualGroupRepository.findByCode("DOCUMENT_VERIFIERS")).thenReturn(Optional.of(vg));
-            when(virtualGroupMemberRepository.findByGroupId(vg.getId())).thenReturn(Arrays.asList(m1, m2));
-
-            List<String> result = service.getUsersByVirtualGroupCode("DOCUMENT_VERIFIERS");
-
-            assertThat(result).containsExactly("user-001", "user-002");
-        }
-
-        @Test
-        @DisplayName("Should return empty list when code unknown")
-        void shouldReturnEmptyWhenCodeUnknown() {
-            when(virtualGroupRepository.findByCode("UNKNOWN")).thenReturn(Optional.empty());
-
-            List<String> result = service.getUsersByVirtualGroupCode("UNKNOWN");
-
-            assertThat(result).isEmpty();
-            verify(virtualGroupMemberRepository, never()).findByGroupId(any());
-        }
-
-        @Test
-        @DisplayName("Should return empty for blank code")
-        void shouldReturnEmptyForBlankCode() {
-            assertThat(service.getUsersByVirtualGroupCode(" ")).isEmpty();
-            assertThat(service.getUsersByVirtualGroupCode(null)).isEmpty();
-            verifyNoInteractions(virtualGroupRepository);
         }
     }
     
@@ -516,24 +406,4 @@ class TaskAssignmentQueryServiceTest {
         }
     }
     
-    @Nested
-    @DisplayName("getBuUnboundedRoles Tests")
-    class GetBuUnboundedRolesTests {
-        
-        @Test
-        @DisplayName("Should return BU unbounded roles")
-        void shouldReturnBuUnboundedRoles() {
-            Role role1 = new Role();
-            role1.setId("role-001");
-            role1.setType(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
-            
-            when(roleRepository.findByType("BU_UNBOUNDED"))
-                    .thenReturn(Arrays.asList(role1));
-            
-            List<Role> result = service.getBuUnboundedRoles();
-            
-            assertThat(result).hasSize(1);
-            assertThat(result.get(0).getId()).isEqualTo("role-001");
-        }
-    }
 }

@@ -124,8 +124,13 @@ class ActionDefinitionRepositoryContainerIT {
     }
 
     private ActionDefinition newAction(String name, Map<String, Object> config) {
+        return newAction(name, config, null);
+    }
+
+    private ActionDefinition newAction(String name, Map<String, Object> config, String sourceId) {
         return ActionDefinition.builder()
                 .functionUnitId(FU_ID)
+                .sourceId(sourceId)
                 .actionName(name)
                 .actionType("BUTTON")
                 .description("container it")
@@ -139,12 +144,13 @@ class ActionDefinitionRepositoryContainerIT {
     @Test
     @DisplayName("实体列映射与真实 DDL 一致：写入后可原样读回")
     void persistsAndReadsBackEveryMappedColumn() {
-        ActionDefinition saved = repository.saveAndFlush(newAction("approve", Map.of("k", "v")));
+        ActionDefinition saved = repository.saveAndFlush(newAction("approve", Map.of("k", "v"), "dw-action-1"));
         entityManager.clear(); // 清一级缓存，强制真正从库里读
 
         ActionDefinition loaded = repository.findById(saved.getId()).orElseThrow();
 
         assertThat(loaded.getFunctionUnitId()).isEqualTo(FU_ID);
+        assertThat(loaded.getSourceId()).isEqualTo("dw-action-1");
         assertThat(loaded.getActionName()).isEqualTo("approve");
         assertThat(loaded.getActionType()).isEqualTo("BUTTON");
         assertThat(loaded.getDescription()).isEqualTo("container it");
@@ -186,6 +192,28 @@ class ActionDefinitionRepositoryContainerIT {
 
         assertThatThrownBy(() -> repository.saveAndFlush(newAction("duplicate", Map.of())))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("uk_sys_action_catalog_source：同一 FU 下来源动作 id 唯一")
+    void enforcesUniqueSourceIdPerFunctionUnit() {
+        repository.saveAndFlush(newAction("first", Map.of(), "dw-action-1"));
+
+        assertThatThrownBy(() -> repository.saveAndFlush(newAction("second", Map.of(), "dw-action-1")))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("uk_sys_action_catalog_source 只约束带来源的行：旧导入没有 source_id 的动作可以并存")
+    void allowsSeveralActionsWithoutSourceId() {
+        repository.saveAndFlush(newAction("legacy-a", Map.of()));
+        repository.saveAndFlush(newAction("legacy-b", Map.of()));
+        repository.saveAndFlush(newAction("sourced", Map.of(), "dw-action-1"));
+        entityManager.clear();
+
+        assertThat(repository.findByFunctionUnitId(FU_ID))
+                .extracting(ActionDefinition::getSourceId)
+                .containsExactlyInAnyOrder(null, null, "dw-action-1");
     }
 
     @Test

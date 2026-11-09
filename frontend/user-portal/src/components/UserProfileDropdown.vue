@@ -116,7 +116,6 @@ const route = useRoute()
 const loading = ref(false)
 const businessUnits = ref<{ id: string; name: string }[]>([])
 const buBoundedRoles = ref<PortalBuBoundedRow[]>([])
-const buUnboundedRoles = ref<{ id: string; name: string }[]>([])
 
 const formatUbrLine = (row: PortalBuBoundedRow) => {
   const r = row.role
@@ -162,7 +161,6 @@ const loadUserPermissions = async () => {
     const lists = parseMyPermissionViewPayload(data)
     businessUnits.value = lists.businessUnits
     buBoundedRoles.value = lists.buBoundedRoles
-    buUnboundedRoles.value = lists.buUnboundedRoles
   } catch (e) {
     console.error('Failed to load user permissions:', e)
   } finally {

@@ -3,7 +3,6 @@ package com.workflow.service;
 import com.platform.common.i18n.I18nService;
 import com.platform.common.mail.MailDiagnostics;
 import com.workflow.client.AdminCenterClient;
-import com.workflow.client.DeveloperWorkstationEmailTemplateClient;
 import com.workflow.util.BpmnExtensionUtils;
 import com.workflow.util.EmailTemplateResolver;
 import jakarta.mail.SendFailedException;
@@ -57,7 +56,6 @@ public class ConfiguredEmailSender {
     private com.platform.common.functionunit.CatalogSnapshotReader catalogSnapshots;
     @org.springframework.beans.factory.annotation.Autowired
     private com.workflow.component.PinnedReleaseLookup pinnedReleaseLookup;
-    private final DeveloperWorkstationEmailTemplateClient emailTemplateClient;
     private final EmailAttachmentResolver emailAttachmentResolver;
     private final EmailSenderService emailSenderService;
     private final TextEnvironmentInterpolator textEnvironmentInterpolator;
@@ -204,12 +202,10 @@ public class ConfiguredEmailSender {
                 throw configInvalid("email.send_task.template_not_found", functionUnitId, emailTemplateId);
             }
             Map<String, Object> template = templates.get(0);
-            var tpl = new DeveloperWorkstationEmailTemplateClient.EmailTemplateContent(
-                    String.valueOf(template.get("subject")), String.valueOf(template.get("bodyHtml")));
             String subject = applyTextEnv(
-                    EmailTemplateResolver.resolve(tpl.subject() != null ? tpl.subject() : "", variables), false);
+                    EmailTemplateResolver.resolve(templateText(template, "subject"), variables), false);
             String body = applyTextEnv(
-                    EmailTemplateResolver.resolveHtml(tpl.bodyHtml() != null ? tpl.bodyHtml() : "", variables), true);
+                    EmailTemplateResolver.resolveHtml(templateText(template, "bodyHtml"), variables), true);
             if (!StringUtils.hasText(subject)) {
                 throw configInvalid("email.send_task.missing_subject");
             }
@@ -228,30 +224,21 @@ public class ConfiguredEmailSender {
                 applyTextEnv(EmailTemplateResolver.resolveHtml(emailBody != null ? emailBody : "", variables), true));
     }
 
+    /**
+     * A template field the designer left empty is published as null (DW saves subject and body as optional). It is
+     * empty text, never the word "null": an empty subject is refused above, an empty body is sent empty, as inline
+     * content without a body is.
+     */
+    private static String templateText(Map<String, Object> template, String field) {
+        Object value = template.get(field);
+        return value == null ? "" : value.toString();
+    }
+
     private record ResolvedContent(String subject, String body) {}
 
     private EmailDeliveryException configInvalid(String messageKey, Object... args) {
         return EmailDeliveryException.permanent(EmailDeliveryException.CONFIG_INVALID,
                 i18nService.getMessage(messageKey, args));
-    }
-
-    /**
-     * DW email-template API expects a Long id or function-unit {@code code}.
-     * Process variables usually carry Admin-center UUID in {@code functionUnitId}, so prefer code.
-     */
-    private static String resolveDwFunctionUnitRef(Map<String, Object> variables) {
-        Object functionUnitCode = variables.get("functionUnitCode");
-        if (functionUnitCode != null && StringUtils.hasText(functionUnitCode.toString())) {
-            return functionUnitCode.toString().trim();
-        }
-        Object functionUnitId = variables.get("functionUnitId");
-        if (functionUnitId != null) {
-            String raw = functionUnitId.toString().trim();
-            if (!raw.isEmpty() && raw.chars().allMatch(Character::isDigit)) {
-                return raw;
-            }
-        }
-        return null;
     }
 
     private String resolveRecipients(String raw) {

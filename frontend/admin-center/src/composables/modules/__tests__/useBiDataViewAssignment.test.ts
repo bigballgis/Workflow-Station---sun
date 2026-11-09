@@ -19,12 +19,12 @@ describe('Data View list server query', () => {
   it('sends typed column filters, sort and FU identity together before paging', async () => {
     vi.mocked(biManagementApi.dataViewAssignment.query).mockResolvedValue(page('result') as never)
     const { state, wrapper } = setup()
-    state.query.functionUnitId = 50029; state.query.dashboardTitle = '  Report  '
+    state.query.functionUnitCode = 'FU_X'; state.query.dashboardTitle = '  Report  '
     state.openFilter('enabled'); state.applyFilter({ operator: 'eq', value: 'false' })
     state.applySort('viewName', 'DESC'); state.pagination.page = 3
     await state.load()
     expect(biManagementApi.dataViewAssignment.query).toHaveBeenCalledWith({
-      page: 2, size: 20, dashboardTitle: 'Report', functionUnitId: 50029,
+      page: 2, size: 20, dashboardTitle: 'Report', functionUnitCode: 'FU_X',
       filters: [{ field: 'enabled', operator: 'eq', value: 'false' }], sortField: 'viewName', sortDirection: 'DESC',
     })
     expect(state.query).not.toHaveProperty('enabled')

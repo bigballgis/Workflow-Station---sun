@@ -2,7 +2,9 @@
   <div class="page-container">
     <PageHeader :title="t('menu.functionUnit')">
       <template #actions>
+        <!-- Every Technical Lead imports into the teams they lead (the dialog offers only those, §8.1). -->
         <el-button
+          v-if="canWrite('functionUnits')"
           type="primary"
           @click="openImportDialog"
         >
@@ -70,8 +72,12 @@
 
     <FunctionUnitImportDialog
       v-model="showImportDialog"
+      v-model:team-code="importTeamCode"
       :import-loading="importLoading"
-      :import-file="importFile"
+      :preview-loading="previewLoading"
+      :preview="importPreview"
+      :block="importBlock"
+      :can-start-import="canStartImport"
       @file-change="handleImportFileChange"
       @start-import="handleStartImport"
     />
@@ -80,6 +86,7 @@
       v-model="showAccessDialogVisible"
       :function-unit-id="currentUnit?.id"
       :function-unit-name="currentUnit?.name"
+      :read-only="!currentUnit?.canManage"
     />
 
     <el-dialog
@@ -205,6 +212,7 @@ import { Upload } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import AccessConfigDialog from './components/AccessConfigDialog.vue'
+import { canWrite } from '@/utils/permission'
 import FunctionUnitImportDialog from './components/FunctionUnitImportDialog.vue'
 import ValidateResultDialog from './components/ValidateResultDialog.vue'
 import FunctionUnitListTab from './components/FunctionUnitListTab.vue'
@@ -248,7 +256,11 @@ const {
   deleteTargetUnit,
   deletePreview,
   compareVersion,
-  importFile,
+  previewLoading,
+  importPreview,
+  importTeamCode,
+  importBlock,
+  canStartImport,
   fetchFunctionUnits,
   showAccessDialog,
   showVersions,

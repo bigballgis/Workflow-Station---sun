@@ -21,7 +21,7 @@ export default {
     fUpdatedBy: '保存当前天数的人。',
     fUpdatedAt: '保存时间，按你浏览器的时区显示。',
     fJob: '最近一次重算：Pending、Running、Succeeded、Partial（有案件被跳过或失败）、Failed、Superseded（被之后的保存取代）。',
-    fActions: 'Edit 与 Recalculate 需要编辑权限；Recalculate 只在已设天数时出现。Details 打开历史与任务。Export 导出勾选的行，未勾选时导出当前页。',
+    fActions: 'Edit 与 Recalculate 只出现在你能修改的行上（见「谁能做什么」）；Recalculate 还要求已设天数。Details 打开历史与任务。Export 导出勾选的行，未勾选时导出当前页。',
     editTitle: '设置时效天数',
     editBody:
       '在行上点 Edit，输入天数，可选填修改原因，Save。未结案件（Running 与 Suspended）在后台重算；已完成、已撤回的案件保留原到期日。新提交和保存的案件总是按当前天数计算到期日。',
@@ -49,7 +49,7 @@ export default {
     fHistDispatch: 'Recalculation start：Started、Pending，或 Failed to start（悬停看提示）。Failed to start 表示天数已保存但没有任务执行；门户可访问后点 Recalculate。',
     permTitle: '谁能做什么',
     permBody:
-      'System Administrator 可执行全部操作。角色权限 sla:policy:edit 可查看、修改与重算。sla:policy:view 只能查看；Auditor 角色默认有。Auditor 即使有编辑权限也不能修改或重算。权限变更在重新登录后生效。',
+      'System Administrator 看到全部功能单元，都能 Edit 和 Recalculate。Technical Lead 只看到自己担任 Technical Lead 的团队的功能单元，并能对它们 Edit 和 Recalculate。Auditor 看到全部功能单元，只读：可用 Details 和 Export，没有 Edit 和 Recalculate。Auditor 同时担任某团队的 Technical Lead 时，可以修改该团队的功能单元。管理中心里还没有所属团队的功能单元只对 System Administrator 和 Auditor 列出。',
     ruleTitle: '到期日如何计算',
     ruleBody: '案件提交或保存时由平台写入到期日，用户不能修改。算不出日期时，字段保持当前值。',
     rule1: 'Lead Time 为 Not set：不计算到期日；已有的值保留。',
@@ -60,7 +60,7 @@ export default {
     failBody: '看到什么，以及怎么处理。',
     failNotListed: '列表里没有该功能单元：主表没有 SLA 到期日映射，或尚未部署。见 [[/table-design#sla-due-date]]。',
     failInvalid: 'Enter a whole number between 1 and 3650：天数为空、为 0、为小数或超过 3650。',
-    failNoPermission: 'No permission：你的角色没有 sla:policy:edit（或你是 Auditor）。',
+    failNoPermission: '某行没有 Edit 和 Recalculate：你是 Auditor，或该功能单元不属于你的团队。以 Technical Lead 登录时，别队的功能单元和还没有团队的功能单元根本不会列出。',
     failDispatch: 'Lead time saved, but the recalculation could not be started：门户不可访问。稍后点 Recalculate。',
     failPartial: '任务 Partial：打开 Details，点该任务，看 Skipped 或 Failed 案件的 Reason。',
   },

@@ -110,13 +110,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Folder, Fold, Expand, Connection } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
-import { hasAnyRole } from '@/utils/permission'
-import { functionUnitApi } from '@/api/functionUnit'
+import { DW_ENTRY_ROLES, hasAnyRole } from '@/utils/permission'
 import { useSidebarState } from '@/composables/useSidebarState'
 import { useRecentFunctionUnits } from '@/composables/useRecentFunctionUnits'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -139,11 +138,9 @@ const activeMenu = computed(() => {
   return ''
 })
 
-// Automation 菜单可见性与路由守卫保持一致：能力角色，或（FR-B23）无能力角色但属于某个团队
-// ——后者只读进入。两处判据必须同源，否则会出现「菜单看不到但地址栏能进」的割裂。
-const hasAutomationRole = hasAnyRole(['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'])
-const teamReadOnlyAccess = ref(false)
-const canSeeAutomation = computed(() => hasAutomationRole || teamReadOnlyAccess.value)
+// Automation 菜单可见性与路由守卫同源（平台访问模型 §6.1、D-20）：能进 DW 的人都能进 Automation，
+// 写不写得动由 Admin 按团队名单签 AP 会话决定。两处判据不同源会出现「菜单看不到但地址栏能进」的割裂。
+const canSeeAutomation = hasAnyRole(DW_ENTRY_ROLES)
 
 /** 当前正在设计器里打开的 FU（用于把「最近打开」里对应的一条标为当前位置） */
 const openFunctionUnitId = computed(() => {
@@ -177,16 +174,8 @@ watch(
   { immediate: true }
 )
 
-onMounted(async () => {
+onMounted(() => {
   initSidebarState()
-  // Only ask when the roles alone do not already answer it (one call, no capability role).
-  if (hasAutomationRole) return
-  try {
-    const res = await functionUnitApi.getWorkspaceAccess()
-    teamReadOnlyAccess.value = res?.data?.canView === true
-  } catch {
-    teamReadOnlyAccess.value = false
-  }
 })
 </script>
 

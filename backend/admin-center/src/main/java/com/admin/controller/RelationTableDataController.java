@@ -30,6 +30,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import com.admin.security.AdminOwner;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Relation Table data management RESTful API
@@ -39,6 +42,7 @@ import java.util.Set;
 @RequestMapping("/relation-tables/data")
 @RequiredArgsConstructor
 @Tag(name = "Relation Table Data Management", description = "Query, create, update, delete and change status of deployed table data")
+@AdminAccess(AdminAudience.TEAM_READ)
 public class RelationTableDataController {
 
     private final RelationTableDataService dataService;
@@ -48,6 +52,7 @@ public class RelationTableDataController {
 
     // ==================== Deployed Table List ====================
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @GetMapping("/tables")
     @Operation(summary = "Get deployed table list", description = "Returns only DEPLOYED Relation Tables")
     public ResponseEntity<List<RelationTableResponse>> getDeployedTables() {
@@ -56,6 +61,7 @@ public class RelationTableDataController {
         return ResponseEntity.ok(tables);
     }
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @GetMapping("/function-units")
     @Operation(summary = "Get Function Unit groups for deployed tables",
             description = "Distinct Function Units referenced by deployed Relation Tables, with table counts (for the nav sidebar)")
@@ -65,6 +71,7 @@ public class RelationTableDataController {
 
     // ==================== Table Data CRUD ====================
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @GetMapping("/{tableId}/export")
     @Operation(summary = "Export table data as CSV", description = "Export table data as CSV file")
     public ResponseEntity<byte[]> exportCsv(
@@ -78,6 +85,7 @@ public class RelationTableDataController {
                 .body(csv.getBytes());
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @GetMapping("/{tableId}/template")
     @Operation(summary = "Download import template", description = "CSV/XLSX template with field-name headers")
     public ResponseEntity<byte[]> downloadTemplate(
@@ -95,6 +103,7 @@ public class RelationTableDataController {
                 .body(bytes);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @PostMapping("/{tableId}/import")
     @Operation(summary = "Import table data", description = "Validate a CSV/XLSX upload against the table structure and insert valid rows")
     public ResponseEntity<Map<String, Object>> importData(
@@ -110,6 +119,7 @@ public class RelationTableDataController {
         return ResponseEntity.ok(result);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @GetMapping("/{tableId}")
     @Operation(summary = "Query table data paginated", description = "Dynamically query physical table data using the latest deployed table structure, with search filter support")
     public ResponseEntity<Page<RelationTableDataRowDTO>> queryData(
@@ -121,6 +131,7 @@ public class RelationTableDataController {
         return ResponseEntity.ok(page);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @PostMapping("/{tableId}/query")
     @Operation(summary = "Page table data", description = "Shared list: COUNT(*) and the page share one predicate including toolbar keyword and column filters")
     public ResponseEntity<AdminListPage<RelationTableDataRowDTO>> queryDataPage(
@@ -129,6 +140,7 @@ public class RelationTableDataController {
         return ResponseEntity.ok(listQueryComponent.query(tableId, request));
     }
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @GetMapping("/{tableId}/search")
     @Operation(summary = "Lookup search", description = "Search rows of a table for a LOOKUP field dropdown / derived auto-fill")
     public ResponseEntity<List<Map<String, Object>>> searchForLookup(
@@ -145,6 +157,7 @@ public class RelationTableDataController {
         return ResponseEntity.ok(rows);
     }
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @GetMapping("/{tableId}/view-fields")
     @Operation(summary = "Get view fields", description = "Backfill panel columns for a LOOKUP field")
     public ResponseEntity<List<Map<String, Object>>> getViewFields(
@@ -152,6 +165,7 @@ public class RelationTableDataController {
         return ResponseEntity.ok(dataService.getViewFields(tableId));
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @PostMapping("/{tableId}/primary-keys/allocate")
     @Operation(summary = "Allocate primary key value(s)", description = "Backend PK allocation for Relation Table data add-row (PRD S5)")
     public ResponseEntity<AllocatePrimaryKeyResponse> allocatePrimaryKeys(
@@ -163,6 +177,7 @@ public class RelationTableDataController {
         return ResponseEntity.ok(response);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @PostMapping("/{tableId}")
     @Operation(summary = "Add data", description = "Add a new row to the table")
     public ResponseEntity<RelationTableDataRowDTO> addData(
@@ -173,6 +188,7 @@ public class RelationTableDataController {
         return ResponseEntity.status(HttpStatus.CREATED).body(row);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @PutMapping("/{tableId}/{rowId}")
     @Operation(summary = "Update data", description = "Update a row in the table")
     public ResponseEntity<RelationTableDataRowDTO> updateData(
@@ -184,6 +200,7 @@ public class RelationTableDataController {
         return ResponseEntity.ok(row);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @DeleteMapping("/{tableId}/{rowId}")
     @Operation(summary = "Delete data", description = "Delete a row from the table")
     public ResponseEntity<Void> deleteData(
@@ -198,6 +215,7 @@ public class RelationTableDataController {
 
     private static final Set<String> ALLOWED_STATUSES = Set.of("ACTIVE", "INACTIVE");
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @PutMapping("/{tableId}/{rowId}/status")
     @Operation(summary = "Change data status", description = "Change the Active/Inactive status of data")
     public ResponseEntity<RelationTableDataRowDTO> changeStatus(
@@ -217,6 +235,7 @@ public class RelationTableDataController {
         return ResponseEntity.ok(row);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @PutMapping("/{tableId}/status/batch")
     @Operation(summary = "Batch change data status",
             description = "Set ACTIVE/INACTIVE on several rows at once; all rows succeed or none do")
@@ -235,6 +254,7 @@ public class RelationTableDataController {
 
     // ==================== Audit Log ====================
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "tableId")
     @GetMapping("/{tableId}/audit-logs")
     @Operation(summary = "Query audit logs", description = "Query audit logs for the table, supporting filter by operation time, operator, and action type")
     public ResponseEntity<Page<RelationTableAuditLog>> queryAuditLogs(

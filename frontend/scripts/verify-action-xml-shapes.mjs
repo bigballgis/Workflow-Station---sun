@@ -49,7 +49,8 @@ try{await mkdir('frontend/developer-workstation/verification-screenshots',{recur
  for(const s of samples){
   if(phase==='red'){s.xml=await diagram(s);await api('POST',`/function-units/${s.unit.id}/process`,{bpmnXml:s.xml});await persist()}
   s.cloneIds??=[s.redCloneId,s.greenCloneId].filter(Boolean)
-  const clone=await api('POST',`/function-units/${s.unit.id}/clone?newName=${encodeURIComponent(`Action XML QA clone ${phase} ${Date.now()}`)}`)
+  const {workspaceId}=await api('GET',`/function-units/${s.unit.id}`);assert(workspaceId,`Function unit ${s.unit.id} has no workspace for its clone`)
+  const clone=await api('POST',`/function-units/${s.unit.id}/clone?newName=${encodeURIComponent(`Action XML QA clone ${phase} ${Date.now()}`)}&targetGroupId=${encodeURIComponent(workspaceId)}`)
   s[`${phase}CloneId`]=clone.id;s.cloneIds.push(clone.id);await persist();const actual=await bindingNames(clone.id)
   const healthy=[['Save Draft','Approve'],['Reject']]
   if(phase==='red'&&s.shape!=='selfClosing'){assert(actual[0][0].startsWith('missing:'));assert(actual[1][0].startsWith('missing:'))}else assert.deepEqual(actual,healthy)

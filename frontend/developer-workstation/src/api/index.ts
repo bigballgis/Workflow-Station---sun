@@ -1,10 +1,11 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { refreshToken as refreshAuthToken, clearAuth, getUser } from './auth'
+import { clearAuth, getUser } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage, pickHttpErrorCode } from '@/utils/httpErrorMessage'
 import { isAmTokenReauthCode, readAmToken, refreshAmToken } from '@/utils/amToken'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
+import { installSessionRefresh, wasRetriedAfterSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -13,25 +14,12 @@ declare module 'axios' {
   }
 }
 
-let isRefreshing = false
-let failedQueue: Array<{ resolve: Function; reject: Function }> = []
-
-const processQueue = (error: any, token: string | null = null) => {
-  failedQueue.forEach(prom => {
-    if (error) {
-      prom.reject(error)
-    } else {
-      prom.resolve(token)
-    }
-  })
-  failedQueue = []
-}
-
 const api = axios.create({
   baseURL: '/api/v1',
   timeout: 30000,
   withCredentials: true
 })
+installSessionRefresh(api, config => axios.request(config))
 
 api.interceptors.request.use(
   config => {
@@ -55,32 +43,12 @@ api.interceptors.response.use(
     const originalRequest = error.config
     const { response } = error
     
-    if (response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject })
-        }).then(() => {
-          return api(originalRequest)
-        }).catch(err => Promise.reject(err))
-      }
-
-      originalRequest._retry = true
-      isRefreshing = true
-
-      try {
-        await refreshAuthToken()
-        // refresh_token cookie auto-sent by the browser; backend sets new access_token cookie
-        processQueue(null, null)
-        return api(originalRequest)
-      } catch (refreshError) {
-        processQueue(refreshError, null)
-        clearAuth()
-        setSsoReturnPath(window.location.pathname + window.location.search)
-        redirectToUnifiedLogin('developer-workstation', { autoSso: true })
-        return Promise.reject(refreshError)
-      } finally {
-        isRefreshing = false
-      }
+    // installSessionRefresh already tried a refresh; reaching here un-retried means the session is gone.
+    if (response?.status === 401 && !wasRetriedAfterSessionRefresh(originalRequest)) {
+      clearAuth()
+      setSsoReturnPath(window.location.pathname + window.location.search)
+      redirectToUnifiedLogin('developer-workstation', { autoSso: true })
+      return Promise.reject(error)
     }
 
     // AI gateway rejected (or never got) the user's DSP AMToken: silently fetch a fresh one and

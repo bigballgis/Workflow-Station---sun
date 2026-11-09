@@ -18,6 +18,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDataRowDTO;
+import com.admin.security.AdminOwner;
+import com.admin.security.AdminTeamScope;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationPermissionLevel;
 import com.platform.common.enums.RelationTableStatus;
@@ -59,14 +61,24 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     private final com.admin.service.RelationTablePrimaryKeyAllocationService primaryKeyAllocationService;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final AdminTeamScope teamScope;
     private final RelationTableTemplateService templateService = new RelationTableTemplateService();
 
     /**
      * Resolve the current admin's permission level on a table for the Table Data page.
-     * Admin Center is default-open: super admins and users with no explicit grant for their active
-     * role are treated as READ_WRITE. Only an explicit READONLY grant restricts to view+export.
+     * A table the caller may not change by team scope (another team's, shared with one, or Common for a Technical
+     * Lead, D-47) is READONLY. Otherwise Admin Center is default-open: super admins and users with no explicit grant
+     * for their active role are treated as READ_WRITE. Only an explicit READONLY grant restricts to view+export.
      */
     private String resolveCurrentLevel(Long tableId) {
+        return resolveCurrentLevel(tableId,
+                teamScope.mayWrite(AdminOwner.RELATION_TABLE_ID, String.valueOf(tableId)));
+    }
+
+    private String resolveCurrentLevel(Long tableId, boolean teamWritable) {
+        if (!teamWritable) {
+            return RelationPermissionLevel.READONLY;
+        }
         if (SecurityContextUtils.isSuperAdmin()) {
             return RelationPermissionLevel.READ_WRITE;
         }
@@ -96,9 +108,13 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         Map<Long, List<RelationTableFunctionUnit>> linksByTable = relationTableFunctionUnitResolver.loadLinksByTable(
                 tables.stream().map(RelationTableDefinition::getId).toList());
         Map<String, FunctionUnit> functionUnitsById = relationTableFunctionUnitResolver.loadFunctionUnitsById(linksByTable);
+        // A Technical Lead sees Common tables and those linked to a unit of a team they lead (D-47).
         return tables.stream()
+                .filter(t -> teamScope.mayReadRelationTableLinkedTo(
+                        relationTableFunctionUnitResolver.linkedCodes(linksByTable.get(t.getId()), functionUnitsById)))
                 .map(this::toDeployedTableResponse)
-                .peek(r -> r.setPermissionLevel(resolveCurrentLevel(r.getId())))
+                .peek(r -> r.setPermissionLevel(resolveCurrentLevel(r.getId(), teamScope.mayWriteRelationTableLinkedTo(
+                        relationTableFunctionUnitResolver.linkedCodes(linksByTable.get(r.getId()), functionUnitsById)))))
                 .peek(r -> r.applyFunctionUnits(relationTableFunctionUnitResolver.resolve(linksByTable.get(r.getId()), functionUnitsById)))
                 .collect(Collectors.toList());
     }
@@ -111,8 +127,12 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         Map<Long, List<RelationTableFunctionUnit>> linksByTable = relationTableFunctionUnitResolver.loadLinksByTable(
                 tables.stream().map(RelationTableDefinition::getId).toList());
         Map<String, FunctionUnit> functionUnitsById = relationTableFunctionUnitResolver.loadFunctionUnitsById(linksByTable);
-        // A table linked to multiple Function Units counts toward each of their groups.
-        return relationTableFunctionUnitResolver.groupByFunctionUnitCode(linksByTable, functionUnitsById);
+        // A table linked to multiple Function Units counts toward each of their groups. A Technical Lead's rail lists
+        // only the units of the teams they lead (§8.2), so another team's unit name never shows.
+        Set<String> visible = teamScope.visibleFunctionUnitCodes();
+        return relationTableFunctionUnitResolver.groupByFunctionUnitCode(linksByTable, functionUnitsById).stream()
+                .filter(group -> visible == null || visible.contains(group.getFunctionUnitCode()))
+                .toList();
     }
 
     /**

@@ -1,0 +1,43 @@
+name: Init scripts / k8s bundle check
+
+# The two k8s offline init files (deploy/k8s/init-data/init-platform-schema|seed/all-in-one-for-gui.sql) are
+# generated from deploy/init-scripts in the order of 00-init-all.sh. They used to be synced by hand and fell
+# 25 scripts behind (WP11b F-1: a new k8s environment lacked tables). This job fails when
+#   - a numbered 00-schema script is not run by 00-init-all.sh, or a configured script no longer exists;
+#   - the committed bundles are not what the generator builds from the current scripts.
+# Fix: register the script in 00-init-all.sh, run  node deploy/k8s/init-data/build-all-in-one.mjs  and commit
+# both bundles. Node only, a few seconds.
+
+on:
+  push:
+    paths:
+      - 'deploy/init-scripts/**'
+      - 'deploy/k8s/init-data/**'
+      - '.github/workflows/init-scripts-check.yml'
+  pull_request:
+    paths:
+      - 'deploy/init-scripts/**'
+      - 'deploy/k8s/init-data/**'
+      - '.github/workflows/init-scripts-check.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: init-scripts-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  k8s-bundle-current:
+    name: k8s init bundles match deploy/init-scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check the generated bundles
+        run: node deploy/k8s/init-data/build-all-in-one.mjs --check

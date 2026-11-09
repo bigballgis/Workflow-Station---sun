@@ -35,6 +35,15 @@ public class AdminApiExceptionHandler {
         return respond(HttpStatus.CONFLICT, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
     }
 
+    @ExceptionHandler(AdminServiceUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleServiceUnavailable(
+            AdminServiceUnavailableException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        log.error("Service unavailable [{}] {}: {}", traceId, ex.getErrorCode(),
+                ex.getCause() != null ? ex.getCause().getMessage() : ex.getErrorMessage());
+        return respond(HttpStatus.SERVICE_UNAVAILABLE, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(
             DataIntegrityViolationException ex, HttpServletRequest request) {
@@ -60,6 +69,30 @@ public class AdminApiExceptionHandler {
         String traceId = shortTraceId();
         log.error("Activepieces API error [{}] {}: {}", traceId, ex.getErrorCode(), ex.getErrorMessage());
         return respond(HttpStatus.BAD_GATEWAY, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
+    }
+
+    @ExceptionHandler(FunctionUnitTeamForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleFunctionUnitTeamForbidden(
+            FunctionUnitTeamForbiddenException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        log.warn("Function unit team refused [{}]: {}", traceId, ex.getMessage());
+        return respond(HttpStatus.FORBIDDEN, "FU_TEAM_FORBIDDEN", ex.getMessage(), traceId, request);
+    }
+
+    @ExceptionHandler(AdminForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(
+            AdminForbiddenException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        log.warn("Scope refused [{}]: {}", traceId, ex.getMessage());
+        return respond(HttpStatus.FORBIDDEN, "PERM_ACCESS_DENIED", ex.getMessage(), traceId, request);
+    }
+
+    @ExceptionHandler(UpstreamScopeNotAppliedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUpstreamScopeNotApplied(
+            UpstreamScopeNotAppliedException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        log.error("Upstream scope not applied [{}]: {}", traceId, ex.getMessage());
+        return respond(HttpStatus.BAD_GATEWAY, "UPSTREAM_SCOPE_NOT_APPLIED", ex.getMessage(), traceId, request);
     }
 
     @ExceptionHandler(ApWorkspaceAccessDeniedException.class)

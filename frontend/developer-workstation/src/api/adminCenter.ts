@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { installSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 import i18n from '@/i18n'
 import { getUser } from './auth'
 
@@ -12,6 +13,7 @@ const adminCenterAxios = axios.create({
   timeout: 30000,
   withCredentials: true
 })
+installSessionRefresh(adminCenterAxios, config => axios.request(config))
 
 adminCenterAxios.interceptors.request.use(config => {
   // Add X-User-Id request header for backend permission check
@@ -57,7 +59,7 @@ export interface RoleInfo {
   id: string
   name: string
   code: string
-  type: 'BU_BOUNDED' | 'BU_UNBOUNDED' | 'ADMIN' | 'DEVELOPER'
+  type: 'BU_BOUNDED' | 'ADMIN' | 'DEVELOPER'
   description?: string
   status?: string
 }
@@ -110,12 +112,6 @@ export const adminCenterApi = {
   /** 获取所有BU绑定型角色 */
   getBuBoundedRoles: async (): Promise<RoleInfo[]> => {
     const response = await adminCenterAxios.get('/task-assignment/roles/bu-bounded')
-    return Array.isArray(response) ? response : (response as any)?.data || []
-  },
-
-  /** 获取所有BU无关型角色 */
-  getBuUnboundedRoles: async (): Promise<RoleInfo[]> => {
-    const response = await adminCenterAxios.get('/task-assignment/roles/bu-unbounded')
     return Array.isArray(response) ? response : (response as any)?.data || []
   },
 

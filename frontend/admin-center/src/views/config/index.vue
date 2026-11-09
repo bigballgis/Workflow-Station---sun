@@ -10,6 +10,7 @@
         <el-form
           :model="systemConfig"
           label-width="150px"
+          :disabled="readOnly"
         >
           <el-form-item :label="t('config.sessionTimeout')">
             <el-input-number
@@ -69,7 +70,7 @@
               <el-radio :value="false">{{ t('common.no') }}</el-radio>
             </el-radio-group>
           </el-form-item>
-          <el-form-item>
+          <el-form-item v-if="!readOnly">
             <el-button
               type="primary"
               @click="saveConfig('system')"
@@ -87,6 +88,7 @@
         <el-form
           :model="businessConfig"
           label-width="150px"
+          :disabled="readOnly"
         >
           <el-form-item :label="t('config.processTimeout')">
             <el-input-number
@@ -112,7 +114,7 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item>
+          <el-form-item v-if="!readOnly">
             <el-button
               type="primary"
               @click="saveConfig('business')"
@@ -127,12 +129,15 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated, onMounted } from 'vue'
+import { computed, onActivated, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/PageHeader.vue'
 import { useConfig } from '@/composables/modules/useConfig'
+import { canWrite } from '@/utils/permission'
 
 const { t } = useI18n()
+/** Technical Leads and Auditors see the settings read-only (§8.2, AC-29). */
+const readOnly = computed(() => !canWrite('systemConfig'))
 
 const {
   activeTab, systemConfig, businessConfig, saveConfig, loadConfigs,

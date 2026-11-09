@@ -76,7 +76,11 @@ public class MemberManagementProperties {
                 virtualGroupRoleRepository,
                 memberChangeLogRepository,
                 approverService,
-                objectMapper);
+                objectMapper,
+                mock(com.platform.common.i18n.I18nService.class),
+                mock(com.admin.service.ClaimPoolResyncService.class));
+        // Exit and clearing apply to CUSTOM groups (Portal access groups); tests that need another group stub it.
+        when(virtualGroupRepository.findById(any())).thenAnswer(inv -> Optional.of(createVirtualGroup(inv.getArgument(0))));
     }
     
     // ==================== Property 6: Approval Immediate Effect ====================
@@ -92,9 +96,9 @@ public class MemberManagementProperties {
             @ForAll("validTargetIds") String virtualGroupId,
             @ForAll("validUserIds") String operatorId) {
         
-        // Given: User is not already a member
-        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, userId))
-                .thenReturn(false);
+        // Given: User is not yet a manual member
+        when(virtualGroupMemberRepository.findByGroupIdAndSource(virtualGroupId, VirtualGroupMember.SOURCE_MANUAL))
+                .thenReturn(List.of());
         
         // Given: Virtual group exists
         VirtualGroup virtualGroup = createVirtualGroup(virtualGroupId);
@@ -171,15 +175,41 @@ public class MemberManagementProperties {
             @ForAll("validTargetIds") String virtualGroupId,
             @ForAll("validUserIds") String operatorId) {
         
-        // Given: User is already a member
-        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, userId))
-                .thenReturn(true);
+        // Given: User is already a manual member of the CUSTOM group
+        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(createVirtualGroup(virtualGroupId)));
+        when(virtualGroupMemberRepository.findByGroupIdAndSource(virtualGroupId, VirtualGroupMember.SOURCE_MANUAL))
+                .thenReturn(List.of(manualMember(virtualGroupId, userId)));
         
         // When: Try to add user again
         memberManagementService.addUserToVirtualGroup(userId, virtualGroupId, operatorId);
-        
+
         // Then: Should not save new member
         verify(virtualGroupMemberRepository, never()).save(any(VirtualGroupMember.class));
+    }
+
+    /**
+     * Platform access model 5.2 / 5.4: approval only grants Portal access groups; SYSTEM membership grants
+     * platform roles and team lists are kept by SYS_ADMIN.
+     */
+    @Property(tries = 20)
+    @Label("Approval cannot add anyone to a SYSTEM group or a team")
+    void approvalOutsideCustomGroupsIsRejected(
+            @ForAll("validUserIds") String userId,
+            @ForAll("validTargetIds") String virtualGroupId,
+            @ForAll("nonCustomGroupTypes") String type) {
+        VirtualGroup group = createVirtualGroup(virtualGroupId);
+        group.setType(type);
+        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(group));
+
+        assertThatThrownBy(() -> memberManagementService.addUserToVirtualGroup(userId, virtualGroupId, "approver"))
+                .isInstanceOf(AdminBusinessException.class)
+                .extracting("errorCode").isEqualTo("APPROVAL_CUSTOM_GROUP_ONLY");
+        verify(virtualGroupMemberRepository, never()).save(any(VirtualGroupMember.class));
+    }
+
+    @Provide
+    Arbitrary<String> nonCustomGroupTypes() {
+        return Arbitraries.of("SYSTEM", "DEVELOPER");
     }
     
     // ==================== Property 9: Member Removal Immediate Effect ====================
@@ -203,11 +233,17 @@ public class MemberManagementProperties {
         when(memberChangeLogRepository.save(any(MemberChangeLog.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         
+        // Given: the user's manual membership, next to another user's
+        VirtualGroupMember manual = manualMember(virtualGroupId, userId);
+        when(virtualGroupMemberRepository.findByGroupIdAndSource(virtualGroupId, VirtualGroupMember.SOURCE_MANUAL))
+                .thenReturn(List.of(manual, manualMember(virtualGroupId, "other-user")));
+
         // When: Remove member
         memberManagementService.removeVirtualGroupMember(virtualGroupId, userId, approverId);
-        
-        // Then: Member should be deleted immediately
-        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
+
+        // Then: Only the user's manual membership is deleted; AD membership follows the AD sync (5.5)
+        verify(virtualGroupMemberRepository).deleteAll(List.of(manual));
+        verify(virtualGroupMemberRepository, never()).deleteByGroupIdAndUserId(any(), any());
         
         // Then: Change log should be recorded
         verify(memberChangeLogRepository).save(argThat(log ->
@@ -237,7 +273,7 @@ public class MemberManagementProperties {
                 .hasMessageContaining("not an approver for this virtual group");
         
         // Then: Member should not be deleted
-        verify(virtualGroupMemberRepository, never()).deleteByGroupIdAndUserId(any(), any());
+        verify(virtualGroupMemberRepository, never()).deleteAll(any());
     }
     
     /**
@@ -368,11 +404,16 @@ public class MemberManagementProperties {
         when(memberChangeLogRepository.save(any(MemberChangeLog.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         
+        // Given: the user's manual membership, next to another user's
+        VirtualGroupMember manual = manualMember(virtualGroupId, userId);
+        when(virtualGroupMemberRepository.findByGroupIdAndSource(virtualGroupId, VirtualGroupMember.SOURCE_MANUAL))
+                .thenReturn(List.of(manual, manualMember(virtualGroupId, "other-user")));
+
         // When: Exit virtual group
         memberManagementService.exitVirtualGroup(virtualGroupId, userId);
-        
-        // Then: Member should be deleted
-        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
+
+        // Then: Only the user's manual membership is deleted
+        verify(virtualGroupMemberRepository).deleteAll(List.of(manual));
         
         // Then: Change log should be recorded with EXIT type
         ArgumentCaptor<MemberChangeLog> logCaptor = ArgumentCaptor.forClass(MemberChangeLog.class);
@@ -566,11 +607,16 @@ public class MemberManagementProperties {
         when(memberChangeLogRepository.save(any(MemberChangeLog.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         
+        // Given: the user's manual membership, next to another user's
+        VirtualGroupMember manual = manualMember(virtualGroupId, userId);
+        when(virtualGroupMemberRepository.findByGroupIdAndSource(virtualGroupId, VirtualGroupMember.SOURCE_MANUAL))
+                .thenReturn(List.of(manual, manualMember(virtualGroupId, "other-user")));
+
         // When: Exit virtual group
         memberManagementService.exitVirtualGroup(virtualGroupId, userId);
-        
-        // Then: Member should be deleted immediately (which revokes the inherited role)
-        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
+
+        // Then: The manual membership is deleted immediately (which revokes the inherited role)
+        verify(virtualGroupMemberRepository).deleteAll(List.of(manual));
         
         // Then: Change log should be recorded with EXIT type
         ArgumentCaptor<MemberChangeLog> logCaptor = ArgumentCaptor.forClass(MemberChangeLog.class);
@@ -715,6 +761,11 @@ public class MemberManagementProperties {
                 .build();
     }
     
+    private static VirtualGroupMember manualMember(String groupId, String userId) {
+        return VirtualGroupMember.builder().id(UUID.randomUUID().toString()).groupId(groupId).userId(userId)
+                .source(VirtualGroupMember.SOURCE_MANUAL).build();
+    }
+
     private User createUser(String id) {
         return User.builder()
                 .id(id)

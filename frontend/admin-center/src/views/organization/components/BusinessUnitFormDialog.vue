@@ -5,6 +5,10 @@
     width="500px"
     @update:model-value="$emit('update:modelValue', $event)"
   >
+    <ReferenceNotice
+      v-if="isEdit"
+      :notice="references ?? null"
+    />
     <el-form
       ref="formRef"
       :model="form"
@@ -62,13 +66,21 @@
 </template>
 
 <script setup lang="ts">
+import ReferenceNotice from '@/components/ReferenceNotice.vue'
+import type { ReferenceNotice as ReferenceNoticeData } from '@/types/referenceNotice'
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance } from 'element-plus'
 import { useOrganizationStore } from '@/stores/organization'
 import { BusinessUnit } from '@/api/organization'
 
-const props = defineProps<{ modelValue: boolean; businessUnit: BusinessUnit | null; parent: BusinessUnit | null }>()
+const props = defineProps<{
+  modelValue: boolean
+  businessUnit: BusinessUnit | null
+  parent: BusinessUnit | null
+  /** Where the unit being edited is used (notice only). */
+  references?: ReferenceNoticeData | null
+}>()
 const emit = defineEmits(['update:modelValue', 'success'])
 
 const { t } = useI18n()

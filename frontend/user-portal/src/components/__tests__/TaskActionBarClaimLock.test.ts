@@ -63,6 +63,7 @@ describe('TaskActionBar claim lock', () => {
     expect(Object.keys(TaskActionBar.props ?? {}).sort()).toEqual([
       'actions',
       'canDelegate',
+      'canTransfer', // only hides Transfer (D-60), like canDelegate hides Delegate
       'claimLocked',
       'getActionLabel',
       'getIconComponent',

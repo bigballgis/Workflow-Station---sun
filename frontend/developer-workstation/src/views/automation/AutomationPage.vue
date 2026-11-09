@@ -110,7 +110,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchServiceTaskSession, type ServiceTaskSession } from '@/api/automation'
 import { functionUnitApi, type DevGroupOption } from '@/api/functionUnit'
-import { PUBLIC_GROUP_ID } from '@/utils/devGroupContext'
+import { getMyTeams, PUBLIC_GROUP_ID } from '@/utils/devGroupContext'
 import {
   getAutomationWorkspaceId,
   isAutomationWorkspacePickable,
@@ -165,9 +165,9 @@ async function loadSession() {
     } else if (status === 401) {
       sessionError.value = t('automation.sessionUnauthorized')
     } else if (status === 403) {
-      // Not a member of the requested workspace. Say so plainly instead of quietly
-      // showing another workspace's flows.
-      sessionError.value = t('automation.sessionWorkspaceForbidden')
+      // Refused workspace: say why plainly instead of quietly showing another workspace's flows.
+      // A disabled team (System Administrators and Auditors can still select it) has no workspace at all.
+      sessionError.value = await forbiddenMessage()
     } else {
       sessionError.value = t('automation.sessionLoadFailed')
     }
@@ -175,6 +175,22 @@ async function loadSession() {
   } finally {
     loadingSession.value = false
   }
+}
+
+/** Why the workspace was refused: a disabled team, or one the user is on no list of. */
+async function forbiddenMessage(): Promise<string> {
+  let groups: readonly DevGroupOption[] = getMyTeams()
+  if (!groups.length) {
+    try {
+      groups = (await functionUnitApi.getMyDevGroups())?.data?.groups ?? []
+    } catch (error) {
+      console.error('[AutomationPage] dev group load failed', error)
+    }
+  }
+  const team = groups.find((g) => g.id === getAutomationWorkspaceId())
+  return team?.status === 'INACTIVE'
+    ? t('automation.sessionWorkspaceInactive', { name: team.name })
+    : t('automation.sessionWorkspaceForbidden')
 }
 
 function onWorkspaceChange(groupId: string) {

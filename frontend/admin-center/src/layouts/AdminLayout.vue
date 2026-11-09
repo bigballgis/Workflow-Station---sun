@@ -30,9 +30,9 @@
             </template>
           </el-menu-item>
 
-          <!-- User Management - requires user:read -->
+          <!-- Every entry below is shown by the user's capability for its page (utils/permission) -->
           <el-menu-item
-            v-if="canReadUser"
+            v-if="canRead('users')"
             index="/user/list"
           >
             <el-icon class="nav-anim nav-anim--bounce"><User /></el-icon>
@@ -43,7 +43,7 @@
 
           <!-- Entitlement Management - sub-menu -->
           <el-sub-menu
-            v-if="canReadUser || canReadRole"
+            v-if="canRead('organization') || canRead('virtualGroups') || canRead('roles')"
             index="entitlement"
           >
             <template #title>
@@ -51,28 +51,27 @@
               <span>{{ t('menu.entitlementManagement') }}</span>
             </template>
             <el-menu-item
-              v-if="canReadUser"
+              v-if="canRead('organization')"
               index="/organization"
             >
               {{ t('menu.organization') }}
             </el-menu-item>
             <el-menu-item
-              v-if="canReadUser"
+              v-if="canRead('virtualGroups')"
               index="/virtual-group"
             >
               {{ t('menu.virtualGroup') }}
             </el-menu-item>
             <el-menu-item
-              v-if="canReadRole"
+              v-if="canRead('roles')"
               index="/role"
             >
               {{ t('menu.roleManagement') }}
             </el-menu-item>
           </el-sub-menu>
 
-          <!-- Function Unit - requires system:admin -->
           <el-menu-item
-            v-if="isSystemAdmin"
+            v-if="canRead('functionUnits')"
             index="/function-unit"
           >
             <el-icon class="nav-anim nav-anim--pop"><Box /></el-icon>
@@ -81,49 +80,71 @@
             </template>
           </el-menu-item>
 
-          <!-- BI Management - requires system:admin -->
           <el-sub-menu
-            v-if="isSystemAdmin"
+            v-if="canRead('biDashboardRegistry') || canRead('biAudienceAssignment')
+              || canRead('biDataViewAssignment') || canRead('biRbacMapping')"
             index="bi-management"
           >
             <template #title>
               <el-icon class="nav-anim nav-anim--rise"><DataAnalysis /></el-icon>
               <span>{{ t('menu.biManagement') }}</span>
             </template>
-            <el-menu-item index="/bi-management/dashboard-registry">
+            <el-menu-item
+              v-if="canRead('biDashboardRegistry')"
+              index="/bi-management/dashboard-registry"
+            >
               {{ t('menu.biDashboardRegistry') }}
             </el-menu-item>
-            <el-menu-item index="/bi-management/audience-assignment">
+            <el-menu-item
+              v-if="canRead('biAudienceAssignment')"
+              index="/bi-management/audience-assignment"
+            >
               {{ t('menu.biAudienceAssignment') }}
             </el-menu-item>
-            <el-menu-item index="/bi-management/data-view-assignment">
+            <el-menu-item
+              v-if="canRead('biDataViewAssignment')"
+              index="/bi-management/data-view-assignment"
+            >
               {{ t('menu.biDataViewAssignment') }}
             </el-menu-item>
-            <el-menu-item index="/bi-management/rbac-mapping">
+            <el-menu-item
+              v-if="canRead('biRbacMapping')"
+              index="/bi-management/rbac-mapping"
+            >
               {{ t('menu.biRbacMapping') }}
             </el-menu-item>
           </el-sub-menu>
 
-          <!-- Audit Log - requires audit:read or log:read -->
           <el-sub-menu
-            v-if="canReadAudit"
+            v-if="canRead('auditAdminCenter') || canRead('auditUserPortal') || canRead('ldapSync')"
             index="audit"
           >
             <template #title>
               <el-icon class="nav-anim nav-anim--wobble"><Document /></el-icon>
               <span>{{ t('menu.audit') }}</span>
             </template>
-            <el-menu-item index="/audit/admin-center">
+            <el-menu-item
+              v-if="canRead('auditAdminCenter')"
+              index="/audit/admin-center"
+            >
               {{ t('menu.auditAdminCenter') }}
             </el-menu-item>
-            <el-menu-item index="/audit/user-portal">
+            <el-menu-item
+              v-if="canRead('auditUserPortal')"
+              index="/audit/user-portal"
+            >
               {{ t('menu.auditUserPortal') }}
+            </el-menu-item>
+            <el-menu-item
+              v-if="canRead('ldapSync')"
+              index="/audit/ldap-sync"
+            >
+              {{ t('menu.ldapSync') }}
             </el-menu-item>
           </el-sub-menu>
 
-          <!-- Relation Tables - requires system:admin -->
           <el-sub-menu
-            v-if="isSystemAdmin"
+            v-if="canRead('relationTables')"
             index="relation-tables"
           >
             <template #title>
@@ -139,7 +160,7 @@
           </el-sub-menu>
 
           <el-menu-item
-            v-if="isSystemAdmin || canSystemConfig"
+            v-if="canRead('environmentVariables')"
             index="/environment-variables"
           >
             <el-icon class="nav-anim nav-anim--wobble"><Key /></el-icon>
@@ -150,7 +171,7 @@
 
           <!-- SLA lead time per Function Unit: a production operation, so it lives in Admin Center. -->
           <el-menu-item
-            v-if="canViewSla"
+            v-if="canRead('slaPolicies')"
             index="/sla-policies"
           >
             <el-icon class="nav-anim nav-anim--wobble"><Timer /></el-icon>
@@ -159,11 +180,11 @@
             </template>
           </el-menu-item>
 
-          <!-- Automation Pieces - piece catalog + import/export/enable/delete, requires system:admin.
+          <!-- Automation Pieces - piece catalog + import/export/enable/delete.
                Lives here (not in the Developer Workstation): DW is dev-only and is not part of the
                K8S deployment set, while piece rollout is a production-environment operation. -->
           <el-menu-item
-            v-if="isSystemAdmin"
+            v-if="canRead('automationPieces')"
             index="/automation-pieces"
           >
             <el-icon class="nav-anim nav-anim--pop"><Cpu /></el-icon>
@@ -172,9 +193,9 @@
             </template>
           </el-menu-item>
 
-          <!-- Automation Flow Migration - flow migration page: export from uat, import into prod; requires system:admin -->
+          <!-- Automation Flow Migration - flow migration page: export from uat, import into prod -->
           <el-menu-item
-            v-if="isSystemAdmin"
+            v-if="canRead('automationFlows')"
             index="/automation-flows"
           >
             <el-icon class="nav-anim nav-anim--wobble"><Share /></el-icon>
@@ -186,7 +207,7 @@
           <!-- Automation Runs - flow execution history, moved here from the Developer Workstation
                (dev-only) because triaging a failed automation is a production operation. Read-only. -->
           <el-menu-item
-            v-if="isSystemAdmin"
+            v-if="canRead('automationRuns')"
             index="/automation-runs"
           >
             <el-icon class="nav-anim nav-anim--pop"><Tickets /></el-icon>
@@ -257,7 +278,7 @@ import {
   Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Key, Cpu, Share, Tickets, Timer
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
-import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { canRead } from '@/utils/permission'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -272,15 +293,6 @@ const currentTitle = computed(() => {
   const key = route.meta.titleKey
   return key ? t(key) : ''
 })
-
-// Permission checks
-const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
-const canSystemConfig = computed(() => hasPermission(PERMISSIONS.SYSTEM_CONFIG))
-const canViewSla = computed(() =>
-  hasPermission(PERMISSIONS.SLA_POLICY_VIEW) || hasPermission(PERMISSIONS.SLA_POLICY_EDIT))
-const canReadUser = computed(() => hasPermission(PERMISSIONS.USER_READ))
-const canReadRole = computed(() => hasPermission(PERMISSIONS.ROLE_READ))
-const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ) || hasPermission(PERMISSIONS.LOG_READ))
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value

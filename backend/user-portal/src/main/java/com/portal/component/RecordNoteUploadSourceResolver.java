@@ -50,8 +50,7 @@ public class RecordNoteUploadSourceResolver {
         if ("REQUEST".equals(target.getSourceView()) && user.equals(request.getStartUserId())) {
             return new UploadSource(UploadSourceKind.MY_REQUEST, null, null);
         }
-        if (!access.isSystemAdministrator(user)
-                && !access.canAuditFunctionUnitAsActiveRole(user, request.getFunctionUnitCode())) {
+        if (!access.canAuditFunctionUnit(user, request.getFunctionUnitCode())) {
             throw new RecordNoteException("FORBIDDEN", "Audit upload requires an audit grant on the active role");
         }
         return new UploadSource(UploadSourceKind.AUDIT, null, null);

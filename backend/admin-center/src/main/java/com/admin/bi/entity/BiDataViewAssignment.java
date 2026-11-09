@@ -20,13 +20,17 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
-/** Dashboard binding for one concrete User Portal Table View. */
+/**
+ * Dashboard binding for one User Portal Table View, named by released data: the function unit code and the View
+ * name (unique within a function unit). The View is resolved in the unit's active release on every read, so a
+ * binding survives redeployment and shows as unavailable while the active release has no such View.
+ */
 @Entity
 @Table(name = "bi_data_view_assignment",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"dashboard_id", "view_id"}),
+        uniqueConstraints = @UniqueConstraint(columnNames = {"dashboard_id", "function_unit_code", "view_name"}),
         indexes = {
-                @Index(name = "idx_bi_data_view_assignment_fu", columnList = "function_unit_id"),
-                @Index(name = "idx_bi_data_view_assignment_table", columnList = "table_id"),
+                @Index(name = "idx_bi_data_view_assignment_release_view",
+                        columnList = "function_unit_code, view_name, enabled"),
                 @Index(name = "idx_bi_data_view_assignment_dashboard", columnList = "dashboard_id")
         })
 @EntityListeners(AuditingEntityListener.class)
@@ -44,18 +48,16 @@ public class BiDataViewAssignment {
     @Column(name = "dashboard_id", nullable = false, length = 64)
     private String dashboardId;
 
-    @Column(name = "function_unit_id", nullable = false)
-    private Long functionUnitId;
-
-    @Column(name = "table_id", nullable = false)
-    private Long tableId;
+    @Column(name = "function_unit_code", length = 100)
+    private String functionUnitCode;
 
     @Column(name = "enabled", nullable = false)
     @Builder.Default
     private Boolean enabled = true;
 
-    @Column(name = "view_id")
-    private Long viewId;
+    /** Null only for a legacy binding that could not be carried over (schema 103). */
+    @Column(name = "view_name", length = 255)
+    private String viewName;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -14,29 +14,41 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
+import com.admin.security.AdminTeamScope;
 
 @RestController
 @RequestMapping("/environment-variables")
 @Tag(name = "Environment variables", description = "TEXT / VAULT environment catalog")
+@AdminAccess(AdminAudience.SHARED_READ)
 public class EnvironmentVariableController extends AbstractBaseController {
 
     private final EnvironmentVariableComponent environmentVariableComponent;
+    private final AdminTeamScope teamScope;
 
-    public EnvironmentVariableController(EnvironmentVariableComponent environmentVariableComponent) {
+    public EnvironmentVariableController(EnvironmentVariableComponent environmentVariableComponent,
+                                         AdminTeamScope teamScope) {
         this.environmentVariableComponent = environmentVariableComponent;
+        this.teamScope = teamScope;
     }
 
+    /** Technical Leads and Auditors read the catalog without Vault paths (D-44); only SYS_ADMIN sees them. */
     @GetMapping
     @Operation(summary = "List environment variables for the current deploy_env")
     public ResponseEntity<ApiResponse<List<EnvironmentVariableResponse>>> list(
             @RequestParam(required = false) EnvironmentValueKind kind) {
-        return handleRequest(() -> environmentVariableComponent.list(kind));
+        return handleRequest(() -> environmentVariableComponent.list(kind).stream().map(this::forCaller).toList());
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Get environment variable")
     public ResponseEntity<ApiResponse<EnvironmentVariableResponse>> get(@PathVariable String id) {
-        return handleRequest(() -> environmentVariableComponent.getById(id));
+        return handleRequest(() -> forCaller(environmentVariableComponent.getById(id)));
+    }
+
+    private EnvironmentVariableResponse forCaller(EnvironmentVariableResponse variable) {
+        return teamScope.caller().isSysAdmin() ? variable : variable.withoutSecrets();
     }
 
     @PostMapping

@@ -14,6 +14,7 @@ import {
   type RoleOptionResponse
 } from '@/api/biManagement'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+import { canWrite } from '@/utils/permission'
 
 const ACTIONS_COL_WIDTH = 200
 
@@ -28,9 +29,12 @@ export function useBiRbac() {
 
   const query = reactive({ roleName: '', roleType: undefined as string | undefined })
 
+  /** Mappings are SYS_ADMIN's; Technical Leads and Auditors read them (D-21, D-52). */
+  const writable = computed(() => canWrite('biRbacMapping'))
   const grid = useAdminListGrid<RbacMappingResponse>({
     storageKey: 'admin-list-layout:bi-rbac',
-    extraWidth: ACTIONS_COL_WIDTH,
+    // No action column for a read-only viewer, so the columns take its width.
+    extraWidth: () => (writable.value ? ACTIONS_COL_WIDTH : 0),
   })
 
   // Edit dialog
@@ -178,6 +182,7 @@ export function useBiRbac() {
   }
 
   return {
+    writable,
     loading, syncing, editLoading, supersetRolesLoading, allSupersetRoles,
     query, editDialogVisible, editForm, activeSupersetRoles,
     createDialogVisible, createLoading, unmappedRolesLoading, createSupersetRolesLoading,

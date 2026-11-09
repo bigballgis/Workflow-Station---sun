@@ -44,7 +44,7 @@ class RoleEntityPropertyTest {
         // Generate random data
         String name = "Role-" + UUID.randomUUID().toString().substring(0, 8);
         String code = "CODE_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        String type = new String[]{"BU_UNBOUNDED", "BU_BOUNDED", "DEVELOPER", "SYSTEM"}[(int)(Math.random() * 4)];
+        String type = new String[]{"BU_BOUNDED", "ADMIN", "AUDITOR", "DEVELOPER"}[(int)(Math.random() * 4)];
         String displayName = "Display Name " + UUID.randomUUID().toString();
         String status = Math.random() > 0.5 ? "ACTIVE" : "INACTIVE";
         Boolean isSystem = Math.random() > 0.5;

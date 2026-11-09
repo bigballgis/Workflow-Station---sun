@@ -1,9 +1,10 @@
+import type { ReferenceNotice } from '@/types/referenceNotice'
 import { get, post, put, del } from './request'
 import type { AdminListPage, PageResult } from '@/types/common'
 import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 /** 角色类型 */
-export type RoleType = 'BU_BOUNDED' | 'BU_UNBOUNDED' | 'BUSINESS' | 'ADMIN' | 'AUDITOR' | 'DEVELOPER'
+export type RoleType = 'BU_BOUNDED' | 'BUSINESS' | 'ADMIN' | 'AUDITOR' | 'DEVELOPER'
 
 export interface Role {
   id: string
@@ -17,27 +18,6 @@ export interface Role {
   memberCount?: number
   createdAt: string
   updatedAt?: string
-}
-
-export interface Permission {
-  id: string
-  name: string
-  code: string
-  resourceType: string
-  actions: string[]
-  parentId?: string
-  children?: Permission[]
-}
-
-export interface RolePermission {
-  roleId: string
-  permissionId: string
-  actions: string[]
-  conditions?: {
-    timeRange?: { start: string; end: string }
-    ipWhitelist?: string[]
-    dataScope?: string
-  }
 }
 
 export interface CreateRoleRequest {
@@ -66,7 +46,6 @@ export interface RoleListQuery {
 
 // 角色管理API
 const ROLE_BASE = '/roles'
-const PERMISSION_BASE = '/permissions'
 
 export const roleApi = {
   /** 获取角色列表，支持按类型筛选和分页 */
@@ -92,39 +71,21 @@ export const roleApi = {
   
   delete: (id: string) => del<void>(`${ROLE_BASE}/${id}`),
   
-  getPermissions: (id: string) => get<RolePermission[]>(`${ROLE_BASE}/${id}/permissions`),
-  
-  updatePermissions: (id: string, permissions: RolePermission[]) => 
-    put<void>(`${ROLE_BASE}/${id}/permissions`, permissions),
-  
-  getMembers: (id: string, params?: { page?: number; size?: number }) => 
-    get<any>(`${ROLE_BASE}/${id}/members`, { params }),
-  
-  addMember: (roleId: string, userId: string, reason?: string) => 
-    post<void>(`${ROLE_BASE}/${roleId}/members/${userId}`, null, { 
-      params: { reason }
-    }),
-  
-  removeMember: (roleId: string, userId: string, reason?: string) => 
-    del<void>(`${ROLE_BASE}/${roleId}/members/${userId}`, { 
-      params: { reason }
-    }),
-  
-  batchAddMembers: (roleId: string, userIds: string[], reason?: string) => 
-    post<any>(`${ROLE_BASE}/${roleId}/members/batch`, { userIds, reason }),
-  
-  batchRemoveMembers: (roleId: string, userIds: string[], reason?: string) => 
-    del<any>(`${ROLE_BASE}/${roleId}/members/batch`, { 
-      data: { userIds, reason }
-    }),
-  
-  getMemberCount: (id: string) => get<number>(`${ROLE_BASE}/${id}/members/count`),
-  
-  getHistory: (id: string) => get<any[]>(`${ROLE_BASE}/${id}/history`)
+  /** Function units and other places that use the role; shown before a change or delete (notice only). */
+  getReferences: (id: string) => get<ReferenceNotice>(`${ROLE_BASE}/${id}/references`),
+
+  /** Who holds the role: SYSTEM group members, team lists, or business unit memberships, by role type. */
+  getHolders: (id: string) => get<RoleHolder[]>(`${ROLE_BASE}/${id}/holders`)
 }
 
-export const permissionApi = {
-  getTree: () => get<Permission[]>(`${PERMISSION_BASE}`),
-  
-  getByRole: (roleId: string) => get<Permission[]>(`${PERMISSION_BASE}/role/${roleId}`)
+/** Someone holding a role, and through which group, team or business unit. */
+export interface RoleHolder {
+  userId: string
+  username: string
+  fullName?: string
+  employeeId?: string
+  email?: string
+  status: string
+  scopeType: 'GROUP' | 'TEAM' | 'BUSINESS_UNIT'
+  scopeName: string
 }

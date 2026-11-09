@@ -13,6 +13,9 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.exception.ResourceNotFoundException;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -55,6 +60,9 @@ class EmailMonitorRuleComponentImplTest {
 
     @Mock
     private I18nService i18nService;
+
+    @Mock
+    private WorkspaceRouteOwnership routeOwnership;
 
     @InjectMocks
     private EmailMonitorRuleComponentImpl component;
@@ -383,6 +391,58 @@ class EmailMonitorRuleComponentImplTest {
                 () -> component.assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID));
 
         assertEquals("VALIDATION_CONNECTION_NOT_INBOUND", ex.getErrorCode());
+    }
+
+    @Test
+    void create_targetFormOfAnotherUnit_isNotFound() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailMonitorRuleRequest request = sampleTemplateRequest();
+        request.setTargetFormId(777L);
+
+        when(functionUnitRepository.findById(FUNCTION_UNIT_ID)).thenReturn(Optional.of(functionUnit));
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(inboundConnection(functionUnit)));
+        doThrow(new ResourceNotFoundException("Form", "777"))
+                .when(routeOwnership).requireInUnit(Owned.FORM, 777L, FUNCTION_UNIT_ID);
+
+        assertThrows(ResourceNotFoundException.class, () -> component.create(FUNCTION_UNIT_ID, request));
+        verify(emailMonitorRuleRepository, never()).save(any());
+    }
+
+    @Test
+    void update_targetBindingOfAnotherForm_isNotFound() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailMonitorRuleRequest request = sampleTemplateRequest();
+        request.setTargetFormId(5L);
+        request.setTargetBindingId("888");
+
+        when(emailMonitorRuleRepository.findById(TEMPLATE_RULE_ID))
+                .thenReturn(Optional.of(sampleTemplate(TEMPLATE_RULE_ID)));
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(inboundConnection(functionUnit)));
+        doThrow(new ResourceNotFoundException("FormTableBinding", "888"))
+                .when(routeOwnership).requireBindingOfForm(888L, 5L);
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> component.update(FUNCTION_UNIT_ID, TEMPLATE_RULE_ID, request));
+        verify(emailMonitorRuleRepository, never()).save(any());
+    }
+
+    @Test
+    void create_targetBindingWithoutFormOfAnotherUnit_isNotFound() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailMonitorRuleRequest request = sampleTemplateRequest();
+        request.setTargetBindingId("888");
+
+        when(functionUnitRepository.findById(FUNCTION_UNIT_ID)).thenReturn(Optional.of(functionUnit));
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(inboundConnection(functionUnit)));
+        // lenient: the (absent) form id reaches the same method first with other arguments
+        lenient().doThrow(new ResourceNotFoundException("FormTableBinding", "888"))
+                .when(routeOwnership).requireInUnit(Owned.FORM_BINDING, 888L, FUNCTION_UNIT_ID);
+
+        assertThrows(ResourceNotFoundException.class, () -> component.create(FUNCTION_UNIT_ID, request));
+        verify(emailMonitorRuleRepository, never()).save(any());
     }
 
     private EmailMonitorRule readyBinding(Long templateId) {

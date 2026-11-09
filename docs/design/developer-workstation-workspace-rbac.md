@@ -1,5 +1,8 @@
 # Developer Workstation：功能单元工作区隔离（Technical Lead / Team Lead / Developer）
 
+> **已取代（2026-11）。** 本文的目标规则全文由 [平台访问模型 PRD](./platform-access-model-requirements.md) 取代，下文只是旧模型的实现记录，不要按它开发或排障。
+> 现行规则：Team Lead 已删除；团队（DEVELOPER 虚拟组）= Workspace，角色按团队的 Technical Lead / Developer 两份名单判断（§4.4、§6.1–6.2）；每个功能单元恰好属于一个 Workspace，移动只收一个目标（§6.3）；System Administrator 对所有 Workspace 有全部权限，Auditor 全部只读；不再有自建的 BU_UNBOUNDED 角色（§5.3）。
+
 本文档描述 **developer-workstation** 中围绕 **FunctionUnit（功能单元）** 的工作区访问模型：与 admin-center 的开发者角色、虚拟开发组、JWT 权限如何配合，以及实现落点与已知边界。
 
 ## 目标
@@ -84,7 +87,7 @@
 
 ## 相关文档
 
-- 门户终端用户的 **业务单元角色（UBR）、工作台上下文、BU_UNBOUNDED 仅虚拟组** 等规则见 [portal-bu-rbac.md](./portal-bu-rbac.md)（与本文 developer 工作区模型互补，不重复展开）。
+- 门户终端用户的 **业务单元角色（UBR）、工作台上下文** 等规则见 [portal-bu-rbac.md](./portal-bu-rbac.md)（与本文 developer 工作区模型互补，不重复展开）。BU_UNBOUNDED 角色类型已随平台访问模型删除（D-64）。
 
 ---
 

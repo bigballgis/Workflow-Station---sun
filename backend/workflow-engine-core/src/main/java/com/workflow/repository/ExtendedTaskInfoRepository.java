@@ -25,6 +25,16 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
      */
     Optional<ExtendedTaskInfo> findByTaskIdAndIsDeletedFalse(String taskId);
 
+    List<ExtendedTaskInfo> findByTaskIdInAndIsDeletedFalse(java.util.Collection<String> taskIds);
+
+    /**
+     * Open MI rows assigned by role (a BU + Role pool per row; {@code MultiInstanceTaskWriter} writes
+     * {@code "assigneeMode":"role"} with the row's BU and role codes into {@code extended_properties}).
+     */
+    @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.isDeleted = false AND (t.status IS NULL OR t.status <> 'COMPLETED') "
+            + "AND t.extendedProperties LIKE '%\"assigneeMode\":\"role\"%'")
+    List<ExtendedTaskInfo> findOpenMiRoleRows();
+
     /**
      * Find all tasks by process instance ID.
      */

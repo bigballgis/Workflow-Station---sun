@@ -183,7 +183,7 @@ class FunctionUnitCloneFieldMetadataTest {
             return t;
         });
 
-        component.clone(1L, "Cloned");
+        component.clone(1L, "Cloned", "vg-team-a");
 
         TableDefinition clonedOrder = findClone(clonedByTableName, "order");
         TableDefinition clonedShipment = findClone(clonedByTableName, "shipment");
@@ -262,7 +262,7 @@ class FunctionUnitCloneFieldMetadataTest {
         });
 
         DeveloperBusinessException ex = assertThrows(DeveloperBusinessException.class,
-                () -> component.clone(1L, "Cloned"));
+                () -> component.clone(1L, "Cloned", "vg-team-a"));
         assertEquals("COMPUTED_FIELD_CLONE_INVALID", ex.getErrorCode());
     }
 

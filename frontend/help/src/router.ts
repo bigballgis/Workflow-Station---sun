@@ -3,6 +3,9 @@ import { BASIC_HASH_REDIRECTS } from './formCtlBasic'
 import { EXTEND_HASH_REDIRECTS } from './formCtlExtend'
 import { GUIDELINES } from './guidelines'
 import i18n from './i18n'
+import { helpHistoryEntryKey, installHelpScroll } from './utils/helpScroll'
+
+const helpScroll = installHelpScroll()
 
 const routes: RouteRecordRaw[] = [
   {
@@ -22,11 +25,10 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
+  // Articles scroll in `main.help-main`, not the window: helpScroll does the scrolling.
   scrollBehavior(to) {
-    if (to.hash) {
-      return { el: to.hash, top: 80 }
-    }
-    return { top: 0 }
+    void helpScroll.navigate(helpHistoryEntryKey(to.fullPath), to.hash)
+    return false
   },
 })
 

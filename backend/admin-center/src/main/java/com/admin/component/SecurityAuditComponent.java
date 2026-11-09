@@ -8,6 +8,7 @@ import com.admin.repository.AuditLogRepository;
 import com.admin.repository.SecurityPolicyRepository;
 import com.admin.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.admin.audit.AuditSecrets;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -185,9 +186,11 @@ public class SecurityAuditComponent {
                 .userName(operator.userName())
                 .ipAddress(fitColumn(request.getIpAddress(), MAX_IP_ADDRESS))
                 .userAgent(fitColumn(request.getUserAgent(), MAX_USER_AGENT))
-                .oldValue(request.getOldValue())
-                .newValue(request.getNewValue())
-                .changeDetails(request.getChangeDetails())
+                // The single writer of the operation audit: whatever a snapshot came from (entity, request body,
+                // detail map, LDAP sync), no secret is stored (D-21, AuditSecrets).
+                .oldValue(AuditSecrets.maskJson(objectMapper, request.getOldValue()))
+                .newValue(AuditSecrets.maskJson(objectMapper, request.getNewValue()))
+                .changeDetails(AuditSecrets.maskJson(objectMapper, request.getChangeDetails()))
                 .success(request.getSuccess())
                 // An upstream failure message is arbitrary length — AP hands back whole pnpm stderr
                 // dumps. Untrimmed it blew the varchar(500) and the INSERT failed, so the audit row

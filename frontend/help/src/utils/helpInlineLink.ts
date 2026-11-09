@@ -31,8 +31,16 @@ const PATH_TITLE: Record<string, string> = {
   '/email-send#extra': 'emailSendGuide.extraTitle',
   '/email-monitor': 'guides.emailMonitor.title',
   '/environment-variables': 'guides.environmentVariables.title',
+  '/table-data': 'guides.tableData.title',
+  '/relation-table-structure': 'guides.rtStructure.title',
+  '/sla-policies': 'guides.slaPolicies.title',
+  '/ac-audit-ldap-sync': 'guides.ldapSync.title',
+  '/bi-audience-assignment': 'biAudienceGuide.title',
+  '/bi-data-view-assignment': 'biViewGuide.title',
   '/action-email': 'guides.actionEmail.title',
   '/action-allowed-roles': 'guides.actionAllowedRoles.title',
+  '/up-tasks-to-claim#lost-access': 'upTasksToClaimGuide.lostTitle',
+  '/task-delegate': 'guides.taskDelegate.title',
 }
 
 for (const ctl of BASIC_FORM_CONTROLS) {

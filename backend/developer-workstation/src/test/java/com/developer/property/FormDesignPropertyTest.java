@@ -45,7 +45,8 @@ public class FormDesignPropertyTest {
                 mock(com.developer.component.impl.OwnerFieldFormReconciler.class),
                 repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository,
                 subTableViewConfigRepository, objectMapper, i18nService, jdbcTemplate, subTableViewService,
-                mock(com.developer.component.impl.FormTableBindingUniquenessGuard.class));
+                mock(com.developer.component.impl.FormTableBindingUniquenessGuard.class),
+                mock(com.developer.security.WorkspaceRouteOwnership.class));
         
         assertThat(component).isNotNull();
         assertThat(config).isNotNull();

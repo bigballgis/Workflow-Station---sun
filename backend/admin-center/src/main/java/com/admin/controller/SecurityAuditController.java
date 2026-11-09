@@ -37,17 +37,23 @@ import java.util.List;
 
 import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.i18n.I18nService;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
+import com.admin.audit.AuditSecrets;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Slf4j
 @RestController
 @RequestMapping("/security")
 @RequiredArgsConstructor
 @Tag(name = "Security Audit", description = "Security policy configuration and audit log management APIs")
+@AdminAccess(AdminAudience.ADMIN_READ)
 public class SecurityAuditController {
     
     private final SecurityAuditComponent securityAuditComponent;
     private final AdminAuditListQueryComponent adminAuditListQueryComponent;
     private final I18nService i18nService;
+    private final ObjectMapper objectMapper;
     
     // ==================== Security Policy Management ====================
     
@@ -92,6 +98,7 @@ public class SecurityAuditController {
     
     // ==================== Password Validation ====================
     
+    @AdminAccess(AdminAudience.ADMIN_READ)
     @PostMapping("/validate-password")
     @Operation(summary = "Validate password against policy")
     public ResponseEntity<PasswordValidationResult> validatePassword(@RequestBody String password) {
@@ -113,6 +120,7 @@ public class SecurityAuditController {
             "USER", "VIRTUAL_GROUP"
     );
     
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/audit-logs/query")
     @Operation(summary = "Query audit logs")
     public ResponseEntity<Page<AuditLog>> queryAuditLogs(
@@ -122,9 +130,10 @@ public class SecurityAuditController {
         Pageable effective = pageable.getSort().isSorted() ? pageable
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Direction.DESC, "timestamp"));
-        return ResponseEntity.ok(securityAuditComponent.queryAuditLogs(request, effective));
+        return ResponseEntity.ok(forReaders(securityAuditComponent.queryAuditLogs(request, effective)));
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/audit-logs/list-query")
     @Operation(summary = "Query audit logs (true paging; column filters and sort)")
     public ResponseEntity<AdminListPage<AdminAuditListRow>> queryAuditLogList(
@@ -132,16 +141,19 @@ public class SecurityAuditController {
         return ResponseEntity.ok(adminAuditListQueryComponent.query(request));
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @GetMapping("/audit-logs/resource-types")
     @Operation(summary = "Get all resource type enum values (for frontend dropdown filter)")
     public ResponseEntity<List<String>> getResourceTypes() {
         return ResponseEntity.ok(ALL_RESOURCE_TYPES);
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @GetMapping("/audit-logs/{id}")
     @Operation(summary = "Get one audit log including before/after snapshots")
     public ResponseEntity<AuditLog> getAuditLog(@PathVariable String id) {
         return adminAuditListQueryComponent.findById(id)
+                .map(log -> AuditSecrets.forReaders(objectMapper, log))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -178,22 +190,34 @@ public class SecurityAuditController {
         return req;
     }
     
+    @AdminAccess(AdminAudience.SHARED_READ)
     @GetMapping("/audit-logs/user/{userId}")
     @Operation(summary = "Get user audit logs")
     public ResponseEntity<Page<AuditLog>> getAuditLogsByUser(
             @PathVariable String userId, Pageable pageable) {
-        return ResponseEntity.ok(securityAuditComponent.getAuditLogsByUser(userId, pageable));
+        return ResponseEntity.ok(forReaders(securityAuditComponent.getAuditLogsByUser(userId, pageable)));
     }
     
+    @AdminAccess(AdminAudience.SHARED_READ)
     @GetMapping("/audit-logs/resource/{resourceType}/{resourceId}")
     @Operation(summary = "Get resource audit logs")
     public ResponseEntity<Page<AuditLog>> getAuditLogsByResource(
             @PathVariable String resourceType,
             @PathVariable String resourceId,
             Pageable pageable) {
-        return ResponseEntity.ok(securityAuditComponent.getAuditLogsByResource(resourceType, resourceId, pageable));
+        return ResponseEntity.ok(forReaders(
+                securityAuditComponent.getAuditLogsByResource(resourceType, resourceId, pageable)));
+    }
+
+    /**
+     * Snapshots leave with their secrets masked, rows written before masking included (D-21: Technical Leads and
+     * Auditors read them). The list and the export carry no snapshot.
+     */
+    private Page<AuditLog> forReaders(Page<AuditLog> page) {
+        return page.map(log -> AuditSecrets.forReaders(objectMapper, log));
     }
     
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/audit-logs/export")
     @Operation(summary = "Export audit logs")
     public ResponseEntity<byte[]> exportAuditLogs(
@@ -236,7 +260,7 @@ public class SecurityAuditController {
         };
     }
     
-    private static final ZoneId EXPORT_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId EXPORT_ZONE = ZoneId.of("Asia/Hong_Kong");
     private static final DateTimeFormatter EXPORT_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(EXPORT_ZONE);
 

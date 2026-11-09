@@ -116,6 +116,19 @@ class BuRolePoolTasksTest {
         assertThat(BuRolePoolTasks.isMiRoleAssignedTask(null)).isFalse();
     }
 
+    @Test
+    void anyPoolKindHasAPoolButOneAssignedPersonDoesNot() {
+        assertThat(BuRolePoolTasks.hasPool(task("BU_ROLE", "alice"))).isTrue();
+        TaskInfo people = task("ASSIGNEE_FROM_VARIABLE", "alice");
+        people.setPoolKind("PEOPLE");
+        assertThat(BuRolePoolTasks.hasPool(people)).isTrue();
+        TaskInfo direct = task("PROCESS_INITIATOR", "alice");
+        direct.setPoolKind("NONE");
+        assertThat(BuRolePoolTasks.hasPool(direct)).isFalse();
+        assertThat(BuRolePoolTasks.hasPool(task("PROCESS_INITIATOR", "alice"))).isFalse();
+        assertThat(BuRolePoolTasks.hasPool(null)).isFalse();
+    }
+
     private static TaskInfo task(String bpmnAssigneeType, String assignee) {
         return TaskInfo.builder()
                 .taskId("t-1")

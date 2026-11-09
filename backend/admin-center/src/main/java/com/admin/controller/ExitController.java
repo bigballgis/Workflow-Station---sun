@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Exit process controller for managing user exit operations.
@@ -100,6 +102,7 @@ public class ExitController {
      * @param userId The user ID performing the exit
      * @return Success response
      */
+    @AdminAccess(value = AdminAudience.SYS_ADMIN, services = true)
     @PostMapping("/business-units/{businessUnitId}/users/{userId}")
     @Operation(
         summary = "退出业务单元",

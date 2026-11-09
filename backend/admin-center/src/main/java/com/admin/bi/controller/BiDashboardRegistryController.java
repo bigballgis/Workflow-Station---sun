@@ -19,6 +19,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Dashboard registry management controller
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Dashboard Registry Management", description = "Dashboard sync, query, update, status toggle, delete and other endpoints")
+@AdminAccess(AdminAudience.SHARED_READ)
 public class BiDashboardRegistryController {
 
     private final BiDashboardRegistryService dashboardRegistryService;
@@ -54,6 +57,7 @@ public class BiDashboardRegistryController {
         return ResponseEntity.ok(page);
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/query")
     @Operation(summary = "Query Dashboards (true paging; column filters and sort)")
     public ResponseEntity<AdminListPage<DashboardRegistryResponse>> queryDashboards(

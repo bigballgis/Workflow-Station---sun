@@ -220,7 +220,7 @@ Element Plus 的 `useZIndex().nextZIndex()` 动态取；点外关闭要把 telep
 
 ### 6.1 行可见范围：不越权
 
-先回答：**这个列表的行可见范围由什么决定？**（全量 / 本人发起 / 本人参与 / BU+Role / 系统管理员绕过）
+先回答：**这个列表的行可见范围由什么决定？**（全量 / 本人发起 / 本人参与 / BU+Role）。Portal 里没有系统管理员绕过（平台访问模型 D-05）。
 把它下推到 SQL 后，**最终判定**必须精确；近似匹配只能用来缩小候选范围，不能直接决定可见性。
 
 PR #107 被否决的写法（`MainTableViewSqlQueryCompiler#compileInvolvement`，原文保留作反面教材）：
@@ -291,7 +291,7 @@ LIMIT :size OFFSET :offset
 **门禁：** 该菜单接入提交里必须先有两条**失败测试**再写实现——(1)「非参与用户查询该视图，结果不含某行」；
 (2)「粗筛结果 ⊇ 精确结果」的超集不变式。这两条是本次重做最重要的产出物。
 
-系统管理员绕过（`SYS_ADMIN`）沿用 skill `view-access-control` 的既有语义，不在本文重新定义。
+没有系统管理员绕过：`SYS_ADMIN` 与其他人一样只看自己参与的行（skill `view-access-control`、平台访问模型 PRD §7.2 / D-05）。
 
 #### 6.1.1 MAIN / SUB 视图的行身份，以及为什么必须分三步走
 
@@ -836,6 +836,7 @@ Action 列可继续 `fixed="right"`（§6.6），不代替共享表头。
 | `/bi-management/data-view-assignment` | `DataViewAssignment.vue` |
 | `/bi-management/rbac-mapping` | `RbacMapping.vue` |
 | `/audit/admin-center`、`/audit/user-portal` | 两页审计列表 |
+| `/audit/ldap-sync` | `ldap-sync/index.vue`（LDAP 同步记录，只读，D-51） |
 | `/relation-tables/structure` | `structure/index.vue` |
 | `/relation-tables/data`、`/relation-tables/data/:fu` | `RelationTableDataGrid.vue` |
 | `/automation-pieces` | `automation-piece/index.vue` |
@@ -968,7 +969,7 @@ Action 列可继续 `fixed="right"`（§6.6），不代替共享表头。
 **正例（期望）**
 
 1. 同上场景，非参与用户查询结果**不含**该行；参与用户（发起人 / 历史办理人 / 真实 MI 参与人）
-  结果**包含**该行；`SYS_ADMIN` 按 `view-access-control` 既有语义可见全部。
+  结果**包含**该行；`SYS_ADMIN` 也只看到自己参与的行（D-05，没有绕过）。
 2. 切表后：新表的请求**不带**旧表筛选；列头状态与实际查询条件一致（要么都是新表的持久化筛选，要么都为空）。
 3. 共享列头菜单对 TEXT / ENUM / USER / BOOLEAN / NUMBER / DATETIME **都没有** Group 项；
   网格没有分组行；查询请求没有 `groupBy`。

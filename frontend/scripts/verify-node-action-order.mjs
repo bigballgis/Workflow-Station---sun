@@ -215,7 +215,9 @@ try {
   // Opt in: some local deployments do not assign a team to clones, preventing cleanup.
   if (process.env.VERIFY_CLONE === '1') {
     // Cloning remaps action IDs; compare the resulting names in the same ordered UI.
-    const clone = await api('post', `/function-units/${fu.id}/clone?newName=${encodeURIComponent(`QA Cloned Action Order ${Date.now()}`)}`)
+    const { workspaceId } = await api('get', `/function-units/${fu.id}`)
+    assert(workspaceId, `Function unit ${fu.id} has no workspace for its clone`)
+    const clone = await api('post', `/function-units/${fu.id}/clone?newName=${encodeURIComponent(`QA Cloned Action Order ${Date.now()}`)}&targetGroupId=${encodeURIComponent(workspaceId)}`)
     created.push(clone.id)
     await page.goto(`${origin}/dev/function-units/${clone.id}`, { waitUntil: 'networkidle' })
     await node('review_a').click()

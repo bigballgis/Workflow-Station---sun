@@ -1,10 +1,11 @@
+import { fetchWithSessionRefresh } from '../auth/sessionRefresh'
 export type StoredFileFetchResult = 'ok' | 'not-found' | 'failed'
 
 export async function fetchStoredFileBlob(
   url: string,
 ): Promise<{ ok: true; blob: Blob } | { ok: false; result: Exclude<StoredFileFetchResult, 'ok'> }> {
   try {
-    const response = await fetch(url, { credentials: 'include' })
+    const response = await fetchWithSessionRefresh(url, { credentials: 'include' })
     if (!response.ok) {
       return { ok: false, result: response.status === 404 ? 'not-found' : 'failed' }
     }

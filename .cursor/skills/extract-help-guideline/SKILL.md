@@ -215,7 +215,7 @@ This portal is **not a tutorial** — the reader already uses Form Design / Tabl
 
 | Do | Don't |
 |---|---|
-| “If BU and Role are both empty, only System Administrator sees the view.” | Copy mermaid of Portal services |
+| “If BU and Role are both empty, no one can see the view after it is published.” | Copy mermaid of Portal services |
 | Formula samples: `quantity * unit_price` on `help_pr_line` | Leftover names that contradict the screenshot (`leave_request`) |
 | Task heading: “Lock a field” / “Block Save” | Heading that is only the method name (`disabled()`) |
 | Playwright asserts **code** (method + `help_pr` field names) | Asserting “If you want” prose (it changes per locale) |

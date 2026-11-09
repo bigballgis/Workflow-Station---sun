@@ -231,7 +231,10 @@ public class TaskApprovalCompletionComponent {
                         "The task is no longer active in the workflow engine (completed, cancelled, or superseded). "
                                 + "Please refresh your todo list.");
             }
-            throw new PortalException("500", message);
+            // An engine refusal (4xx) keeps its status; anything else is a failure of ours.
+            Object status = data.get("status");
+            boolean refused = status instanceof Number n && n.intValue() >= 400 && n.intValue() < 500;
+            throw new PortalException(refused ? String.valueOf(((Number) status).intValue()) : "500", message);
         }
 
         log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})",

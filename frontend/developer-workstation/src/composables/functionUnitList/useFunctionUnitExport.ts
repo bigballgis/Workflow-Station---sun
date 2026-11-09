@@ -3,6 +3,7 @@ import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { functionUnitApi, type FunctionUnitResponse } from '@/api/functionUnit'
+import { pickBlobHttpErrorMessage } from '@/utils/httpErrorMessage'
 
 interface UseFunctionUnitExportOptions {
   list: Ref<FunctionUnitResponse[]>
@@ -51,8 +52,7 @@ export function useFunctionUnitExport(options: UseFunctionUnitExportOptions) {
       ElMessage.success(t('functionUnit.exportSuccess'))
       showExportDialog.value = false
     } catch (e: unknown) {
-      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-      ElMessage.error(message || t('functionUnit.exportFailed'))
+      ElMessage.error((await pickBlobHttpErrorMessage(e)) || t('functionUnit.exportFailed'))
     } finally {
       exporting.value = false
     }

@@ -61,14 +61,4 @@ public interface RoleRepository extends JpaRepository<Role, String> {
      * 按 ID 列表批量查询角色
      */
     List<Role> findByIdIn(List<String> ids);
-
-    /**
-     * 查找用户的所有角色
-     * Note: Using native query since platform-security Role doesn't have userRoles relationship
-     */
-    @Query(value = "SELECT r.* FROM sys_roles r " +
-           "JOIN sys_user_roles ur ON r.id = ur.role_id " +
-           "WHERE ur.user_id = :userId AND r.status = 'ACTIVE'",
-           nativeQuery = true)
-    List<Role> findByUserId(@Param("userId") String userId);
 }

@@ -11,6 +11,7 @@ import {
 import { formatUploadCellText } from '@platform-shared/upload/uploadFieldValue'
 import { uploadPropsBlockDownload } from '@platform-shared/upload/uploadDownloadFlags'
 import type { ColumnConfig } from './types'
+import { fetchWithSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 interface UseSubTableUploadCellsOptions {
   displayColumns: ComputedRef<ColumnConfig[]>
@@ -68,7 +69,7 @@ export function useSubTableUploadCells(options: UseSubTableUploadCellsOptions) {
     const msg = ElMessage({ message: t('common.downloading'), type: 'info', duration: 0 })
 
     try {
-      const response = await fetch(fetchUrl, { credentials: 'include' })
+      const response = await fetchWithSessionRefresh(fetchUrl, { credentials: 'include' })
       if (!response.ok) {
         msg.close()
         ElMessage.error(response.status === 404 ? t('common.fileNotFound') : t('common.downloadFailed'))

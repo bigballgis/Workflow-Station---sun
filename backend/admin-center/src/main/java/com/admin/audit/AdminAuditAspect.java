@@ -16,7 +16,6 @@ import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -345,13 +344,34 @@ public class AdminAuditAspect {
         };
     }
 
+    /**
+     * The list a manual member change is on, written the way the AD sync writes it: as requested for a team, and the
+     * only list ({@code MEMBER}) of any other group, where the request leaves it out.
+     */
+    private String memberList(String groupId, Object requested) {
+        if (requested != null || groupId == null) {
+            return requested == null ? null : String.valueOf(requested);
+        }
+        return virtualGroupRepository.findById(groupId)
+                .filter(group -> !"DEVELOPER".equals(group.getType()))
+                .map(group -> com.platform.security.entity.VirtualGroupMember.LIST_MEMBER)
+                .orElse(null);
+    }
+
     private AuditMeta resolveVgMeta(String method, String groupId, Object[] args) {
         return switch (method) {
             case "createVirtualGroup"  -> new AuditMeta(AuditAction.CREATE, "VIRTUAL_GROUP", null);
             case "updateVirtualGroup"  -> new AuditMeta(AuditAction.UPDATE, "VIRTUAL_GROUP", groupId);
             case "deleteVirtualGroup"  -> new AuditMeta(AuditAction.DELETE, "VIRTUAL_GROUP", groupId);
-            case "addMember"           -> new AuditMeta(AuditAction.CREATE, "VIRTUAL_GROUP", groupId);
-            case "removeMember"        -> new AuditMeta(AuditAction.DELETE, "VIRTUAL_GROUP", groupId);
+            // Membership changes name the person, the list and the source (platform access model 5.5)
+            case "addMember"           -> new AuditMeta(AuditAction.CREATE, "VIRTUAL_GROUP", groupId,
+                    args.length > 1 && args[1] instanceof com.admin.dto.request.VirtualGroupMemberRequest req
+                            ? detailJson("userId", req.getUserId(), "listType", memberList(groupId, req.getListType()),
+                                    "source", "MANUAL")
+                            : null);
+            case "removeMember"        -> new AuditMeta(AuditAction.DELETE, "VIRTUAL_GROUP", groupId,
+                    detailJson("userId", args.length > 1 ? args[1] : null,
+                            "listType", memberList(groupId, args.length > 2 ? args[2] : null), "source", "MANUAL"));
             case "activateGroup"       -> new AuditMeta(AuditAction.UPDATE, "VIRTUAL_GROUP", groupId);
             case "deactivateGroup"     -> new AuditMeta(AuditAction.UPDATE, "VIRTUAL_GROUP", groupId);
             case "claimTask"           -> new AuditMeta(AuditAction.UPDATE, "TASK", groupId);
@@ -602,7 +622,8 @@ public class AdminAuditAspect {
                     default               -> null;
                 };
                 if (entity == null) return null;
-                return "CONFIG".equals(resourceType) ? toJsonMasked(entity) : toJson(entity);
+                // Every snapshot is masked: a user row carries its password hash (D-21, readers include TLs).
+                return toJsonMasked(entity);
             });
         } catch (Throwable e) {
             log.debug("Could not fetch audit entity state (type={}, id={}): {}",
@@ -808,28 +829,15 @@ public class AdminAuditAspect {
         }
     }
 
-    private static final String[] SENSITIVE_FIELDS = {
-        "password", "passwordHash", "newPassword", "oldPassword",
-        "initialPassword", "confirmPassword", "secret", "token",
-        "accessToken", "refreshToken", "apiKey"
-    };
-
+    /** Serialised with every secret masked at any depth ({@link AuditSecrets}); never written unmasked. */
     private String toJsonMasked(Object obj) {
         if (obj == null) return null;
+        String json = toJson(obj);
         try {
-            String json = mapper.writeValueAsString(obj);
-            ObjectNode node = (ObjectNode) mapper.readTree(json);
-            for (String field : SENSITIVE_FIELDS) {
-                if (node.has(field)) node.put(field, "***");
-            }
-            // SystemConfig flagged encrypted: its value is a secret, keep it out of the audit log.
-            if (node.path("encrypted").asBoolean(false)) {
-                if (node.has("configValue"))  node.put("configValue", "***");
-                if (node.has("defaultValue")) node.put("defaultValue", "***");
-            }
-            return mapper.writeValueAsString(node);
+            return mapper.writeValueAsString(AuditSecrets.mask(mapper.readTree(json)));
         } catch (Exception e) {
-            return toJson(obj);
+            // toJson answered its own error stub, which holds no value of the object.
+            return json;
         }
     }
 

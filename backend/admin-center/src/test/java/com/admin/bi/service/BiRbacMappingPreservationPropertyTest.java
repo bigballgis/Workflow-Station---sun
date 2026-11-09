@@ -143,7 +143,7 @@ class BiRbacMappingPreservationPropertyTest {
                                     .id(roleId)
                                     .name(names.get(i))
                                     .code("CODE_" + names.get(i).toUpperCase())
-                                    .type("BU_UNBOUNDED")
+                                    .type("BU_BOUNDED")
                                     .status("ACTIVE")
                                     .build();
                             roles.add(role);

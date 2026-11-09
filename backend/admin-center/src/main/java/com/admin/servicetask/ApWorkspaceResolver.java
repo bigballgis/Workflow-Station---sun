@@ -5,6 +5,7 @@ import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
 import com.admin.servicetask.config.ServiceTaskProperties;
 import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,13 +14,12 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Automation workspace 解析 —— 把 DW 的「开发组（团队）」映射到一个 AP project。
  *
- * <p>DW 的工作区模型是「团队 scope × 能力角色」（见 DW 的
- * {@code FunctionUnitWorkspaceAccessService}）。Automation 沿用同一把尺：
+ * <p>与 DW 同一口径（平台访问模型 §6.1、D-20，见 DW 的 {@code FunctionUnitWorkspaceAccessService}）：
+ * SYS_ADMIN 进所有团队的 workspace；团队的 Technical Lead、Developer 进本团队；Auditor 只读。
  * <ul>
  *   <li>团队组 {@code <id>} → AP {@code externalProjectId = <prefix><id>}，AP 的
  *       managed-authn 首次见到即自建 TEAM project 并写入成员；</li>
@@ -39,25 +39,27 @@ import java.util.Set;
  * <p>Public 的写权限收敛到 {@code SYS_ADMIN}（与 FU 的 Public 组规则一致）：其余人以
  * {@code Viewer} 角色签会话，AP 路由层直接拒绝一切写操作（{@code Viewer} 只有 READ_*）。</p>
  *
- * <p><b>团队 workspace 内的写权限＝能力角色</b>（FR-B23，与 FU 的二维模型对齐）：团队成员身份
- * 决定<i>看得见</i>，{@code TECH_LEAD} / {@code TEAM_LEAD} / {@code DEVELOPER} 才决定<i>改得动</i>。
- * 无能力角色的纯团队成员同样以 {@code Viewer} 签会话——只读进入不是靠前端收按钮，AP 侧照样拒写。</p>
+ * <p><b>团队 workspace 内的写权限＝该团队的名单</b>：在 Technical Lead 或 Developer 名单上的人可写，
+ * SYS_ADMIN 可写；Auditor 以 {@code Viewer} 签会话——只读进入不是靠前端收按钮，AP 侧照样拒写。
+ * 一个团队的名单不给别的团队任何权限（§4.4）。</p>
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class ApWorkspaceResolver {
 
-    /** DW 团队组的虚拟组类型；其余类型（SYSTEM 等）不是开发团队，不能作为 workspace。 */
-    private static final Set<String> TEAM_TYPES = Set.of("CUSTOM", "DEVELOPER");
+    /** DW 团队组的虚拟组类型；CUSTOM 是 Portal 准入组、SYSTEM 是平台角色组，都不是 workspace（§5.1）。 */
+    private static final String TEAM_TYPE = "DEVELOPER";
 
     /** DW 前端「全部团队」哨兵（管理员）：不按单一团队过滤，Automation 侧按 Public 处理。 */
     private static final String ALL_SENTINEL = "__ALL__";
 
     private static final String ROLE_SYS_ADMIN = "SYS_ADMIN";
+    private static final String ROLE_AUDITOR = "AUDITOR";
 
-    /** DW 能力角色：在团队 scope 内决定"改得动"（与 FunctionUnitWorkspaceAccessService 同一套）。 */
-    private static final Set<String> CAPABILITY_ROLES = Set.of("TECH_LEAD", "TEAM_LEAD", "DEVELOPER");
+    /** A team's two lists; being on either lets the user work in the team's workspace. */
+    private static final List<String> TEAM_LISTS =
+            List.of(VirtualGroupMember.LIST_TECH_LEAD, VirtualGroupMember.LIST_DEVELOPER);
 
     private final ServiceTaskProperties properties;
     private final VirtualGroupRepository virtualGroupRepository;
@@ -86,7 +88,7 @@ public class ApWorkspaceResolver {
      * @param userId           当前用户 id（成员校验用）
      * @param requestedGroupId 前端 {@code X-Dev-Group-Id} 传入的组 id；空 / {@code __ALL__} / Public 组
      *                         id 一律解析为 Public workspace
-     * @throws ApWorkspaceAccessDeniedException 组不存在 / 非开发团队 / 已停用 / 非成员（且非 SYS_ADMIN）
+     * @throws ApWorkspaceAccessDeniedException 组不存在 / 非开发团队 / 已停用 / 不在名单上（且非 SYS_ADMIN、AUDITOR）
      */
     public ApWorkspace resolve(String userId, String requestedGroupId) {
         boolean sysAdmin = isSysAdmin();
@@ -99,7 +101,7 @@ public class ApWorkspaceResolver {
         VirtualGroup group = virtualGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ApWorkspaceAccessDeniedException(groupId,
                         "Automation workspace '" + groupId + "' does not exist"));
-        if (!TEAM_TYPES.contains(group.getType())) {
+        if (!TEAM_TYPE.equals(group.getType())) {
             throw new ApWorkspaceAccessDeniedException(groupId,
                     "Virtual group '" + groupId + "' is not a developer team and cannot be an Automation workspace");
         }
@@ -107,15 +109,15 @@ public class ApWorkspaceResolver {
             throw new ApWorkspaceAccessDeniedException(groupId,
                     "Automation workspace '" + group.getName() + "' is inactive");
         }
-        if (!sysAdmin && !isMember(userId, groupId)) {
-            // 非成员：显式 403，不回落 Public——静默降级会让人以为看到的是该团队的 flow。
+        boolean onList = isOnTeamList(userId, groupId);
+        if (!sysAdmin && !onList && !SecurityContextUtils.hasRole(ROLE_AUDITOR)) {
+            // 不在名单上：显式 403，不回落 Public——静默降级会让人以为看到的是该团队的 flow。
             throw new ApWorkspaceAccessDeniedException(groupId,
                     "You are not a member of Automation workspace '" + group.getName() + "'");
         }
 
-        // 团队成员身份 → 可见；能力角色 → 可写。纯成员拿 Viewer 会话（AP 侧拒写），
-        // 这样 FR-B15 的只读兜底对 Automation 才是安全的：能进，但改不动。
-        boolean canWrite = sysAdmin || hasAnyCapabilityRole();
+        // 名单上的人与 SYS_ADMIN 可写；Auditor 拿 Viewer 会话（AP 侧拒写）。
+        boolean canWrite = sysAdmin || onList;
         return new ApWorkspace(groupId, group.getName(),
                 properties.getManaged().getTeamProjectExternalIdPrefix() + groupId,
                 projectRoleFor(canWrite), platformRoleFor(sysAdmin), canWrite, false);
@@ -124,10 +126,6 @@ public class ApWorkspaceResolver {
     private String projectRoleFor(boolean canWrite) {
         ServiceTaskProperties.Managed managed = properties.getManaged();
         return canWrite ? managed.getProjectRole() : managed.getReadOnlyProjectRole();
-    }
-
-    private boolean hasAnyCapabilityRole() {
-        return CAPABILITY_ROLES.stream().anyMatch(SecurityContextUtils::hasRole);
     }
 
     /**
@@ -158,21 +156,20 @@ public class ApWorkspaceResolver {
         return resolve(userId, externalProjectId.substring(prefix.length()));
     }
 
-    /** 管理面可选的 workspace（Public + 全部 ACTIVE 团队组），供 flow 导入选目标用。 */
+    /** 管理面可选的 workspace（Public + 全部 ACTIVE 团队），供 flow 导入选目标用；可写按当前用户在各团队的名单。 */
     public List<ApWorkspace> listSelectableWorkspaces() {
         boolean sysAdmin = isSysAdmin();
+        String userId = SecurityContextUtils.getCurrentUserId().orElse(null);
         List<ApWorkspace> options = new ArrayList<>();
         options.add(publicWorkspace(sysAdmin));
         String prefix = properties.getManaged().getTeamProjectExternalIdPrefix();
-        for (String type : TEAM_TYPES) {
-            for (VirtualGroup group : virtualGroupRepository.findByTypeAndStatus(type, "ACTIVE")) {
-                if (group.getId().equals(properties.getManaged().getPublicGroupId())) {
-                    continue;
-                }
-                boolean canWrite = sysAdmin || hasAnyCapabilityRole();
-                options.add(new ApWorkspace(group.getId(), group.getName(), prefix + group.getId(),
-                        projectRoleFor(canWrite), platformRoleFor(sysAdmin), canWrite, false));
+        for (VirtualGroup group : virtualGroupRepository.findByTypeAndStatus(TEAM_TYPE, "ACTIVE")) {
+            if (group.getId().equals(properties.getManaged().getPublicGroupId())) {
+                continue;
             }
+            boolean canWrite = sysAdmin || isOnTeamList(userId, group.getId());
+            options.add(new ApWorkspace(group.getId(), group.getName(), prefix + group.getId(),
+                    projectRoleFor(canWrite), platformRoleFor(sysAdmin), canWrite, false));
         }
         options.sort(Comparator.comparing(ApWorkspace::publicWorkspace).reversed()
                 .thenComparing(ApWorkspace::name));
@@ -212,11 +209,12 @@ public class ApWorkspaceResolver {
         return sysAdmin ? managed.getPlatformRole() : managed.getMemberPlatformRole();
     }
 
-    private boolean isMember(String userId, String groupId) {
+    /** On the team's Technical Lead or Developer list, from AD or by hand. */
+    private boolean isOnTeamList(String userId, String groupId) {
         if (userId == null || userId.isBlank()) {
             return false;
         }
-        return virtualGroupMemberRepository.findByGroupIdAndUserId(groupId, userId).isPresent();
+        return virtualGroupMemberRepository.isActiveUserOnLists(groupId, userId, TEAM_LISTS);
     }
 
     private boolean isSysAdmin() {

@@ -43,7 +43,7 @@ Method: for every `*Controller` / `*ServiceImpl` / `*ComponentImpl` in `src/main
 
 **admin-center — ~40 controllers with zero test refs**, including security-critical ones:
 `AuthController` (which also contains 3 empty-catch logout calls, see §4), `SsoAuthController`,
-`AuthSsoExchangeController`, `SsoInternalController`, `SecurityAuditController`, `PermissionController`,
+`AuthSsoExchangeController`, `SsoInternalController`, `SecurityAuditController`, `PermissionController` (removed in WP10),
 `TaskAssignmentController`, `UserController`, `RoleController`, `BusinessUnitController`,
 `LdapSyncController`, all 5 `Bi*` (Superset) controllers, `AuthServiceImpl`. [GAP]
 

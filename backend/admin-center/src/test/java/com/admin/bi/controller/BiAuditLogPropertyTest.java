@@ -24,7 +24,7 @@ import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.UserBusinessUnitRoleRepository;
-import com.admin.repository.UserRoleRepository;
+import com.admin.service.UserRoleIdResolver;
 import com.admin.service.UserBusinessUnitService;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -63,7 +63,7 @@ class BiAuditLogPropertyTest {
     private UserRepository userRepository;
     private RoleRepository roleRepository;
     private BusinessUnitRepository businessUnitRepository;
-    private UserRoleRepository userRoleRepository;
+    private UserRoleIdResolver userRoleIdResolver;
     private UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private UserBusinessUnitService userBusinessUnitService;
     private BiDashboardAssignmentServiceImpl assignmentService;
@@ -80,14 +80,14 @@ class BiAuditLogPropertyTest {
         userRepository = mock(UserRepository.class);
         roleRepository = mock(RoleRepository.class);
         businessUnitRepository = mock(BusinessUnitRepository.class);
-        userRoleRepository = mock(UserRoleRepository.class);
+        userRoleIdResolver = mock(UserRoleIdResolver.class);
         userBusinessUnitRoleRepository = mock(UserBusinessUnitRoleRepository.class);
         userBusinessUnitService = mock(UserBusinessUnitService.class);
         assignmentService = new BiDashboardAssignmentServiceImpl(
                 assignmentRepository, registryRepository,
                 userRepository, roleRepository, businessUnitRepository,
-                userRoleRepository, userBusinessUnitRoleRepository, userBusinessUnitService,
-                new DashboardRoleGate(mock(BiRbacMappingService.class), new BiProperties(), userRoleRepository),
+                userRoleIdResolver, userBusinessUnitRoleRepository, userBusinessUnitService,
+                new DashboardRoleGate(mock(BiRbacMappingService.class), new BiProperties(), userRoleIdResolver),
                 mock(jakarta.persistence.EntityManager.class));
     }
 

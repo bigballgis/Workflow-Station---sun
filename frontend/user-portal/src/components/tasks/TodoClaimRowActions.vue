@@ -18,6 +18,17 @@
     >
       {{ t('task.unclaim') }}
     </el-button>
+    <!-- Holder lost Portal entry: Take over first; Release Claim and Reassign go into "More" (the
+         column fits two buttons). The task page banner shows all three. -->
+    <el-button
+      v-else-if="task.canTakeOver"
+      type="warning"
+      :loading="loading"
+      data-test="todo-take-over-btn"
+      @click="$emit('take-over', task)"
+    >
+      {{ t('task.takeOver') }}
+    </el-button>
     <el-button
       v-else-if="task.canForceUnclaim"
       type="warning"
@@ -33,8 +44,42 @@
       class="todo-held"
       data-test="todo-held"
     >{{ t('task.heldByOther') }}</span>
+    <el-dropdown
+      v-if="moreMenu"
+      trigger="click"
+      data-test="todo-more-actions"
+      @command="onMore"
+    >
+      <el-button
+        :loading="loading"
+        data-test="todo-more-btn"
+      >
+        {{ t('common.more') }}
+        <el-icon class="el-icon--right">
+          <ArrowDown />
+        </el-icon>
+      </el-button>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item
+            v-if="task.canForceUnclaim"
+            command="force-unclaim"
+            data-test="todo-more-force-unclaim"
+          >
+            {{ t('task.forceUnclaim') }}
+          </el-dropdown-item>
+          <el-dropdown-item
+            v-if="task.canReassign"
+            command="reassign"
+            data-test="todo-more-reassign"
+          >
+            {{ t('task.reassign') }}
+          </el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
     <el-button
-      v-if="task.canReassign"
+      v-else-if="task.canReassign"
       type="primary"
       plain
       :loading="loading"
@@ -47,22 +92,34 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ArrowDown } from '@element-plus/icons-vue'
 import type { TaskInfo } from '@/api/task'
 
-defineProps<{
+const props = defineProps<{
   task: TaskInfo
   loading: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   claim: [task: TaskInfo]
   unclaim: [task: TaskInfo]
   'force-unclaim': [task: TaskInfo]
+  'take-over': [task: TaskInfo]
   reassign: [task: TaskInfo]
 }>()
 
 const { t } = useI18n()
+
+/** Take over is shown: Release Claim and Reassign of the same row move into "More". */
+const moreMenu = computed(() => !props.task.claimable && !props.task.claimedByCurrentUser
+  && !!props.task.canTakeOver && (!!props.task.canForceUnclaim || !!props.task.canReassign))
+
+function onMore(command: 'force-unclaim' | 'reassign'): void {
+  if (command === 'force-unclaim') emit('force-unclaim', props.task)
+  else emit('reassign', props.task)
+}
 </script>
 
 <style scoped>

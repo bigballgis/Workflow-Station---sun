@@ -42,6 +42,12 @@
         {{ item.name }}
       </h3>
       <p
+        v-if="workspaceWarning"
+        class="card-workspace-warning"
+      >
+        {{ workspaceWarning }}
+      </p>
+      <p
         v-if="item.description"
         class="card-description-preview"
       >
@@ -84,7 +90,6 @@
         @click.stop
       >
         <el-button
-          v-if="permissions.canEdit()"
           size="small"
           @click="$emit('settings', item)"
         >
@@ -92,7 +97,6 @@
           {{ t('functionUnit.setting') }}
         </el-button>
         <el-button
-          v-if="permissions.canEdit()"
           size="small"
           type="primary"
           @click="$emit('edit', item)"
@@ -101,7 +105,7 @@
           {{ t('common.edit') }}
         </el-button>
         <el-button
-          v-if="permissions.canClone()"
+          v-if="canClone"
           size="small"
           type="warning"
           @click="$emit('clone', item)"
@@ -110,7 +114,7 @@
           {{ t('functionUnit.clone') }}
         </el-button>
         <el-button
-          v-if="item.status === 'ARCHIVED' && permissions.canEdit()"
+          v-if="item.status === 'ARCHIVED' && canManage"
           size="small"
           type="success"
           @click="$emit('restore', item)"
@@ -119,7 +123,7 @@
           {{ t('functionUnit.restore') }}
         </el-button>
         <el-button
-          v-if="permissions.canDelete()"
+          v-if="canManage"
           size="small"
           :type="isArchived ? 'danger' : 'info'"
           @click="$emit('delete', item)"
@@ -138,7 +142,7 @@ import { useI18n } from 'vue-i18n'
 import { Edit, CopyDocument, Delete, Box, Setting, RefreshLeft } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
-import { permissions, isFunctionUnitReadOnly } from '@/utils/permission'
+import { canCloneFunctionUnits, canManageFunctionUnit, isFunctionUnitReadOnly } from '@/utils/permission'
 
 const { t } = useI18n()
 const MAX_DISPLAY_TAGS = 3
@@ -160,6 +164,17 @@ const emit = defineEmits<{
 const displayTags = computed(() => props.tags.slice(0, MAX_DISPLAY_TAGS))
 const extraTagCount = computed(() => Math.max(0, props.tags.length - MAX_DISPLAY_TAGS))
 const itemReadOnly = computed(() => isFunctionUnitReadOnly(props.item))
+const canManage = computed(() => canManageFunctionUnit(props.item))
+const canClone = computed(() => canCloneFunctionUnits())
+// Platform access model D-09 / D-33: a unit whose team is disabled or deleted is shown to System Administrators and
+// Auditors, marked, so it can be moved to another team.
+const workspaceWarning = computed(() => {
+  if (props.item.workspaceStatus === 'INACTIVE') {
+    return t('devGroup.workspaceDisabled', { name: props.item.workspaceName ?? '' })
+  }
+  return props.item.workspaceStatus === 'MISSING' ? t('devGroup.workspaceMissing') : ''
+})
+
 
 const statusType = computed(() => {
   const map: Record<string, string> = { 
@@ -307,6 +322,13 @@ function handleClick() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.card-workspace-warning {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: var(--el-color-warning-dark-2);
+  text-align: center;
 }
 
 .card-description-preview {

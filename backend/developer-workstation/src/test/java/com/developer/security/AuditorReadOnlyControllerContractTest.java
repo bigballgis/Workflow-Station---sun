@@ -3,7 +3,6 @@ package com.developer.security;
 import com.developer.controller.ExportImportController;
 import com.developer.controller.FileUploadController;
 import com.developer.controller.IconLibraryController;
-import com.developer.controller.MemberController;
 import com.developer.controller.SubTableViewController;
 import org.junit.jupiter.api.Test;
 
@@ -55,16 +54,6 @@ class AuditorReadOnlyControllerContractTest {
                 Set.of(annotationOn(IconLibraryController.class, "upload").value()));
         assertEquals(Set.of("FUNCTION_UNIT_UPDATE"),
                 Set.of(annotationOn(IconLibraryController.class, "delete").value()));
-    }
-
-    @Test
-    void memberMutationsRequireAssignDevGroup() throws Exception {
-        assertEquals(Set.of("FUNCTION_UNIT_VIEW"),
-                Set.of(annotationOn(MemberController.class, "getMember").value()));
-        assertEquals(Set.of("FUNCTION_UNIT_ASSIGN_DEV_GROUP"),
-                Set.of(annotationOn(MemberController.class, "createMember").value()));
-        assertEquals(Set.of("FUNCTION_UNIT_ASSIGN_DEV_GROUP"),
-                Set.of(annotationOn(MemberController.class, "deleteMember").value()));
     }
 
     @Test

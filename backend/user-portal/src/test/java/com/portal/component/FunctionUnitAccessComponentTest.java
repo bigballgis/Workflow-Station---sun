@@ -5,12 +5,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.platform.common.dto.UserPrincipal;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,10 +23,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * Focused unit tests for View-access-related FU gate behavior (code resolve + SYS_ADMIN).
+ * Focused unit tests for the FU gate: code resolve, current workspace role, no SYS_ADMIN bypass.
  */
 @ExtendWith(MockitoExtension.class)
 class FunctionUnitAccessComponentTest {
@@ -41,11 +47,17 @@ class FunctionUnitAccessComponentTest {
         component = new FunctionUnitAccessComponent(restTemplate);
     }
 
+    @AfterEach
+    void clearSession() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void canAccessFunctionUnit_resolvesCodeBeforeAccessLookup() {
         mockResolveCodeToCatalogId(FU_CODE, CATALOG_ID);
         mockAccessRoles(CATALOG_ID, List.of("MANAGER"));
         mockPortalRoles(USER_ID, List.of(Map.of("id", "role-manager", "code", "MANAGER")));
+        signIn(USER_ID, "role-manager", false);
 
         assertThat(component.canAccessFunctionUnit(USER_ID, FU_CODE)).isTrue();
     }
@@ -59,25 +71,52 @@ class FunctionUnitAccessComponentTest {
         assertThat(component.canAccessFunctionUnit(USER_ID, FU_CODE)).isFalse();
     }
 
+    /**
+     * D-05: no System Administrator shortcut — the access roles decide, and the admin-profile role
+     * list is never even consulted.
+     */
     @Test
-    void isSystemAdministrator_usesAdminProfileNotPortal() {
-        mockProfileRoles(USER_ID, "ADMIN", List.of(Map.of("code", "SYS_ADMIN")));
+    void systemAdministratorWithoutAnAccessRoleIsDenied() {
+        signIn("user-view-admin", "role-clerk-id", true);
+        mockResolveCodeToCatalogId(FU_CODE, CATALOG_ID);
+        mockAccessRoles(CATALOG_ID, List.of("MANAGER"));
+        mockPortalRoles("user-view-admin", List.of(Map.of("id", "role-clerk-id", "code", "CLERK")));
 
-        assertThat(component.isSystemAdministrator(USER_ID)).isTrue();
+        assertThat(component.canAccessFunctionUnit("user-view-admin", FU_CODE)).isFalse();
+        verify(restTemplate, never()).exchange(contains("profileContext=ADMIN"), eq(HttpMethod.GET), isNull(),
+                any(ParameterizedTypeReference.class));
     }
 
+    /** §7.2: launch / view access follows the current workspace role, not every role the user holds. */
     @Test
-    void isSystemAdministrator_falseWhenOnlyPortalBusinessRoles() {
-        mockProfileRoles(USER_ID, "PORTAL", List.of(Map.of("code", "MANAGER")));
+    void canAccessFunctionUnit_followsCurrentWorkspaceRoleOnly() {
+        mockResolveCodeToCatalogId(FU_CODE, CATALOG_ID);
+        mockAccessRoles(CATALOG_ID, List.of("ROLE_Y"));
+        mockPortalRoles(USER_ID, List.of(
+                Map.of("id", "role-x-id", "code", "ROLE_X"),
+                Map.of("id", "role-y-id", "code", "ROLE_Y")));
 
-        assertThat(component.isSystemAdministrator(USER_ID)).isFalse();
+        signIn(USER_ID, "role-x-id", false);
+        assertThat(component.canAccessFunctionUnit(USER_ID, FU_CODE)).isFalse();
+
+        signIn(USER_ID, "role-y-id", false);
+        assertThat(component.canAccessFunctionUnit(USER_ID, FU_CODE)).isTrue();
     }
 
+    /** §7.2: audit access follows the current workspace role too, System Administrator included. */
     @Test
-    void sysAdminBypassesFunctionUnitAccessWithoutRoleIntersection() {
-        mockProfileRoles("user-view-admin", "ADMIN", List.of(Map.of("code", "SYS_ADMIN")));
+    void canAuditFunctionUnit_followsCurrentWorkspaceRoleOnly() {
+        mockResolveCodeToCatalogId(FU_CODE, CATALOG_ID);
+        mockAuditRoles(CATALOG_ID, List.of("AUDITOR_ROLE"));
+        mockPortalRoles(USER_ID, List.of(
+                Map.of("id", "role-x-id", "code", "ROLE_X"),
+                Map.of("id", "role-audit-id", "code", "AUDITOR_ROLE")));
 
-        assertThat(component.canAccessFunctionUnit("user-view-admin", FU_CODE)).isTrue();
+        signIn(USER_ID, "role-x-id", true);
+        assertThat(component.canAuditFunctionUnit(USER_ID, FU_CODE)).isFalse();
+
+        signIn(USER_ID, "role-audit-id", true);
+        assertThat(component.canAuditFunctionUnit(USER_ID, FU_CODE)).isTrue();
     }
 
     @Test
@@ -96,8 +135,17 @@ class FunctionUnitAccessComponentTest {
         assertThat(filtered).extracting(u -> u.get("id")).containsExactly("unit-x");
     }
 
+    /** §7.2: outside permission self-service, no current role means no roles — never all of them combined. */
     @Test
-    void filterAccessibleFunctionUnits_withoutActiveRole_keepsAllHeldRoles() {
+    void filterAccessibleFunctionUnits_withoutActiveRoleOutsideSelfService_returnsEmpty() {
+        signInSession(USER_ID, "FULL");
+
+        assertThat(component.filterAccessibleFunctionUnits(USER_ID, List.of(enabledUnit("unit-x")), null)).isEmpty();
+    }
+
+    @Test
+    void filterAccessibleFunctionUnits_selfServiceWithoutActiveRole_keepsAllHeldRoles() {
+        signInSession(USER_ID, "PERMISSION_SELF_SERVICE_ONLY");
         mockPortalRoles(USER_ID, List.of(
                 Map.of("id", "role-x-id", "code", "ROLE_X"),
                 Map.of("id", "role-y-id", "code", "ROLE_Y")));
@@ -220,6 +268,38 @@ class FunctionUnitAccessComponentTest {
                 isNull(),
                 any(ParameterizedTypeReference.class)))
                 .thenReturn(ResponseEntity.ok(accessList));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void mockAuditRoles(String functionUnitId, List<String> roleCodes) {
+        List<Map<String, Object>> accessList = roleCodes.stream()
+                .map(code -> Map.<String, Object>of(
+                        "targetType", "ROLE",
+                        "targetCode", code,
+                        "targetId", "role-" + code.toLowerCase()))
+                .toList();
+
+        when(restTemplate.exchange(
+                contains("/function-units/" + functionUnitId + "/audit-access"),
+                eq(HttpMethod.GET),
+                isNull(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(accessList));
+    }
+
+    private static void signIn(String userId, String activeRoleId, boolean systemAdministrator) {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                UserPrincipal.builder().userId(userId).username(userId)
+                        .roles(systemAdministrator ? List.of("SYS_ADMIN") : List.of())
+                        .superAdmin(systemAdministrator)
+                        .activeBusinessUnitId("bu-1").activeRoleId(activeRoleId).build(),
+                null, List.of()));
+    }
+
+    private static void signInSession(String userId, String portalAccessMode) {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                UserPrincipal.builder().userId(userId).username(userId).portalAccessMode(portalAccessMode).build(),
+                null, List.of()));
     }
 
     @SuppressWarnings("unchecked")

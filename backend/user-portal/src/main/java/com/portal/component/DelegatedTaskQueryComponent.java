@@ -4,7 +4,6 @@ import com.platform.security.util.SecurityContextUtils;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationRule;
-import com.portal.repository.DelegationRuleRepository;
 import com.portal.util.RequestContextInheritanceUtils;
 import com.portal.util.WorkflowEnginePayloadHelper;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +14,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -38,7 +36,7 @@ public class DelegatedTaskQueryComponent {
     private static final int DELEGATOR_ENGINE_PAGE_SIZE = 200;
 
     private final WorkflowEngineClient workflowEngineClient;
-    private final DelegationRuleRepository delegationRuleRepository;
+    private final EffectiveDelegationRules effectiveDelegationRules;
 
     public List<TaskInfo> queryDelegatedTasks(String userId) {
         if (!workflowEngineClient.isAvailable()) {
@@ -78,12 +76,15 @@ public class DelegatedTaskQueryComponent {
             mapped.setDelegatorName(mapped.getDelegatorName() != null ? mapped.getDelegatorName() : mapped.getAssigneeName());
             out.add(mapped);
         }
+        // A single-task delegation not in effect (D-55: delegator or delegate without Portal entry) shows to nobody
+        // but its delegator, who holds the task anyway.
+        effectiveDelegationRules.markSingleTaskDelegations(out, userId);
+        out.removeIf(task -> task.getDelegationInactiveReason() != null);
         return out;
     }
 
     private List<TaskInfo> loadStandingRuleDelegatedTasks(String userId) {
-        List<DelegationRule> delegations = delegationRuleRepository
-                .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
+        List<DelegationRule> delegations = effectiveDelegationRules.inForceForDelegate(userId);
         if (delegations.isEmpty()) {
             return Collections.emptyList();
         }

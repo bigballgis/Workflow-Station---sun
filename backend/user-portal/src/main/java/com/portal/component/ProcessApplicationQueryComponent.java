@@ -656,9 +656,6 @@ public class ProcessApplicationQueryComponent {
         if (isProcessParticipant(userId, detail)) {
             return true;
         }
-        if (mainTableViewAccessResolver.isSystemAdministrator(userId)) {
-            return true;
-        }
         String functionUnitCode = detail.getFunctionUnitCode();
         if (functionUnitCode == null || functionUnitCode.isBlank()) {
             return false;

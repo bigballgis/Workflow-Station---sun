@@ -56,6 +56,7 @@ const sections: GuideSection[] = [
   {
     titleKey: 'taskDelegateGuide.seeTitle',
     bodyKey: 'taskDelegateGuide.seeBody',
+    bodyKeys: ['taskDelegateGuide.endBody'],
     samples: [
       { code: 'Delegated', hintKey: 'taskDelegateGuide.todoFilterSample' },
       { code: 'On behalf of', hintKey: 'taskDelegateGuide.onBehalfSample' },

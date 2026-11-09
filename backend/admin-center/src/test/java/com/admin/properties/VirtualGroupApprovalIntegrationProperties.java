@@ -71,9 +71,11 @@ public class VirtualGroupApprovalIntegrationProperties {
                 virtualGroupRoleRepository,
                 memberChangeLogRepository,
                 approverService,
-                objectMapper);
-        
-        permissionRequestService = new PermissionRequestService(
+                objectMapper,
+                mock(com.platform.common.i18n.I18nService.class),
+                mock(com.admin.service.ClaimPoolResyncService.class));
+
+        permissionRequestService= new PermissionRequestService(
                 permissionRequestRepository,
                 virtualGroupRepository,
                 businessUnitRepository,
@@ -221,73 +223,6 @@ public class VirtualGroupApprovalIntegrationProperties {
         // (Role is inherited from virtual group, not directly assigned)
     }
 
-    
-    /**
-     * Feature: permission-request-approval, Property 7: Virtual Group Approval Immediate Effect
-     * BU_UNBOUNDED role should be immediately effective after virtual group approval
-     */
-    @Property(tries = 100)
-    @Label("Feature: permission-request-approval, Property 7: BU_UNBOUNDED role is immediately effective")
-    void buUnboundedRoleIsImmediatelyEffectiveAfterApproval(
-            @ForAll("validUserIds") String applicantId,
-            @ForAll("validTargetIds") String virtualGroupId,
-            @ForAll("validRoleIds") String boundRoleId,
-            @ForAll("validUserIds") String approverId) {
-        
-        Assume.that(!applicantId.equals(approverId)); // Self-approval not allowed
-        
-        String requestId = UUID.randomUUID().toString();
-        
-        // Given: Pending request exists
-        PermissionRequest request = PermissionRequest.builder()
-                .id(requestId)
-                .applicantId(applicantId)
-                .requestType(PermissionRequestType.VIRTUAL_GROUP)
-                .targetId(virtualGroupId)
-                .status(PermissionRequestStatus.PENDING)
-                .reason("Test reason")
-                .build();
-        when(permissionRequestRepository.findById(requestId)).thenReturn(Optional.of(request));
-        
-        // Given: Approver is authorized
-        when(approverService.isApprover(approverId, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId))
-                .thenReturn(true);
-        
-        // Given: Virtual group exists
-        VirtualGroup virtualGroup = createVirtualGroup(virtualGroupId);
-        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(virtualGroup));
-        
-        // Given: Virtual group has a BU_UNBOUNDED role
-        Role buUnboundedRole = createRole(boundRoleId, RoleType.BU_UNBOUNDED);
-        when(virtualGroupRoleService.getBoundRole(virtualGroupId)).thenReturn(Optional.of(buUnboundedRole));
-        
-        // Given: User exists
-        User user = createUser(applicantId);
-        when(userRepository.findById(applicantId)).thenReturn(Optional.of(user));
-        
-        // Given: User is not already a member
-        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, applicantId))
-                .thenReturn(false);
-        
-        // Given: Save operations succeed
-        when(permissionRequestRepository.save(any(PermissionRequest.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(virtualGroupMemberRepository.save(any(VirtualGroupMember.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(memberChangeLogRepository.save(any(MemberChangeLog.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        
-        // When: Approve the request
-        permissionRequestService.approve(requestId, approverId, "Approved");
-        
-        // Then: User should be added to virtual group
-        verify(virtualGroupMemberRepository).save(any(VirtualGroupMember.class));
-        
-        // Then: BU_UNBOUNDED role is immediately effective (no business unit required)
-        // This is verified by the fact that the user is now a member of the virtual group
-        // and the role type is BU_UNBOUNDED
-        assertThat(buUnboundedRole.getType()).isEqualTo(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
-    }
     
     /**
      * Feature: permission-request-approval, Property 7: Virtual Group Approval Immediate Effect
@@ -518,6 +453,6 @@ public class VirtualGroupApprovalIntegrationProperties {
     
     @Provide
     Arbitrary<RoleType> businessRoleTypes() {
-        return Arbitraries.of(RoleType.BU_BOUNDED, RoleType.BU_UNBOUNDED);
+        return Arbitraries.of(RoleType.BU_BOUNDED);
     }
 }

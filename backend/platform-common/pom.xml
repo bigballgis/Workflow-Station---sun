@@ -115,6 +115,16 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Apache HttpClient 5 for SsrfGuardedHttpClient (connect-time SSRF DNS check). provided: only the modules
+             that use it (workflow-engine-core, developer-workstation) supply the runtime jar, so Spring Boot does not
+             switch every other module's RestTemplateBuilder to HttpComponents. -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+            <version>5.2.3</version>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

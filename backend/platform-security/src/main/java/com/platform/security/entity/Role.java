@@ -39,9 +39,9 @@ public class Role implements Serializable {
     @Column(nullable = false, length = 100)
     private String name;
     
+    /** No default: a role is created with an explicit type (platform access model §5.3). */
     @Column(length = 20, nullable = false)
-    @Builder.Default
-    private String type = "BU_UNBOUNDED";
+    private String type;
     
     @Column(name = "display_name", columnDefinition = "TEXT")
     private String displayName;

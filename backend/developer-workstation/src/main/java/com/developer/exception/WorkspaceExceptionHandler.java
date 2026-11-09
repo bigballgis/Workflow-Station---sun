@@ -1,8 +1,11 @@
 package com.developer.exception;
 
+import com.developer.security.DeveloperPermissionUnavailableException;
 import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.exception.ErrorResponse;
+import com.platform.common.i18n.I18nService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -21,7 +24,10 @@ import java.util.UUID;
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE + 15)
 @Slf4j
+@RequiredArgsConstructor
 public class WorkspaceExceptionHandler {
+
+    private final I18nService i18nService;
 
     private static final Set<String> CONFLICT_ERROR_CODES = Set.of(
             "BINDING_EXISTS",
@@ -55,6 +61,15 @@ public class WorkspaceExceptionHandler {
                 .body(Map.of(
                         "error", "WORKSPACE_FORBIDDEN",
                         "message", ex.getMessage()));
+    }
+
+    /** Admin Center could not answer which developer permissions the user has: an outage, not a refusal. */
+    @ExceptionHandler(DeveloperPermissionUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> onPermissionsUnavailable(DeveloperPermissionUnavailableException ex) {
+        log.error("Developer permissions unavailable: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of("error", "PERMISSIONS_UNAVAILABLE",
+                        "message", i18nService.getMessage("auth.permissions_unavailable")));
     }
 
     /**

@@ -45,7 +45,7 @@ class SubTableBatchCompletionObservationTest {
         task.put("candidateUserIds", List.of("synthetic-second", "synthetic-first"));
         task.put("candidateGroupIds", null);
         task.put("miAssigneeMode", "role");
-        task.put("miRoleCode", "synthetic-role");
+        task.put("miRoleCodes", List.of("synthetic-role"));
         task.put("miBusinessUnitCode", "synthetic-bu");
         return task;
     }
@@ -66,8 +66,8 @@ class SubTableBatchCompletionObservationTest {
         }
     }
     @Test void anotherRoleOrBuCannotBeVerifiedEvenWhenMembersAreTheSame() {
-        for (String field : List.of("miRoleCode", "miBusinessUnitCode", "miAssigneeMode")) {
-            var task = roleTask(); task.put(field, "synthetic-other");
+        for (String field : List.of("miRoleCodes", "miBusinessUnitCode", "miAssigneeMode")) {
+            var task = roleTask(); task.put(field, "miRoleCodes".equals(field) ? List.of("synthetic-other") : "synthetic-other");
             responses(List.of(task), List.of(identity("own-task", "own")));
             var result = SubTableBatchCompletionObservation.observe(rolePlan(), engine);
             assertThat(result.status()).isEqualTo("FAILED");
@@ -75,7 +75,7 @@ class SubTableBatchCompletionObservationTest {
         }
     }
     @Test void missingOrMalformedCandidateEvidenceRemainsUnknown() {
-        for (String field : List.of("candidateUserIds", "candidateGroupIds", "miRoleCode", "miBusinessUnitCode", "miAssigneeMode", "currentAssignee")) {
+        for (String field : List.of("candidateUserIds", "candidateGroupIds", "miRoleCodes", "miBusinessUnitCode", "miAssigneeMode", "currentAssignee")) {
             var task = roleTask(); task.remove(field);
             responses(List.of(task), List.of(identity("own-task", "own")));
             assertThat(SubTableBatchCompletionObservation.observe(rolePlan(), engine).status()).isEqualTo("UNCONFIRMED");

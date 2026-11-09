@@ -36,4 +36,8 @@ public class VirtualGroupCreateRequest {
      */
     @Size(max = 100, message = "AD Group名称长度不能超过100个字符")
     private String adGroup;
+
+    /** Teams only: the AD group synced into the Technical Lead list ({@code adGroup} feeds the Developer list). */
+    @Size(max = 100, message = "AD Group名称长度不能超过100个字符")
+    private String techLeadAdGroup;
 }

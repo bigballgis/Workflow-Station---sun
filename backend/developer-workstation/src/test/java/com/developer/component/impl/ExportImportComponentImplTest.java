@@ -280,7 +280,7 @@ class ExportImportComponentImplTest {
                 "{\"name\":\"kk\",\"code\":\"" + existingCode + "\",\"version\":\"1.0.0\"}");
         MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", zip);
 
-        Map<String, Object> result = impl.importFunctionUnit(file, null);
+        Map<String, Object> result = impl.importFunctionUnit(file, null, "vg-team-a");
 
         assertEquals("SUCCESS", result.get("status"));
         assertEquals(false, result.get("versioned"));
@@ -376,7 +376,7 @@ class ExportImportComponentImplTest {
         }
 
         MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", baos.toByteArray());
-        Map<String, Object> result = impl.importFunctionUnit(file, null);
+        Map<String, Object> result = impl.importFunctionUnit(file, null, "vg-team-a");
         assertEquals("SUCCESS", result.get("status"));
 
         org.mockito.ArgumentCaptor<FunctionUnit> functionUnitCaptor =
@@ -499,7 +499,7 @@ class ExportImportComponentImplTest {
         }
 
         MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", baos.toByteArray());
-        Map<String, Object> result = impl.importFunctionUnit(file, null);
+        Map<String, Object> result = impl.importFunctionUnit(file, null, "vg-team-a");
         assertEquals("SUCCESS", result.get("status"));
 
         org.mockito.ArgumentCaptor<com.developer.entity.FormDefinition> formCaptor =
@@ -630,7 +630,7 @@ class ExportImportComponentImplTest {
         }
 
         MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", baos.toByteArray());
-        assertEquals("SUCCESS", impl.importFunctionUnit(file, null).get("status"));
+        assertEquals("SUCCESS", impl.importFunctionUnit(file, null, "vg-team-a").get("status"));
 
         org.mockito.ArgumentCaptor<com.developer.entity.FormTableBinding> bindingCaptor =
                 org.mockito.ArgumentCaptor.forClass(com.developer.entity.FormTableBinding.class);

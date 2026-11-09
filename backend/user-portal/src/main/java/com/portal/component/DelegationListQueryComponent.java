@@ -39,8 +39,12 @@ public class DelegationListQueryComponent {
     private static final String RULES_FROM = " FROM up_delegation_rule r WHERE r.delegator_id = ?";
     private static final String AUDIT_FROM =
             " FROM up_delegation_audit a WHERE (a.delegator_id = ? OR a.delegate_id = ?)";
+    /** A person's display name as the change history gives it: full name, else display name, else username. */
+    private static final String USER_NAME_SQL = "(SELECT COALESCE(NULLIF(TRIM(u.full_name), ''),"
+            + " NULLIF(TRIM(u.display_name), ''), u.username) FROM sys_users u WHERE u.id = %s)";
 
     private final JdbcTemplate jdbcTemplate;
+    private final EffectiveDelegationRules effectiveDelegationRules;
 
     public PortalListPage<DelegationRule> queryRules(String userId, DelegationListQueryRequest request) {
         requireUser(userId);
@@ -61,7 +65,7 @@ public class DelegationListQueryComponent {
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, RULES_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, RULES_KEY, request.page(), request.size(), total, elapsedMs, elapsedMs, 0L);
-        return new PortalListPage<>(DelegationRuleColumnSpec.columns(), rows,
+        return new PortalListPage<>(DelegationRuleColumnSpec.columns(), effectiveDelegationRules.markLostEntry(rows),
                 request.page(), request.size(), total);
     }
 
@@ -96,7 +100,8 @@ public class DelegationListQueryComponent {
         pageParams.add(request.page() * request.size());
         String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
         String sql = "SELECT r.id, r.delegator_id, r.delegate_id, r.delegation_type, r.start_time,"
-                + " r.end_time, r.status, r.reason, r.created_at, r.updated_at"
+                + " r.end_time, r.status, r.reason, r.created_at, r.updated_at,"
+                + " " + String.format(USER_NAME_SQL, "r.delegate_id") + " AS delegate_name"
                 + where + orderBy + " LIMIT ? OFFSET ?";
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, rs -> {
             List<DelegationRule> page = new ArrayList<>();
@@ -114,7 +119,9 @@ public class DelegationListQueryComponent {
         pageParams.add(request.page() * request.size());
         String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
         String sql = "SELECT a.id, a.delegator_id, a.delegate_id, a.task_id, a.operation_type,"
-                + " a.operation_result, a.operation_detail, a.ip_address, a.user_agent, a.created_at"
+                + " a.operation_result, a.operation_detail, a.ip_address, a.user_agent, a.created_at,"
+                + " " + String.format(USER_NAME_SQL, "a.delegator_id") + " AS delegator_name,"
+                + " " + String.format(USER_NAME_SQL, "a.delegate_id") + " AS delegate_name"
                 + where + orderBy + " LIMIT ? OFFSET ?";
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, rs -> {
             List<DelegationAudit> page = new ArrayList<>();
@@ -130,6 +137,7 @@ public class DelegationListQueryComponent {
                 .id(rs.getLong("id"))
                 .delegatorId(rs.getString("delegator_id"))
                 .delegateId(rs.getString("delegate_id"))
+                .delegateName(rs.getString("delegate_name"))
                 .delegationType(enumOrNull(rs.getString("delegation_type"), DelegationType.class))
                 .startTime(toLocalDateTime(rs.getTimestamp("start_time")))
                 .endTime(toLocalDateTime(rs.getTimestamp("end_time")))
@@ -145,6 +153,8 @@ public class DelegationListQueryComponent {
                 .id(rs.getLong("id"))
                 .delegatorId(rs.getString("delegator_id"))
                 .delegateId(rs.getString("delegate_id"))
+                .delegatorName(rs.getString("delegator_name"))
+                .delegateName(rs.getString("delegate_name"))
                 .taskId(rs.getString("task_id"))
                 .operationType(rs.getString("operation_type"))
                 .operationResult(rs.getString("operation_result"))

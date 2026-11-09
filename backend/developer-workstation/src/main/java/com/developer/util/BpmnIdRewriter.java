@@ -437,7 +437,11 @@ public final class BpmnIdRewriter {
      * Parse properties block content, extracting name → value for all
      * {@code <X:property>} / {@code <X:values>} elements.
      */
-    private static Map<String, String> parsePropertyMap(String content) {
+    /**
+     * Extension properties ({@code <x:property name="..." value="..."/>}, {@code <x:values .../>}) found in an
+     * XML fragment, by name; the first one wins when a name repeats.
+     */
+    public static Map<String, String> parsePropertyMap(String content) {
         Map<String, String> result = new HashMap<>();
         Matcher m = EXTENSION_ELEMENT.matcher(content);
         while (m.find()) {

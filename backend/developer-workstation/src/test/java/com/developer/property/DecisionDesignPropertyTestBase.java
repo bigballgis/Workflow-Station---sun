@@ -66,6 +66,17 @@ public abstract class DecisionDesignPropertyTestBase {
         functionUnitRepository = mock(FunctionUnitRepository.class);
         functionUnitDevGroupAssignmentRepository = mock(FunctionUnitDevGroupAssignmentRepository.class);
         when(functionUnitDevGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(List.of());
+        FunctionUnitWorkspaceAccessService workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
+        // Every unit sits in an active team the caller may manage; the workspace rules are tested on their own.
+        when(workspaceAccessService.describe(anyCollection())).thenAnswer(inv -> {
+            Map<Long, FunctionUnitWorkspaceAccessService.FunctionUnitAccess> access = new LinkedHashMap<>();
+            for (Object id : inv.<java.util.Collection<?>>getArgument(0)) {
+                access.put((Long) id, new FunctionUnitWorkspaceAccessService.FunctionUnitAccess(
+                        new FunctionUnitWorkspaceAccessService.Workspace("vg-team-a", "Team A",
+                                FunctionUnitWorkspaceAccessService.WorkspaceStatus.ACTIVE), true, true));
+            }
+            return access;
+        });
         functionUnitComponentImpl = new FunctionUnitComponentImpl(
                 functionUnitRepository,
                 mock(ProcessDefinitionRepository.class),
@@ -81,7 +92,7 @@ public abstract class DecisionDesignPropertyTestBase {
                 mock(IconRepository.class),
                 new ObjectMapper(),
                 mock(UserDisplayNameService.class),
-                mock(FunctionUnitWorkspaceAccessService.class),
+                workspaceAccessService,
                 functionUnitDevGroupAssignmentRepository,
                 mock(com.developer.component.VersionComponent.class),
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),

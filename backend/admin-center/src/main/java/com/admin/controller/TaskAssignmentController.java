@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 任务分配查询控制器
@@ -19,6 +21,7 @@ import java.util.Map;
 @RequestMapping("/task-assignment")
 @RequiredArgsConstructor
 @Tag(name = "任务分配查询", description = "工作流任务分配相关的查询接口")
+@AdminAccess(value = AdminAudience.WORKSTATION, services = true)
 public class TaskAssignmentController {
     
     private final TaskAssignmentQueryService taskAssignmentQueryService;
@@ -63,24 +66,6 @@ public class TaskAssignmentController {
         return ResponseEntity.ok(userIds);
     }
 
-    // ==================== BU无关型角色用户查询 ====================
-
-    @GetMapping("/roles/{roleId}/users")
-    @Operation(summary = "获取拥有指定BU无关型角色的用户ID列表",
-               description = "路径参数 roleId 为 role code；通过查询绑定了该角色的虚拟组的所有成员")
-    public ResponseEntity<List<String>> getUsersByUnboundedRole(@PathVariable("roleId") String roleCode) {
-        List<String> userIds = taskAssignmentQueryService.getUsersByUnboundedRole(roleCode);
-        return ResponseEntity.ok(userIds);
-    }
-
-    @GetMapping("/virtual-groups/by-code/{code}/users")
-    @Operation(summary = "按虚拟组编码获取成员用户ID列表",
-               description = "用于 BPMN 中 VIRTUAL_GROUP 的 assigneeValue（如 DOCUMENT_VERIFIERS）解析候选人")
-    public ResponseEntity<List<String>> getUsersByVirtualGroupCode(@PathVariable String code) {
-        List<String> userIds = taskAssignmentQueryService.getUsersByVirtualGroupCode(code);
-        return ResponseEntity.ok(userIds);
-    }
-    
     // ==================== 业务单元准入角色查询 ====================
     
     @GetMapping("/business-units/{businessUnitId}/eligible-roles")
@@ -109,11 +94,5 @@ public class TaskAssignmentController {
         List<Role> roles = taskAssignmentQueryService.getBuBoundedRoles();
         return ResponseEntity.ok(roles);
     }
-    
-    @GetMapping("/roles/bu-unbounded")
-    @Operation(summary = "获取所有BU无关型角色")
-    public ResponseEntity<List<Role>> getBuUnboundedRoles() {
-        List<Role> roles = taskAssignmentQueryService.getBuUnboundedRoles();
-        return ResponseEntity.ok(roles);
-    }
+
 }

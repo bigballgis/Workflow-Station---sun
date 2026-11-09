@@ -9,6 +9,7 @@ import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.developer.security.WorkspaceRouteOwnership;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +52,9 @@ class ProcessDesignComponentSaveFormStageBindingSyncTest {
     private ActionDefinitionRepository actionDefinitionRepository;
     @Mock
     private FormStageBindingRepository formStageBindingRepository;
+
+    @Mock
+    private WorkspaceRouteOwnership routeOwnership;
 
     private ProcessDesignComponentImpl component;
 
@@ -96,6 +100,8 @@ class ProcessDesignComponentSaveFormStageBindingSyncTest {
                 new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null),
                 new ProcessBpmnFormStageBindingSync(
                         new BpmnFormStageBindingParser(), formDefinitionRepository, formStageBindingRepository),
+                null,
+                new ProcessBpmnEmailReferenceGuard(routeOwnership, null),
                 null);
     }
 

@@ -18,6 +18,9 @@ import java.util.Set;
 /**
  * Remaps View Design access rules (targetCode → this environment's id) and rejects unpaired
  * or unresolvable BU/Role rules. Admin catalog stores the remapped JSON blob.
+ *
+ * <p>A View is named by its name across versions (Portal Views, BI Data View Assignments), so View
+ * names must be unique within the package (WP12).
  */
 @Component
 @RequiredArgsConstructor
@@ -25,6 +28,7 @@ public class ImportViewAccessValidator {
 
     public static final String IMPORT_UNRESOLVED_CODE = "BIZ_VIEW_ACCESS_IMPORT_UNRESOLVED";
     public static final String PAIR_ERROR_CODE = "BIZ_VIEW_ACCESS_BU_ROLE_PAIR";
+    public static final String VIEW_NAME_ERROR_CODE = "FU_IMPORT_VIEW_NAME_INVALID";
 
     private final RoleRepository roleRepository;
     private final BusinessUnitRepository businessUnitRepository;
@@ -37,6 +41,7 @@ public class ImportViewAccessValidator {
         try {
             List<Map<String, Object>> views = objectMapper.readValue(
                     viewsJson, new TypeReference<List<Map<String, Object>>>() {});
+            assertUniqueNames(views);
             for (Map<String, Object> view : views) {
                 String viewName = view.get("viewName") != null
                         ? String.valueOf(view.get("viewName")) : "unnamed";
@@ -85,11 +90,42 @@ public class ImportViewAccessValidator {
                 throw new AdminBusinessException(IMPORT_UNRESOLVED_CODE,
                         "View '" + viewName + "': access rule " + targetType
                                 + " has neither targetCode nor targetId");
+            } else if (!existsHere(targetType, targetId)) {
+                // An id from another environment would leave the View visible to nobody, silently.
+                throw new AdminBusinessException(IMPORT_UNRESOLVED_CODE,
+                        "View '" + viewName + "': access rule " + targetType + " id=" + targetId
+                                + " carries no code and does not exist in this environment"
+                                + " — re-export the function unit from Developer Workstation");
             }
             rule.put("targetId", targetId);
             out.add(rule);
         }
         return out;
+    }
+
+    private boolean existsHere(String targetType, String id) {
+        if ("ROLE".equals(targetType)) {
+            return roleRepository.existsById(id);
+        }
+        if ("BUSINESS_UNIT".equals(targetType)) {
+            return businessUnitRepository.existsById(id);
+        }
+        return false;
+    }
+
+    private static void assertUniqueNames(List<Map<String, Object>> views) {
+        Set<String> names = new HashSet<>();
+        for (Map<String, Object> view : views) {
+            String name = stringVal(view.get("viewName"));
+            if (name == null) {
+                throw new AdminBusinessException(VIEW_NAME_ERROR_CODE, "A View in the package has no name");
+            }
+            if (!names.add(name)) {
+                throw new AdminBusinessException(VIEW_NAME_ERROR_CODE,
+                        "View name '" + name + "' is used by more than one View; View names must be unique"
+                                + " within a function unit");
+            }
+        }
     }
 
     private String resolveId(String targetType, String code) {

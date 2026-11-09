@@ -1,76 +1,58 @@
 package com.admin.ldap;
-import com.admin.repository.RoleRepository;
+import com.admin.component.SecurityAuditComponent;
+import com.admin.enums.AuditAction;
 import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
-import com.admin.repository.VirtualGroupRoleRepository;
-import com.platform.security.entity.Role;
-import com.platform.security.entity.RoleAssignment;
 import com.platform.security.entity.VirtualGroup;
 import com.platform.security.entity.VirtualGroupMember;
-import com.platform.security.entity.VirtualGroupRole;
-import com.platform.security.enums.AssignmentTargetType;
-import com.platform.security.repository.RoleAssignmentRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.LinkedHashSet;
-import static com.admin.ldap.LdapConstants.AD_ATTR_MEMBER_OF;
-import static com.admin.ldap.LdapConstants.GROUP_ROLE_KEY_ADMIN;
-import static com.admin.ldap.LdapConstants.GROUP_ROLE_KEY_DEVELOPER;
-import static com.admin.ldap.LdapConstants.GROUP_ROLE_KEY_USER;
+import java.util.stream.Collectors;
 import static com.admin.ldap.LdapConstants.HERMES_SYNC_MEMBER_ADDED_BY;
 import static com.admin.ldap.LdapConstants.LDAP_SYNC_ACTOR;
-import static com.admin.ldap.LdapConstants.ROLE_AUDITOR;
-import static com.admin.ldap.LdapConstants.ROLE_DEVELOPER;
-import static com.admin.ldap.LdapConstants.ROLE_SYSTEM_ADMIN;
-import static com.admin.ldap.LdapConstants.ROLE_TEAM_LEAD;
-import static com.admin.ldap.LdapConstants.ROLE_TECH_LEAD;
+import static com.admin.ldap.LdapConstants.SKIPPED_WITHOUT_EMPLOYEE_ID;
 import static com.admin.ldap.LdapConstants.SYNC_TYPE_HERMES_AD_GROUP;
 import static com.admin.ldap.LdapConstants.SYNC_TYPE_HERMES_AD_INCR;
-import static com.admin.ldap.LdapConstants.VG_AUDITORS;
-import static com.admin.ldap.LdapConstants.VG_DEVELOPERS;
-import static com.admin.ldap.LdapConstants.VG_HERMES_USERS;
-import static com.admin.ldap.LdapConstants.VG_SYSTEM_ADMINISTRATORS;
-import static com.admin.ldap.LdapConstants.VG_TEAM_LEADS;
-import static com.admin.ldap.LdapConstants.VG_TECH_LEADS;
 /**
- * Hermes AD Group → Admin Center 用户/虚拟组/角色 同步服务。
+ * AD 组 → 虚拟组成员同步（平台访问模型 §5.6）。
  *
- * <p>核心职责：
- * <ol>
- *   <li>解析目标 AD 组清单（显式映射 / roles+pattern 拼接）</li>
- *   <li>确保 Hermes 角色、虚拟组、角色绑定、权限分配基础数据存在</li>
- *   <li>全量同步：拉取每组所有成员 → 去重 → 分批 upsert → 写虚拟组关系</li>
- *   <li>增量同步：以目标 AD 组当前成员为期望态对账（upsert 画像 + 虚拟组集合差），不依赖 whenChanged</li>
- *   <li>统一写审计（{@link LdapSyncAudit}）</li>
- * </ol>
+ * <p>哪个 AD 组同步到哪里，只看虚拟组上的配置：
+ * <ul>
+ *   <li>SYSTEM、CUSTOM 组：{@code ad_group} → 成员；</li>
+ *   <li>DEVELOPER 团队：{@code ad_group} → Developer 名单，{@code tech_lead_ad_group} → Technical Lead 名单。</li>
+ * </ul>
+ * 每次同步把每份名单的 AD 来源行对齐到 AD 组当前成员：缺的补、多的删，人工来源从不改动；
+ * 没有 AD 映射的名单删除它的 AD 来源行（D-29）。同步不创建任何组、角色或角色绑定。
+ * 每个 AD 组只拉一次；拉到的用户写画像，并补导入一层 Entity / Function Manager。
+ * 每一条成员增删都和人工维护一样写进 Admin 操作审计，操作人为 {@code LDAP_SYNC_JOB}（D-32）。</p>
  *
- * <p>安全：LDAP-only 用户写入不可用占位密码（见 {@link LdapUserSyncService}）；
- * {@code memberOf} 敏感信息仅 DEBUG 级输出。</p>
+ * <p>安全：LDAP-only 用户写入不可用占位密码（见 {@link LdapUserSyncService}）。</p>
  *
  * <p>仅 {@code ldap.enabled=true} 且 {@code ldap.sync-enabled=true} 时创建。</p>
  *
  * <p>FALLBACK(external) — class-wide policy: this is a periodic sync job against an external
- * directory. Per-group / per-batch catches deliberately tolerate individual failures (one bad
- * AD group must not abort the whole sync; batch upsert degrades to per-user), and the run-level
- * catch records the failure into {@link LdapSyncAudit} — failures are persisted and visible,
- * never silent. Do not "fix" these catches into rethrows: aborting the run on the first bad
- * entry is worse for directory convergence than a partial sync plus an audit trail.</p>
+ * directory. An AD group that cannot be read, or whose members could not all be stored, leaves the
+ * AD rows of the lists it feeds without removals (nothing is removed on partial data); one bad user
+ * is skipped with a warning; the run-level catch records the failure into {@link LdapSyncAudit} —
+ * failures are persisted and visible, never silent. Do not "fix" these catches into rethrows:
+ * aborting the run on the first bad entry is worse for directory convergence than a partial sync
+ * plus an audit trail.</p>
  */
 @Slf4j
 @Service
@@ -80,188 +62,234 @@ public class LdapSyncService {
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
-    /** Hermes AD 组键 → 虚拟组 → 角色编码 预定义绑定。 */
-    private static final List<HermesGroupBinding> HERMES_BINDINGS = List.of(
-            new HermesGroupBinding(GROUP_ROLE_KEY_ADMIN, VG_SYSTEM_ADMINISTRATORS, "System Administrators", ROLE_SYSTEM_ADMIN, "System Administrator", "ADMIN"),
-            new HermesGroupBinding(GROUP_ROLE_KEY_ADMIN, VG_AUDITORS, "Auditors", ROLE_AUDITOR, "Auditor", "AUDITOR"),
-            new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_TECH_LEADS, "Technical Leads", ROLE_TECH_LEAD, "Technical Lead", "DEVELOPER"),
-            new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_TEAM_LEADS, "Team Leads", ROLE_TEAM_LEAD, "Team Lead", "DEVELOPER"),
-            new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_DEVELOPERS, "Developers", ROLE_DEVELOPER, "Developer", "DEVELOPER"),
-            new HermesGroupBinding(GROUP_ROLE_KEY_USER, VG_HERMES_USERS, "Hermes Default Users", null, null, null));private final LdapClient ldapClient;
+    /** Some mapped AD groups were not read, or read only in part; the rest were reconciled. */
+    private static final String STATUS_PARTIAL = "PARTIAL";
+    private static final int AUDIT_GROUPS_MAX = 2000;
+    private static final int AUDIT_MESSAGE_MAX = 1000;
+    private final LdapClient ldapClient;
     private final LdapUserMapper ldapUserMapper;
     private final LdapUserSyncService ldapUserSyncService;
     private final LdapProperties ldapProperties;
     private final LdapSyncAuditRepository auditRepository;
     private final VirtualGroupRepository virtualGroupRepository;
     private final VirtualGroupMemberRepository virtualGroupMemberRepository;
-    private final VirtualGroupRoleRepository virtualGroupRoleRepository;
-    private final RoleRepository roleRepository;
-    private final RoleAssignmentRepository roleAssignmentRepository;
     private final UserRepository userRepository;
-    private final Environment environment;
     private final TransactionTemplate transactionTemplate;
-    // ==================== 全量 AD 组同步 ====================
-    /**
-     * 全量 Hermes AD 组同步：解析目标组 → 确保绑定存在 → 清理旧成员 → 拉取 → upsert → 写组成员关系。
-     */
+    private final SecurityAuditComponent securityAuditComponent;
+    private final ObjectMapper objectMapper;
+
+    /** 手动触发的全量同步。与定时同步是同一次对账，只是审计类型不同。 */
     public LdapSyncAudit runHermesAdGroupSync() {
-        long start = System.currentTimeMillis();
-        LdapSyncAudit audit = startAudit(SYNC_TYPE_HERMES_AD_GROUP);
-        try {
-            Map<String, String> groupDefs = resolveGroupDefinitions();
-            if (groupDefs.isEmpty()) {
-                return finishSuccess(audit, 0, start, "No Hermes AD groups configured");
-            }
-            audit.setGroups(String.join(",", groupDefs.values()));
-            // 1. 确保 Admin Center 侧角色/虚拟组/绑定存在
-            ensureHermesBindings(groupDefs);
-            // 2. 清理本次涉及虚拟组的旧 LDAP 管理成员
-            cleanOldLdapMembershipsForBindings();
-            // 3. 按组拉取成员并聚合（一个用户可命中多个组）
-            GroupFetchResult fetched = accumulateUsersFromTargetGroups(groupDefs);
-            Map<String, LdapGroupUserAccumulator> accumulator = fetched.accumulator();
-            int totalFetched = fetched.totalFetched();
-            log.info("Hermes AD group sync: {} unique users from {} groups",
-                    accumulator.size(), groupDefs.size());
-            totalFetched += supplementDirectManagers(accumulator);
-            // 4. 分批 upsert 用户（含逐条失败降级）
-            int successCount = 0;
-            int insertCount = 0;
-            int updateCount = 0;
-            int skippedMissingKey = 0;
-            Map<String, String> syncedUserIdsByEmployeeId = new LinkedHashMap<>();
-            int batchSize = ldapProperties.getGroupSync().getBatchSize();
-            if (batchSize <= 0) {
-                batchSize = 20;
-            }
-            List<Map.Entry<String, LdapGroupUserAccumulator>> entries =
-                    new ArrayList<>(accumulator.entrySet());
-            for (int i = 0; i < entries.size(); i += batchSize) {
-                int end = Math.min(i + batchSize, entries.size());
-                List<Map.Entry<String, LdapGroupUserAccumulator>> batch =
-                        entries.subList(i, end);
-                try {
-                    UpsertBatchResult result = upsertBatchWithFallback(batch);
-                    successCount += result.success();
-                    insertCount += result.insert();
-                    updateCount += result.update();
-                    skippedMissingKey += result.skipped();
-                    syncedUserIdsByEmployeeId.putAll(result.syncedUserIdsByEmployeeId());
-                } catch (Exception e) {
-                    // 整批失败时降级为逐条
-                    log.warn("Batch upsert failed, falling back to individual: {}", e.getMessage());
-                    UpsertBatchResult result = upsertBatchWithFallback(batch);
-                    successCount += result.success();
-                    insertCount += result.insert();
-                    updateCount += result.update();
-                    skippedMissingKey += result.skipped();
-                    syncedUserIdsByEmployeeId.putAll(result.syncedUserIdsByEmployeeId());
-                }
-            }
-            // 5. 同步用户与虚拟组关系
-            syncVirtualGroupMemberships(entries, groupDefs, syncedUserIdsByEmployeeId);
-            // 6. 数据驱动的团队组同步（CUSTOM + ad_group）——新团队零代码接入
-            syncCustomAdGroupBackedVirtualGroups();
-            audit.setSuccessCount(successCount);
-            audit.setInsertCount(insertCount);
-            audit.setUpdateCount(updateCount);
-            audit.setSkippedMissingKey(skippedMissingKey);
-            audit.setUpserted(successCount);
-            audit.setFailed(skippedMissingKey);
-            return finishSuccess(audit, totalFetched, start, null);
-        } catch (Exception e) {
-            return finishFailed(audit, e, start);
-        }
-    }
-    // ==================== 增量 AD 组同步 ====================
-    /**
-     * 增量 Hermes AD 组同步：以目标组成员清单为期望态对账，不依赖 {@code whenChanged}。
-     * 无历史基线时自动降级为全量同步。
-     */
-    public LdapSyncAudit runHermesAdGroupIncrementalSync() {
-        Optional<LdapSyncAudit> baseline = auditRepository
-                .findTopBySyncTypeInAndStatusOrderByStartedAtDesc(
-                        List.of(SYNC_TYPE_HERMES_AD_GROUP, SYNC_TYPE_HERMES_AD_INCR), STATUS_SUCCESS);
-        if (baseline.isEmpty()) {
-            log.info("No Hermes AD group sync baseline; incremental falls back to full");
-            return runHermesAdGroupSync();
-        }
-        LdapSyncAudit prev = baseline.get();
-        Instant watermark = prev.getSnapshotAt() != null ? prev.getSnapshotAt() : prev.getStartedAt();
-        long start = System.currentTimeMillis();
-        LdapSyncAudit audit = startAudit(SYNC_TYPE_HERMES_AD_INCR);
-        try {
-            return reconcileTargetGroupMemberships(audit, watermark, start);
-        } catch (Exception e) {
-            return finishFailed(audit, e, start);
-        }
-    }
-    /**
-     * 对账：拉每个目标 AD 组当前成员 → upsert 画像 → 虚拟组集合差。
-     * 不先整组清空。拉取失败的组不参与删除，避免误摘成员。
-     */
-    private LdapSyncAudit reconcileTargetGroupMemberships(
-            LdapSyncAudit audit, Instant watermark, long start) {
-        Map<String, String> groupDefs = resolveGroupDefinitions();
-        if (groupDefs.isEmpty()) {
-            return finishSuccess(audit, 0, start, "No Hermes AD groups configured");
-        }
-        audit.setGroups(String.join(",", groupDefs.values()));
-        if (watermark != null) {
-            audit.setHighWaterMark(watermark.toString());
-        }
-        ensureHermesBindings(groupDefs);
-        GroupFetchResult fetched = accumulateUsersFromTargetGroups(groupDefs);
-        int totalFetched = fetched.totalFetched() + supplementDirectManagers(fetched.accumulator());
-        List<Map.Entry<String, LdapGroupUserAccumulator>> entries =
-                new ArrayList<>(fetched.accumulator().entrySet());
-        UpsertBatchResult counts = upsertAccumulatedUsers(entries);
-        syncVirtualGroupMemberships(entries, groupDefs, counts.syncedUserIdsByEmployeeId());
-        pruneStaleHermesMemberships(
-                entries, groupDefs, counts.syncedUserIdsByEmployeeId(), fetched.fetchedRoleKeys());
-        syncCustomAdGroupBackedVirtualGroups();
-        audit.setSuccessCount(counts.success());
-        audit.setInsertCount(counts.insert());
-        audit.setUpdateCount(counts.update());
-        audit.setSkippedMissingKey(counts.skipped());
-        audit.setUpserted(counts.success());
-        audit.setFailed(counts.skipped());
-        return finishSuccess(audit, totalFetched, start, null);
+        return reconcile(SYNC_TYPE_HERMES_AD_GROUP);
     }
 
-    private GroupFetchResult accumulateUsersFromTargetGroups(Map<String, String> groupDefs) {
+    /** 启动与定时同步。 */
+    public LdapSyncAudit runHermesAdGroupIncrementalSync() {
+        return reconcile(SYNC_TYPE_HERMES_AD_INCR);
+    }
+
+    private LdapSyncAudit reconcile(String syncType) {
+        long start = System.currentTimeMillis();
+        LdapSyncAudit audit = startAudit(syncType);
+        try {
+            Map<VirtualGroup, Map<String, String>> listsByGroup = new LinkedHashMap<>();
+            Set<String> adGroups = new LinkedHashSet<>();
+            for (VirtualGroup group : virtualGroupRepository.findAll()) {
+                Map<String, String> lists = adGroupByList(group);
+                listsByGroup.put(group, lists);
+                lists.values().stream().filter(StringUtils::hasText).forEach(adGroups::add);
+            }
+            audit.setGroups(truncate(String.join(",", adGroups), AUDIT_GROUPS_MAX));
+            GroupFetchResult fetched = fetchAdGroups(adGroups);
+            int totalFetched = fetched.totalFetched() + supplementDirectManagers(fetched.accumulator());
+            UpsertBatchResult counts = upsertAccumulatedUsers(new ArrayList<>(fetched.accumulator().entrySet()));
+            AdMembership membership = AdMembership.of(fetched, counts);
+            List<String> heldBackGroups = new ArrayList<>();
+            for (Map.Entry<VirtualGroup, Map<String, String>> entry : listsByGroup.entrySet()) {
+                if (reconcileGroup(entry.getKey(), entry.getValue(), membership)) {
+                    heldBackGroups.add(entry.getKey().getCode());
+                }
+            }
+            audit.setSuccessCount(counts.success());
+            audit.setInsertCount(counts.insert());
+            audit.setUpdateCount(counts.update());
+            int skipped = fetched.withoutEmployeeId() + counts.skipped();
+            audit.setSkippedMissingKey(skipped);
+            audit.setUpserted(counts.success());
+            audit.setFailed(counts.failedEmployeeIds().size());
+            return finish(audit, outcomeStatus(adGroups, membership), totalFetched, start,
+                    outcomeMessage(adGroups, membership, heldBackGroups, skipped));
+        } catch (Exception e) {
+            return finishFailed(audit, e, start);
+        }
+    }
+
+    /**
+     * The lists of a group and the AD group each one is synced from ({@code null} = not mapped).
+     * SYSTEM and CUSTOM groups have their members only; a team has its Developer and Technical Lead lists;
+     * Public has none.
+     */
+    static Map<String, String> adGroupByList(VirtualGroup group) {
+        Map<String, String> lists = new LinkedHashMap<>();
+        if (group.isPublicTeam()) {
+            return lists; // Public is a reserved team without lists (6.4)
+        }
+        if ("DEVELOPER".equals(group.getType())) {
+            lists.put(VirtualGroupMember.LIST_DEVELOPER, trimToNull(group.getAdGroup()));
+            lists.put(VirtualGroupMember.LIST_TECH_LEAD, trimToNull(group.getTechLeadAdGroup()));
+        } else {
+            lists.put(VirtualGroupMember.LIST_MEMBER, trimToNull(group.getAdGroup()));
+        }
+        return lists;
+    }
+
+    /**
+     * Aligns the AD rows of each list of one group with its AD group. AD rows of a list the group does
+     * not have, or of a list without a mapping, are removed (D-29); manual rows are never touched.
+     * System Administrators never loses its last active member this way (D-31): the removals are then
+     * held back and the audit says so.
+     *
+     * @return whether removals were held back to keep System Administrators staffed
+     */
+    private boolean reconcileGroup(VirtualGroup group, Map<String, String> adGroupByList, AdMembership membership) {
+        Boolean heldBack = transactionTemplate.execute(status -> {
+            Map<String, List<VirtualGroupMember>> adRowsByList = virtualGroupMemberRepository
+                    .findByGroupIdAndSource(group.getId(), VirtualGroupMember.SOURCE_AD).stream()
+                    .collect(Collectors.groupingBy(VirtualGroupMember::getListType, LinkedHashMap::new,
+                            Collectors.toList()));
+            List<VirtualGroupMember> additions = new ArrayList<>();
+            List<VirtualGroupMember> removals = new ArrayList<>();
+            for (Map.Entry<String, List<VirtualGroupMember>> rows : adRowsByList.entrySet()) {
+                if (adGroupByList.get(rows.getKey()) == null) {
+                    removals.addAll(rows.getValue());
+                }
+            }
+            for (Map.Entry<String, String> list : adGroupByList.entrySet()) {
+                String adGroup = list.getValue();
+                if (adGroup == null) {
+                    continue;
+                }
+                Optional<Set<String>> desired = membership.userIds(adGroup);
+                if (desired.isEmpty()) {
+                    log.warn("AD group sync left {}/{} unchanged: AD group CN={} could not be read",
+                            group.getCode(), list.getKey(), adGroup);
+                    continue;
+                }
+                List<VirtualGroupMember> rows = adRowsByList.getOrDefault(list.getKey(), List.of());
+                Set<String> present = rows.stream().map(VirtualGroupMember::getUserId).collect(Collectors.toSet());
+                for (String userId : desired.get()) {
+                    if (!present.contains(userId)) {
+                        additions.add(VirtualGroupMember.builder()
+                                .id(UUID.randomUUID().toString())
+                                .groupId(group.getId())
+                                .userId(userId)
+                                .addedBy(HERMES_SYNC_MEMBER_ADDED_BY)
+                                .listType(list.getKey())
+                                .source(VirtualGroupMember.SOURCE_AD)
+                                .build());
+                    }
+                }
+                if (!membership.complete(adGroup)) {
+                    log.warn("AD group sync kept possible leavers in {}/{}: some members of CN={} were not stored",
+                            group.getCode(), list.getKey(), adGroup);
+                    continue;
+                }
+                rows.stream().filter(row -> !desired.get().contains(row.getUserId())).forEach(removals::add);
+            }
+            boolean keepAdministrators = !removals.isEmpty() && group.isSystemAdministrators()
+                    && !anyActiveMemberAfter(group, additions, removals);
+            if (keepAdministrators) {
+                log.error("AD group sync kept the AD members of {}: removing them would leave it without an "
+                        + "active member", group.getCode());
+                removals.clear();
+            }
+            virtualGroupMemberRepository.saveAll(additions);
+            virtualGroupMemberRepository.deleteAll(removals);
+            additions.forEach(row -> auditMembershipChange(group, row, AuditAction.CREATE));
+            removals.forEach(row -> auditMembershipChange(group, row, AuditAction.DELETE));
+            if (!additions.isEmpty() || !removals.isEmpty()) {
+                log.info("AD group sync: {} +{} -{} AD members", group.getCode(), additions.size(), removals.size());
+            }
+            return keepAdministrators;
+        });
+        return Boolean.TRUE.equals(heldBack);
+    }
+
+    /**
+     * One Admin operation audit row per AD row added or removed, carrying the same details as a manual
+     * change (D-32). It is written in the group's transaction, so a change is never kept without its audit.
+     */
+    private void auditMembershipChange(VirtualGroup group, VirtualGroupMember row, AuditAction action) {
+        Map<String, String> detail = new LinkedHashMap<>();
+        detail.put("userId", row.getUserId());
+        detail.put("listType", row.getListType());
+        detail.put("source", VirtualGroupMember.SOURCE_AD);
+        String detailJson;
+        try {
+            detailJson = objectMapper.writeValueAsString(detail);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Cannot write the audit of AD member " + row.getUserId()
+                    + " in " + group.getCode(), e);
+        }
+        securityAuditComponent.recordAudit(SecurityAuditComponent.AuditLogRequest.builder()
+                .action(action)
+                .resourceType("VIRTUAL_GROUP")
+                .resourceId(group.getId())
+                .resourceName(group.getName())
+                .userId(LDAP_SYNC_ACTOR)
+                .userName(LDAP_SYNC_ACTOR)
+                .newValue(detailJson)
+                .success(true)
+                .build());
+    }
+
+    /** Whether the group still has an active, not deleted member once the planned rows are applied. */
+    private boolean anyActiveMemberAfter(VirtualGroup group, List<VirtualGroupMember> additions,
+                                         List<VirtualGroupMember> removals) {
+        Set<String> removedIds = removals.stream().map(VirtualGroupMember::getId).collect(Collectors.toSet());
+        Set<String> userIds = new LinkedHashSet<>();
+        virtualGroupMemberRepository.findByGroupId(group.getId()).stream()
+                .filter(row -> !removedIds.contains(row.getId()))
+                .forEach(row -> userIds.add(row.getUserId()));
+        additions.forEach(row -> userIds.add(row.getUserId()));
+        return userRepository.findAllById(userIds).stream()
+                .anyMatch(user -> user.isActive() && !Boolean.TRUE.equals(user.getDeleted()));
+    }
+
+    /**
+     * Reads the members of each mapped AD group. Members without an employee ID are counted and left out: such
+     * accounts are not stored by design, so they cannot be on a list and do not make the AD group incomplete.
+     */
+    private GroupFetchResult fetchAdGroups(Set<String> adGroups) {
         Map<String, LdapGroupUserAccumulator> accumulator = new LinkedHashMap<>();
-        Set<String> fetchedRoleKeys = new LinkedHashSet<>();
+        Set<String> readGroups = new LinkedHashSet<>();
+        Set<String> partlyReadGroups = new LinkedHashSet<>();
         int totalFetched = 0;
-        for (Map.Entry<String, String> entry : groupDefs.entrySet()) {
-            String roleKey = entry.getKey();
-            String groupCn = entry.getValue();
+        int withoutEmployeeId = 0;
+        String employeeIdAttr = ldapProperties.getAttributes().getEmployeeId();
+        for (String groupCn : adGroups) {
             try {
-                List<Map<String, String>> users = ldapClient.fetchUsersInGroup(groupCn);
+                LdapClient.AdGroupMembers members = ldapClient.fetchUsersInGroup(groupCn);
+                List<Map<String, String>> users = members.users();
+                if (!members.complete()) {
+                    partlyReadGroups.add(groupCn);
+                }
                 totalFetched += users.size();
-                addFetchedGroupUsers(accumulator, users, groupCn, roleKey);
-                fetchedRoleKeys.add(roleKey);
+                for (Map<String, String> userAttrs : users) {
+                    String employeeId = trimToNull(userAttrs.get(employeeIdAttr));
+                    if (employeeId != null) {
+                        accumulator.computeIfAbsent(employeeId, k -> new LdapGroupUserAccumulator(userAttrs))
+                                .hitGroupNames.add(groupCn);
+                    } else {
+                        withoutEmployeeId++;
+                    }
+                }
+                readGroups.add(groupCn);
             } catch (Exception e) {
                 log.warn("Failed to fetch users from AD group CN={}: {}", groupCn, e.getMessage());
             }
         }
-        return new GroupFetchResult(accumulator, totalFetched, fetchedRoleKeys);
-    }
-
-    private void addFetchedGroupUsers(
-            Map<String, LdapGroupUserAccumulator> accumulator,
-            List<Map<String, String>> users,
-            String groupCn,
-            String roleKey) {
-        String employeeIdAttr = ldapProperties.getAttributes().getEmployeeId();
-        for (Map<String, String> userAttrs : users) {
-            String employeeId = userAttrs.get(employeeIdAttr);
-            if (!StringUtils.hasText(employeeId)) {
-                continue;
-            }
-            accumulator.computeIfAbsent(employeeId, k -> new LdapGroupUserAccumulator(userAttrs))
-                    .addHitGroup(groupCn, roleKey);
-        }
+        return new GroupFetchResult(accumulator, totalFetched, withoutEmployeeId, readGroups, partlyReadGroups);
     }
 
     private UpsertBatchResult upsertAccumulatedUsers(
@@ -275,26 +303,25 @@ public class LdapSyncService {
         int update = 0;
         int skipped = 0;
         Map<String, String> syncedUserIdsByEmployeeId = new LinkedHashMap<>();
+        Set<String> failedEmployeeIds = new LinkedHashSet<>();
         for (int i = 0; i < entries.size(); i += batchSize) {
-            UpsertBatchResult result = upsertBatchWithFallback(
+            UpsertBatchResult result = upsertBatch(
                     entries.subList(i, Math.min(i + batchSize, entries.size())));
             success += result.success();
             insert += result.insert();
             update += result.update();
             skipped += result.skipped();
             syncedUserIdsByEmployeeId.putAll(result.syncedUserIdsByEmployeeId());
+            failedEmployeeIds.addAll(result.failedEmployeeIds());
         }
-        return new UpsertBatchResult(success, insert, update, skipped, syncedUserIdsByEmployeeId);
-    }
-
-    /** LDAP 若提供用户变更水位字段（如 AD 的 whenChanged），即可安全执行增量组同步。 */
-    boolean supportsUserChangeIncrementalSync() {
-        return StringUtils.hasText(ldapProperties.getAttributes().getWhenChanged());
+        return new UpsertBatchResult(success, insert, update, skipped, syncedUserIdsByEmployeeId,
+                failedEmployeeIds);
     }
 
     /**
      * 补齐本次 AD group 用户的一层 EM/FM 用户画像。
-     * <p>只根据同步前已有的组内用户收集 manager ID，补入的 manager 不再继续追踪其 EM/FM，避免递归。</p>
+     * <p>只根据同步前已有的组内用户收集 manager ID，补入的 manager 不再继续追踪其 EM/FM，避免递归；
+     * 补入的 manager 不进任何名单。</p>
      */
     int supplementDirectManagers(Map<String, LdapGroupUserAccumulator> accumulator) {
         Set<String> managerEmployeeIds = new LinkedHashSet<>();
@@ -322,7 +349,7 @@ public class LdapSyncService {
                     continue;
                 }
                 String employeeId = mappedManager.get().getEmployeeId();
-                accumulator.computeIfAbsent(employeeId, k -> LdapGroupUserAccumulator.supplemental(managerAttrs.get()));
+                accumulator.computeIfAbsent(employeeId, k -> new LdapGroupUserAccumulator(managerAttrs.get()));
                 fetched++;
             } catch (Exception e) {
                 log.warn("LDAP manager supplemental import failed for employeeID {}: {}", managerEmployeeId, e.getMessage());
@@ -345,302 +372,11 @@ public class LdapSyncService {
         }
     }
 
-    // ==================== 环境解析 ====================
-    /**
-     * 解析 Hermes 环境名。优先级：
-     * <ol>
-     *   <li>{@code ldap.hermes-env} 配置</li>
-     *   <li>环境变量 {@code LDAP_HERMES_ENV}</li>
-     *   <li>Spring profile 推断（dev→DEV, uat→UAT, ppd→PPD, prd→PRD）</li>
-     *   <li>默认 {@code DEV}</li>
-     * </ol>
-     */
-    String resolveHermesEnvironment() {
-        String configured = ldapProperties.getHermesEnv();
-        if (StringUtils.hasText(configured)) {
-            return configured.toUpperCase();
-        }
-        // Spring profile 推断
-        for (String profile : environment.getActiveProfiles()) {
-            String upper = profile.toUpperCase();
-            if (Set.of("DEV", "UAT", "PPD", "PRD").contains(upper)) {
-                return upper;
-            }
-            if (upper.contains("DEV")) return "DEV";
-            if (upper.contains("UAT")) return "UAT";
-            if (upper.contains("PPD")) return "PPD";
-            if (upper.contains("PRD")) return "PRD";
-        }
-        return "DEV";
-    }
-    // ==================== 组定义解析 ====================
-    /**
-     * 解析「角色标识 → AD 组名」映射。优先使用显式映射
-     * ({@code ldap.group-sync.groups})；未配置时使用 roles + pattern 拼接。
-     */
-    Map<String, String> resolveGroupDefinitions() {
-        String env = resolveHermesEnvironment();
-        LdapProperties.GroupSync gs = ldapProperties.getGroupSync();
-        // 显式映射优先
-        String explicitGroups = gs.getGroups();
-        if (StringUtils.hasText(explicitGroups)) {
-            Map<String, String> map = new LinkedHashMap<>();
-            for (String pair : explicitGroups.split(",")) {
-                String[] kv = pair.split("=", 2);
-                if (kv.length == 2) {
-                    String roleKey = kv[0].trim();
-                    if (isSupportedGroupRoleKey(roleKey)) {
-                        map.put(roleKey, kv[1].trim());
-                    } else {
-                        log.warn("Ignoring unsupported Hermes AD group mapping key: {}", roleKey);
-                    }
-                }
-            }
-            if (!map.isEmpty()) {
-                log.debug("Using explicit Hermes group mapping: {}", map);
-                return map;
-            }
-        }
-        // roles + pattern 拼接
-        String roles = gs.getRoles();
-        String pattern = gs.getPattern();
-        if (StringUtils.hasText(roles) && StringUtils.hasText(pattern)) {
-            Map<String, String> map = new LinkedHashMap<>();
-            for (String role : roles.split(",")) {
-                String trimmed = role.trim();
-                if (!trimmed.isEmpty()) {
-                    String groupCn = pattern.replace("{env}", env).replace("{role}", trimmed);
-                    if (isSupportedGroupRoleKey(trimmed)) {
-                        map.put(trimmed, groupCn);
-                    } else {
-                        log.warn("Ignoring unsupported Hermes AD group role: {}", trimmed);
-                    }
-                }
-            }
-            log.debug("Resolved Hermes group mapping via pattern: {}", map);
-            return map;
-        }
-
-        // 兜底：使用默认 Hermes 模式
-        log.warn("No Hermes group mapping configured; using default pattern");
-        Map<String, String> map = new LinkedHashMap<>();
-        for (String role : List.of(GROUP_ROLE_KEY_ADMIN, GROUP_ROLE_KEY_USER, GROUP_ROLE_KEY_DEVELOPER)) {
-            map.put(role, "Infodir-Hermes-Default-" + env + "-" + role);
-        }
-        return map;
-    }
-
-    private static boolean isSupportedGroupRoleKey(String roleKey) {
-            return HERMES_BINDINGS.stream().anyMatch(binding -> binding.roleKey.equals(roleKey));
-    }
-    // ==================== 绑定确保 ====================
-    /**
-     * 确保 Hermes 角色、虚拟组、角色绑定、权限分配基础数据存在。
-     * 幂等——已存在的跳过创建。
-     */
-    @Transactional
-    void ensureHermesBindings(Map<String, String> groupDefs) {
-        for (HermesGroupBinding binding : HERMES_BINDINGS) {
-            // 仅处理本次配置中涉及的绑定
-            if (!groupDefs.containsKey(binding.roleKey)) {
-                continue;
-            }
-            VirtualGroup vg = ensureVirtualGroup(binding.vgCode, binding.vgName,
-                    binding.adGroupCn(groupDefs), LDAP_SYNC_ACTOR);
-            // 仅对配置了角色编码的系统组确保角色绑定；Default Users 只维护成员关系。
-            if (StringUtils.hasText(binding.roleCode)) {
-                Role role = ensureRole(binding.roleCode, binding.displayName, binding.roleType, LDAP_SYNC_ACTOR);
-                // VirtualGroupRole binding
-                ensureVirtualGroupRole(vg.getId(), role.getId(), LDAP_SYNC_ACTOR);
-                // RoleAssignment (VIRTUAL_GROUP → Role)
-                ensureRoleAssignment(role.getId(), AssignmentTargetType.VIRTUAL_GROUP, vg.getId(), LDAP_SYNC_ACTOR);
-            }
-        }
-    }
-    private Role ensureRole(String code, String displayName, String type, String actor) {
-        return roleRepository.findByCode(code)
-                .orElseGet(() -> {
-                    Role r = Role.builder()
-                            .id(UUID.randomUUID().toString())
-                            .code(code)
-                            .name(displayName)
-                            .type(type)
-                            .displayName(displayName)
-                            .status("ACTIVE")
-                            .isSystem(true)
-                            .createdBy(actor)
-                            .updatedBy(actor)
-                            .build();
-                    return roleRepository.save(r);
-                });
-    }
-    private VirtualGroup ensureVirtualGroup(String code, String name, String adGroup, String actor) {
-        return virtualGroupRepository.findByCode(code)
-                .map(existing -> {
-                    boolean changed = false;
-                    if (!name.equals(existing.getName())) {
-                        existing.setName(name);
-                        changed = true;
-                    }
-                    if (!"SYSTEM".equals(existing.getType())) {
-                        existing.setType("SYSTEM");
-                        changed = true;
-                    }
-                    if (StringUtils.hasText(adGroup) && !adGroup.equals(existing.getAdGroup())) {
-                        existing.setAdGroup(adGroup);
-                        changed = true;
-                    }
-                    if (!"ACTIVE".equals(existing.getStatus())) {
-                        existing.setStatus("ACTIVE");
-                        changed = true;
-                    }
-                    if (changed) {
-                        existing.setUpdatedBy(actor);
-                        return virtualGroupRepository.save(existing);
-                    }
-                    return existing;
-                })
-                .orElseGet(() -> {
-                    VirtualGroup vg = VirtualGroup.builder()
-                            .id(UUID.randomUUID().toString())
-                            .code(code)
-                            .name(name)
-                            .type("SYSTEM")
-                            .displayName(name)
-                            .adGroup(adGroup)
-                            .status("ACTIVE")
-                            .createdBy(actor)
-                            .updatedBy(actor)
-                            .build();
-                    return virtualGroupRepository.save(vg);
-                });
-    }
-
-    private void ensureVirtualGroupRole(String vgId, String roleId, String actor) {
-        if (!virtualGroupRoleRepository.existsByVirtualGroupIdAndRoleId(vgId, roleId)) {
-            VirtualGroupRole vgr = VirtualGroupRole.builder()
-                    .id(UUID.randomUUID().toString())
-                    .virtualGroupId(vgId)
-                    .roleId(roleId)
-                    .createdBy(actor)
-                    .build();
-            virtualGroupRoleRepository.save(vgr);
-        }
-    }
-    private void ensureRoleAssignment(String roleId, AssignmentTargetType targetType,
-                                      String targetId, String actor) {
-        if (!roleAssignmentRepository.existsByRoleIdAndTargetTypeAndTargetId(
-                roleId, targetType, targetId)) {
-            RoleAssignment ra = RoleAssignment.builder()
-                    .id(UUID.randomUUID().toString())
-                    .roleId(roleId)
-                    .targetType(targetType)
-                    .targetId(targetId)
-                    .assignedBy(actor)
-                    .build();
-            roleAssignmentRepository.save(ra);
-        }
-    }
-    // ==================== 成员清理 ====================
-    /** 清理所有 Hermes 虚拟组中由 LDAP 同步添加的旧成员关系。 */
-    private void cleanOldLdapMembershipsForBindings() {
-        transactionTemplate.executeWithoutResult(status -> {
-            for (HermesGroupBinding binding : HERMES_BINDINGS) {
-                virtualGroupRepository.findByCode(binding.vgCode).ifPresent(vg -> {
-                    List<VirtualGroupMember> members = virtualGroupMemberRepository.findByGroupId(vg.getId());
-                    members.stream()
-                            .filter(m -> HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy()))
-                            .forEach(m -> virtualGroupMemberRepository.deleteByGroupIdAndUserId(
-                                    m.getGroupId(), m.getUserId()));
-                });
-            }
-        });
-    }
-
-    /**
-     * 增量对账：从成功拉取的目标组对应虚拟组中，删除已不在期望集合中的 LDAP 管理成员。
-     * 手工成员（{@code addedBy != HERMES_AD_SYNC}）保留；拉取失败的组不删。
-     */
-    private void pruneStaleHermesMemberships(
-            List<Map.Entry<String, LdapGroupUserAccumulator>> entries,
-            Map<String, String> groupDefs,
-            Map<String, String> syncedUserIdsByEmployeeId,
-            Set<String> fetchedRoleKeys) {
-        if (fetchedRoleKeys.isEmpty()) {
-            return;
-        }
-        Map<String, Set<String>> groupToVgCodes = buildGroupToVgCodes(groupDefs);
-        VirtualGroup defaultVg = virtualGroupRepository.findByCode(VG_HERMES_USERS).orElse(null);
-        Map<String, Set<String>> desiredUserIdsByVg = collectDesiredUserIdsByVg(
-                entries, groupDefs, syncedUserIdsByEmployeeId, groupToVgCodes, defaultVg);
-        transactionTemplate.executeWithoutResult(status ->
-                removeLdapMembersNotDesired(groupDefs, fetchedRoleKeys, desiredUserIdsByVg));
-    }
-
-    private Map<String, Set<String>> collectDesiredUserIdsByVg(
-            List<Map.Entry<String, LdapGroupUserAccumulator>> entries,
-            Map<String, String> groupDefs,
-            Map<String, String> syncedUserIdsByEmployeeId,
-            Map<String, Set<String>> groupToVgCodes,
-            VirtualGroup defaultVg) {
-        Map<String, Set<String>> desiredUserIdsByVg = new LinkedHashMap<>();
-        for (Map.Entry<String, LdapGroupUserAccumulator> entry : entries) {
-            if (entry.getValue().supplementalOnly) {
-                continue;
-            }
-            String actualUserId = syncedUserIdsByEmployeeId.getOrDefault(entry.getKey(), entry.getKey());
-            LdapGroupUserAccumulator acc = entry.getValue();
-            Set<String> targetVgCodes = resolveTargetVirtualGroups(
-                    acc.userAttrs, acc.hitGroupNames, acc.hitRoleKeys, groupDefs, groupToVgCodes);
-            if (targetVgCodes.isEmpty() && defaultVg != null) {
-                targetVgCodes = Set.of(defaultVg.getCode());
-            }
-            for (String vgCode : targetVgCodes) {
-                desiredUserIdsByVg.computeIfAbsent(vgCode, k -> new LinkedHashSet<>()).add(actualUserId);
-            }
-        }
-        return desiredUserIdsByVg;
-    }
-
-    private void removeLdapMembersNotDesired(
-            Map<String, String> groupDefs,
-            Set<String> fetchedRoleKeys,
-            Map<String, Set<String>> desiredUserIdsByVg) {
-        for (HermesGroupBinding binding : HERMES_BINDINGS) {
-            if (!fetchedRoleKeys.contains(binding.roleKey) || !groupDefs.containsKey(binding.roleKey)) {
-                continue;
-            }
-            virtualGroupRepository.findByCode(binding.vgCode).ifPresent(vg -> {
-                Set<String> desired = desiredUserIdsByVg.getOrDefault(binding.vgCode, Set.of());
-                for (VirtualGroupMember m : virtualGroupMemberRepository.findByGroupId(vg.getId())) {
-                    if (HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy())
-                            && !desired.contains(m.getUserId())) {
-                        virtualGroupMemberRepository.deleteByGroupIdAndUserId(m.getGroupId(), m.getUserId());
-                    }
-                }
-            });
-        }
-    }
-
-    private Map<String, Set<String>> buildGroupToVgCodes(Map<String, String> groupDefs) {
-        Map<String, Set<String>> groupToVgCodes = new LinkedHashMap<>();
-        for (HermesGroupBinding binding : HERMES_BINDINGS) {
-            if (!groupDefs.containsKey(binding.roleKey)) {
-                continue;
-            }
-            String adGroupCn = groupDefs.get(binding.roleKey);
-            virtualGroupRepository.findByCode(binding.vgCode)
-                    .ifPresent(vg -> groupToVgCodes.computeIfAbsent(adGroupCn, k -> new LinkedHashSet<>())
-                            .add(vg.getCode()));
-        }
-        return groupToVgCodes;
-    }
-
     // ==================== 批量 Upsert ====================
-    private UpsertBatchResult upsertBatchWithFallback(
-            List<Map.Entry<String, LdapGroupUserAccumulator>> batch) {
+    private UpsertBatchResult upsertBatch(List<Map.Entry<String, LdapGroupUserAccumulator>> batch) {
         int success = 0, insert = 0, update = 0, skipped = 0;
         Map<String, String> syncedUserIdsByEmployeeId = new LinkedHashMap<>();
+        Set<String> failedEmployeeIds = new LinkedHashSet<>();
         for (Map.Entry<String, LdapGroupUserAccumulator> entry : batch) {
             Map<String, String> attrs = entry.getValue().userAttrs;
             Optional<LdapUserData> mapped = ldapUserMapper.mapToUser(attrs);
@@ -662,220 +398,13 @@ public class LdapSyncService {
                 }
             } catch (Exception e) {
                 log.warn("Upsert failed for employeeId {}: {}", entry.getKey(), e.getMessage());
-                skipped++;
+                failedEmployeeIds.add(entry.getKey());
             }
         }
-        return new UpsertBatchResult(success, insert, update, skipped, syncedUserIdsByEmployeeId);
+        return new UpsertBatchResult(success, insert, update, skipped, syncedUserIdsByEmployeeId,
+                failedEmployeeIds);
     }
 
-    // ==================== 虚拟组成员关系同步 ====================
-    /**
-     * 为用户同步 Hermes 虚拟组成员关系。
-     * <p>规则：
-     * <ol>
-     *   <li>解析用户 {@code memberOf} → 提取 CN</li>
-     *   <li>匹配 Hermes 目标组 → 加入对应虚拟组</li>
-     *   <li>无命中时使用 {@code fallbackGroupNames}（用户在当前同步中被发现的组）</li>
-     *   <li>仍未命中时落入默认 Users 组</li>
-     * </ol>
-     */
-    @Transactional
-    void syncVirtualGroupMemberships(
-            List<Map.Entry<String, LdapGroupUserAccumulator>> entries,
-            Map<String, String> groupDefs,
-            Map<String, String> syncedUserIdsByEmployeeId) {
-        Map<String, Set<String>> groupToVgCodes = buildGroupToVgCodes(groupDefs);
-        // 默认 Users 虚拟组
-        VirtualGroup defaultVg = virtualGroupRepository.findByCode(VG_HERMES_USERS).orElse(null);
-        for (Map.Entry<String, LdapGroupUserAccumulator> entry : entries) {
-            if (entry.getValue().supplementalOnly) {
-                continue;
-            }
-            String employeeId = entry.getKey();
-            String actualUserId = syncedUserIdsByEmployeeId.getOrDefault(employeeId, employeeId);
-            LdapGroupUserAccumulator acc = entry.getValue();
-            // 通过 memberOf 确定目标虚拟组
-            Set<String> targetVgCodes = resolveTargetVirtualGroups(
-                    acc.userAttrs, acc.hitGroupNames, acc.hitRoleKeys, groupDefs, groupToVgCodes);
-            if (targetVgCodes.isEmpty() && defaultVg != null) {
-                targetVgCodes = Set.of(defaultVg.getCode());
-            }
-            // 写入组成员关系
-            for (String vgCode : targetVgCodes) {
-                virtualGroupRepository.findByCode(vgCode).ifPresent(vg -> {
-                    if (!virtualGroupMemberRepository.existsByGroupIdAndUserId(vg.getId(), actualUserId)) {
-                        VirtualGroupMember member = VirtualGroupMember.builder()
-                                .id(UUID.randomUUID().toString())
-                                .groupId(vg.getId())
-                                .userId(actualUserId)
-                                .addedBy(HERMES_SYNC_MEMBER_ADDED_BY)
-                                .build();
-                        virtualGroupMemberRepository.save(member);
-                    }
-                });
-            }
-            // 清理该用户不再属于的 Hermes LDAP 管理虚拟组
-            cleanStaleMembershipsForUser(actualUserId, targetVgCodes);
-        }
-    }
-
-    // ==================== 数据驱动的团队组同步 ====================
-    /**
-     * 为所有「配置了 {@code ad_group} 的 CUSTOM 虚拟组」（团队组）从 AD 拉取成员。
-     *
-     * <p>与硬编码的 {@link #HERMES_BINDINGS}（SYSTEM 能力组）解耦：新团队接入只需在 Admin Center
-     * 创建 CUSTOM 虚拟组并填写 {@code adGroup}，下一次同步即自动灌入成员，<b>无需改代码或发版</b>。</p>
-     *
-     * <p>SYSTEM 组由 Hermes 绑定链处理，此处按 {@code type != SYSTEM} 排除，避免重复处理与冲突清理。
-     * 手工添加的成员（{@code addedBy != HERMES_AD_SYNC}）予以保留，仅回收本同步任务管理的过期成员。</p>
-     */
-    void syncCustomAdGroupBackedVirtualGroups() {
-        List<VirtualGroup> teamGroups = virtualGroupRepository.findAll().stream()
-                .filter(vg -> !"SYSTEM".equals(vg.getType()))
-                .filter(vg -> StringUtils.hasText(vg.getAdGroup()))
-                .toList();
-        if (teamGroups.isEmpty()) {
-            return;
-        }
-        for (VirtualGroup vg : teamGroups) {
-            try {
-                syncOneCustomAdGroup(vg);
-            } catch (Exception e) {
-                log.warn("Custom AD-backed team group sync failed: vg={} adGroup={}: {}",
-                        vg.getCode(), vg.getAdGroup(), e.getMessage());
-            }
-        }
-    }
-
-    private void syncOneCustomAdGroup(VirtualGroup vg) throws javax.naming.NamingException {
-        String adGroupCn = vg.getAdGroup().trim();
-        List<Map<String, String>> users = ldapClient.fetchUsersInGroup(adGroupCn);
-        Set<String> targetUserIds = new LinkedHashSet<>();
-        for (Map<String, String> attrs : users) {
-            Optional<LdapUserData> mapped = ldapUserMapper.mapToUser(attrs);
-            if (mapped.isEmpty()) {
-                continue;
-            }
-            try {
-                LdapUserSyncService.UpsertResult res = ldapUserSyncService.upsertUser(mapped.get());
-                if (StringUtils.hasText(res.userId())) {
-                    targetUserIds.add(res.userId());
-                }
-            } catch (Exception e) {
-                log.warn("Upsert failed for team group {} member {}: {}",
-                        vg.getCode(), mapped.get().getId(), e.getMessage());
-            }
-        }
-        transactionTemplate.executeWithoutResult(status -> {
-            for (String userId : targetUserIds) {
-                if (!virtualGroupMemberRepository.existsByGroupIdAndUserId(vg.getId(), userId)) {
-                    virtualGroupMemberRepository.save(VirtualGroupMember.builder()
-                            .id(UUID.randomUUID().toString())
-                            .groupId(vg.getId())
-                            .userId(userId)
-                            .addedBy(HERMES_SYNC_MEMBER_ADDED_BY)
-                            .build());
-                }
-            }
-            // 仅回收由本同步任务添加、现已不在 AD 组中的成员；手工添加的成员保留
-            for (VirtualGroupMember m : virtualGroupMemberRepository.findByGroupId(vg.getId())) {
-                if (HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy())
-                        && !targetUserIds.contains(m.getUserId())) {
-                    virtualGroupMemberRepository.deleteByGroupIdAndUserId(m.getGroupId(), m.getUserId());
-                }
-            }
-        });
-        log.info("Custom AD-backed team group sync: vg={} adGroup={} members={}",
-                vg.getCode(), adGroupCn, targetUserIds.size());
-    }
-
-   /**
-     * 根据 {@code memberOf} 属性解析目标虚拟组集合。
-     */
-    private Set<String> resolveTargetVirtualGroups(
-            Map<String, String> userAttrs,
-            Set<String> fallbackGroupCns,
-            Set<String> hitRoleKeys,
-            Map<String, String> groupDefs,
-            Map<String, Set<String>> groupToVgCodes) {
-        Set<String> result = new java.util.LinkedHashSet<>();
-        // 1. 通过 memberOf 匹配
-        Set<String> memberOfCns = parseMemberOfCns(userAttrs);
-        for (Map.Entry<String, String> defEntry : groupDefs.entrySet()) {
-            String roleKey = defEntry.getKey();
-            String adGroupCn = defEntry.getValue();
-            if (memberOfCns.contains(adGroupCn)) {
-                findBindings(roleKey).forEach(binding -> result.add(binding.vgCode));
-            }
-        }
-        // 2. memberOf 无命中时，使用 fallback（本次同步命中组）
-        if (result.isEmpty()) {
-            for (String groupCn : fallbackGroupCns) {
-                result.addAll(groupToVgCodes.getOrDefault(groupCn, Collections.emptySet()));
-            }
-        }
-        // 3. 仍未命中：从 hitRoleKeys 推断
-        if (result.isEmpty()) {
-            for (String roleKey : hitRoleKeys) {
-                findBindings(roleKey).forEach(binding -> result.add(binding.vgCode));
-            }
-        }
-        return result;
-    }
-
-    /** 从用户属性中解析 {@code memberOf}，提取每个 DN 的 CN 部分。 */
-    Set<String> parseMemberOfCns(Map<String, String> userAttrs) {
-        String memberOf = userAttrs.get(AD_ATTR_MEMBER_OF);
-        if (!StringUtils.hasText(memberOf)) {
-            return Collections.emptySet();
-        }
-        Set<String> cns = new java.util.LinkedHashSet<>();
-        // memberOf 可能是多值属性（扁平化为逗号分隔或分号分隔）
-        String[] parts = memberOf.split("[,;]");
-        for (String part : parts) {
-            String trimmed = part.trim();
-            // 提取 CN=xxx 部分
-            if (trimmed.toUpperCase().startsWith("CN=")) {
-                String cn = trimmed.substring(3);
-                // 去掉可能尾随的其他 LDAP 属性
-                int nextAttr = cn.indexOf(',');
-                if (nextAttr > 0) {
-                    cn = cn.substring(0, nextAttr);
-                }
-                cns.add(cn.trim());
-            }
-        }
-        return cns;
-    }
-
-    /** 清理用户在 Hermes 虚拟组中不再需要的旧 LDAP 管理成员关系。 */
-    private void cleanStaleMembershipsForUser(String userId, Set<String> targetVgCodes) {
-        transactionTemplate.executeWithoutResult(status -> {
-            List<VirtualGroupMember> allMemberships =
-                    virtualGroupMemberRepository.findByUserId(userId);
-            for (VirtualGroupMember m : allMemberships) {
-                if (!HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy())) {
-                    continue; // 跳过非 LDAP 管理的成员关系
-                }
-                VirtualGroup vg = virtualGroupRepository.findById(m.getGroupId()).orElse(null);
-                if (vg == null) {
-                    continue;
-                }
-                // 检查是否为 Hermes 虚拟组
-                boolean isHermesVg = HERMES_BINDINGS.stream()
-                        .anyMatch(b -> b.vgCode.equals(vg.getCode()));
-                if (isHermesVg && !targetVgCodes.contains(vg.getCode())) {
-                    virtualGroupMemberRepository.deleteByGroupIdAndUserId(m.getGroupId(), userId);
-                    log.debug("Removed stale Hermes membership: userId={} vg={}", userId, vg.getCode());
-                }
-            }
-        });
-    }
-    private List<HermesGroupBinding> findBindings(String roleKey) {
-        return HERMES_BINDINGS.stream()
-                .filter(b -> b.roleKey.equals(roleKey))
-                .toList();
-    }
     // ==================== 审计 ====================
     private LdapSyncAudit startAudit(String type) {
         return auditRepository.save(LdapSyncAudit.builder()
@@ -886,17 +415,17 @@ public class LdapSyncService {
                 .startedAt(Instant.now())
                 .build());
     }
-    private LdapSyncAudit finishSuccess(LdapSyncAudit audit, int totalFetched,
-                                        long startMs, String overrideMessage) {
-        audit.setStatus(STATUS_SUCCESS);
+    private LdapSyncAudit finish(LdapSyncAudit audit, String status, int totalFetched,
+                                 long startMs, String overrideMessage) {
+        audit.setStatus(status);
         audit.setTotalFetched(totalFetched);
         audit.setFinishedAt(Instant.now());
         audit.setDurationMs(System.currentTimeMillis() - startMs);
         if (overrideMessage != null) {
             audit.setMessage(overrideMessage);
         }
-        log.info("Hermes AD group sync ({}) done: fetched={}, success={}, insert={}, update={}, skipped={}, {}ms",
-                audit.getSyncType(), totalFetched, audit.getSuccessCount(),
+        log.info("Hermes AD group sync ({}) {}: fetched={}, success={}, insert={}, update={}, skipped={}, {}ms",
+                audit.getSyncType(), status, totalFetched, audit.getSuccessCount(),
                 audit.getInsertCount(), audit.getUpdateCount(),
                 audit.getSkippedMissingKey(), audit.getDurationMs());
         return auditRepository.save(audit);
@@ -905,64 +434,141 @@ public class LdapSyncService {
         audit.setStatus(STATUS_FAILED);
         audit.setFinishedAt(Instant.now());
         audit.setDurationMs(System.currentTimeMillis() - startMs);
-        audit.setMessage(truncate(e.getMessage(), 1000));
+        audit.setMessage(truncate(e.getMessage(), AUDIT_MESSAGE_MAX));
         log.error("Hermes AD group sync ({}) failed: {}", audit.getSyncType(), e.getMessage());
         return auditRepository.save(audit);
     }
-    private String truncate(String v, int max) {
+    private static String truncate(String v, int max) {
         if (v == null) return null;
         return v.length() <= max ? v : v.substring(0, max);
     }
-    // ==================== 内部类型 ====================
-    /** Hermes 角色 → 虚拟组 → 角色编码 绑定定义。 */
-    record HermesGroupBinding(
-            String roleKey,
-            String vgCode,
-            String vgName,
-            String roleCode,
-            String displayName,
-            String roleType) {
-        String adGroupCn(Map<String, String> groupDefs) {
-            return groupDefs.getOrDefault(roleKey, "");
-        }
+    private static String trimToNull(String v) {
+        return StringUtils.hasText(v) ? v.trim() : null;
     }
-
-
+    // ==================== 内部类型 ====================
+    /** {@code skipped}: entries without an employee ID; {@code failedEmployeeIds}: entries that could not be stored. */
     record UpsertBatchResult(
             int success,
             int insert,
             int update,
             int skipped,
-            Map<String, String> syncedUserIdsByEmployeeId) {
+            Map<String, String> syncedUserIdsByEmployeeId,
+            Set<String> failedEmployeeIds) {
     }
 
     private record GroupFetchResult(
             Map<String, LdapGroupUserAccumulator> accumulator,
             int totalFetched,
-            Set<String> fetchedRoleKeys) {
+            int withoutEmployeeId,
+            Set<String> readGroups,
+            Set<String> partlyReadGroups) {
     }
+
+    /**
+     * Who is in each AD group that was read, as stored user ids. An AD group is complete when all its
+     * members were read and every one found was stored; only then may its lists lose rows.
+     */
+    private record AdMembership(Map<String, Set<String>> userIdsByGroup, Set<String> incompleteGroups) {
+        static AdMembership of(GroupFetchResult fetched, UpsertBatchResult counts) {
+            Map<String, Set<String>> userIdsByGroup = new LinkedHashMap<>();
+            Set<String> incompleteGroups = new LinkedHashSet<>(fetched.partlyReadGroups());
+            fetched.readGroups().forEach(groupCn -> userIdsByGroup.put(groupCn, new LinkedHashSet<>()));
+            for (Map.Entry<String, LdapGroupUserAccumulator> entry : fetched.accumulator().entrySet()) {
+                String userId = counts.syncedUserIdsByEmployeeId().get(entry.getKey());
+                for (String groupCn : entry.getValue().hitGroupNames) {
+                    if (userId != null) {
+                        userIdsByGroup.get(groupCn).add(userId);
+                    } else if (counts.failedEmployeeIds().contains(entry.getKey())) {
+                        incompleteGroups.add(groupCn);
+                    }
+                }
+            }
+            return new AdMembership(userIdsByGroup, incompleteGroups);
+        }
+
+        Optional<Set<String>> userIds(String groupCn) {
+            return Optional.ofNullable(userIdsByGroup.get(groupCn));
+        }
+
+        boolean complete(String groupCn) {
+            return !incompleteGroups.contains(groupCn);
+        }
+    }
+
+    /**
+     * How the run ended, as the record shows it: FAILED when no mapped AD group could be read (the directory was
+     * unreachable, nothing changed), PARTIAL when some were not read or read only in part (their lists only gained
+     * members or stayed as they were), SUCCESS otherwise. The message says which AD groups.
+     */
+    private static String outcomeStatus(Set<String> adGroups, AdMembership membership) {
+        if (adGroups.isEmpty()) {
+            return STATUS_SUCCESS;
+        }
+        long unread = adGroups.stream().filter(cn -> membership.userIds(cn).isEmpty()).count();
+        if (unread == adGroups.size()) {
+            return STATUS_FAILED;
+        }
+        boolean partlyRead = adGroups.stream().anyMatch(cn -> !membership.complete(cn));
+        return unread > 0 || partlyRead ? STATUS_PARTIAL : STATUS_SUCCESS;
+    }
+
+    /**
+     * What the audit record says beyond the counts: why nothing was read, which AD groups held back, and how many
+     * members were skipped for having no employee ID.
+     */
+    private static String outcomeMessage(Set<String> adGroups, AdMembership membership, List<String> heldBackGroups,
+                                         int skipped) {
+        StringBuilder message = new StringBuilder();
+        if (!heldBackGroups.isEmpty()) {
+            message.append("Kept the AD members of ").append(String.join(", ", heldBackGroups))
+                    .append(": removing them would leave no active member");
+        }
+        if (adGroups.isEmpty()) {
+            return message.length() > 0 ? message.toString() : "No virtual group maps an AD group";
+        }
+        List<String> unread = adGroups.stream().filter(cn -> membership.userIds(cn).isEmpty()).toList();
+        List<String> partial = adGroups.stream()
+                .filter(cn -> membership.userIds(cn).isPresent() && !membership.complete(cn))
+                .toList();
+        List<String> empty = adGroups.stream()
+                .filter(cn -> membership.userIds(cn).map(Set::isEmpty).orElse(false) && membership.complete(cn))
+                .toList();
+        if (!unread.isEmpty()) {
+            if (message.length() > 0) {
+                message.append("; ");
+            }
+            message.append("Not read, lists unchanged: ").append(String.join(", ", unread));
+        }
+        if (!partial.isEmpty()) {
+            if (message.length() > 0) {
+                message.append("; ");
+            }
+            message.append("Read incompletely, nobody removed: ").append(String.join(", ", partial));
+        }
+        if (!empty.isEmpty()) {
+            if (message.length() > 0) {
+                message.append("; ");
+            }
+            message.append("No members found (missing or empty AD group): ").append(String.join(", ", empty));
+        }
+        if (skipped > 0) {
+            if (message.length() > 0) {
+                message.append("; ");
+            }
+            message.append(SKIPPED_WITHOUT_EMPLOYEE_ID).append(skipped);
+        }
+        return message.length() == 0 ? null : truncate(message.toString(), AUDIT_MESSAGE_MAX);
+    }
+
     /**
      * 按 employeeID 聚合的 LDAP 用户数据。
-     * 同一用户可能出现在多个 AD 组中，本对象累积其命中。
+     * 同一用户可能出现在多个 AD 组中，本对象累积其命中；补导入的 manager 不命中任何组。
      */
     static class LdapGroupUserAccumulator {
         final Map<String, String> userAttrs;
-        final Set<String> hitGroupNames = new java.util.LinkedHashSet<>();
-        final Set<String> hitRoleKeys = new java.util.LinkedHashSet<>();
-        final boolean supplementalOnly;
+        final Set<String> hitGroupNames = new LinkedHashSet<>();
         LdapGroupUserAccumulator(Map<String, String> attrs) {
-            this(attrs, false);
-        }
-        private LdapGroupUserAccumulator(Map<String, String> attrs, boolean supplementalOnly) {
             this.userAttrs = attrs;
-            this.supplementalOnly = supplementalOnly;
-        }
-        static LdapGroupUserAccumulator supplemental(Map<String, String> attrs) {
-            return new LdapGroupUserAccumulator(attrs, true);
-        }
-        void addHitGroup(String groupCn, String roleKey) {
-            hitGroupNames.add(groupCn);
-            hitRoleKeys.add(roleKey);
         }
     }
 }

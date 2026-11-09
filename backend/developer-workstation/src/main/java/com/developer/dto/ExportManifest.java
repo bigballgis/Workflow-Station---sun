@@ -82,7 +82,12 @@ public class ExportManifest {
      * 图标信息
      */
     private IconInfo icon;
-    
+
+    /**
+     * 所属团队（平台访问模型 §8.1）：按 code 在目标环境对上同名团队；DW 导入、Admin 部署据此落位。旧包没有这一项。
+     */
+    private TeamInfo team;
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -112,5 +117,14 @@ public class ExportManifest {
         private String category;
         private String color;
         private String svgContent;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TeamInfo {
+        private String code;
+        private String name;
     }
 }

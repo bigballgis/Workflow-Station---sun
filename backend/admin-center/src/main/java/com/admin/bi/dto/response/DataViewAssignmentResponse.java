@@ -15,17 +15,16 @@ public class DataViewAssignmentResponse {
     private String id;
     private String dashboardId;
     private String dashboardTitle;
-    private Long functionUnitId;
     private String functionUnitCode;
     private String functionUnitName;
-    private Long tableId;
     private String tableName;
     private String tableDisplayName;
     private String tableType;
-    private Long viewId;
     private String viewName;
     private Boolean viewAvailable;
     private Boolean enabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** List only: whether the caller may change it — its unit is of a team they lead, or SYS_ADMIN (D-15, AC-32). */
+    private Boolean canEdit;
 }

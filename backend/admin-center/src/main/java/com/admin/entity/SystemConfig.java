@@ -16,7 +16,7 @@ import java.time.Instant;
         @Index(name = "idx_config_key", columnList = "configKey")
 })
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class SystemConfig {

@@ -147,7 +147,11 @@
                 test-id="user-ubr-leader-guide-link"
               />
             </div>
-            <div class="ubr-toolbar">
+            <!-- UBR changes are SYS_ADMIN's (D-13): Technical Leads and Auditors only read them. -->
+            <div
+              v-if="canWriteUbr"
+              class="ubr-toolbar"
+            >
               <el-button
                 type="primary"
                 size="small"
@@ -193,6 +197,7 @@
                     </template>
                   </el-table-column>
                   <el-table-column
+                    v-if="canWriteUbr"
                     :label="t('common.operation')"
                     width="220"
                     align="center"
@@ -463,6 +468,7 @@ import { watch, toRef, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserDetail } from '@/composables/modules/useUserDetail'
 import DesignerHelpLink from '@/components/relation-table/DesignerHelpLink.vue'
+import { canWrite } from '@/utils/permission'
 
 const props = defineProps<{ modelValue: boolean; userId: string }>()
 defineEmits(['update:modelValue'])
@@ -485,6 +491,8 @@ const { loading, detailActiveTab, user, businessUnits, portalVirtualGroups, plat
   loadDetail, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole,
   setBuRoleMembership,
 } = useUserDetail(toRef(props, 'userId'))
+
+const canWriteUbr = computed(() => canWrite('organizationMembers'))
 
 const successfulLoginHistory = computed(() =>
   (user.value?.loginHistory ?? []).filter((row) => row.success),

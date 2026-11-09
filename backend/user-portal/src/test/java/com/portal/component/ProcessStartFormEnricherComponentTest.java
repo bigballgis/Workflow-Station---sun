@@ -82,7 +82,7 @@ class ProcessStartFormEnricherComponentTest {
         when(userDisplayNameResolver.resolve("system")).thenReturn("System");
         stubJdbc();
         when(primaryKeyAllocationService.allocate(
-                eq(MAIN_TABLE), eq("id"), any(PkGenerationConfig.class), anyInt(), anyString()))
+                eq(MAIN_TABLE), eq("id"), any(PkGenerationConfig.class), anyInt(), anyString(), eq("up_pk_sequences")))
                 .thenReturn(List.of("MAIN-1"));
     }
 
@@ -108,7 +108,7 @@ class ProcessStartFormEnricherComponentTest {
         enricher.enrichOnInsert("FU-MCY", "system", variables);
 
         assertThat(variables.get("id")).isEqualTo("CASE-9");
-        verify(primaryKeyAllocationService, never()).allocate(anyLong(), anyString(), any(), anyInt(), anyString());
+        verify(primaryKeyAllocationService, never()).allocate(anyLong(), anyString(), any(), anyInt(), anyString(), anyString());
     }
 
     @Test
@@ -119,7 +119,7 @@ class ProcessStartFormEnricherComponentTest {
         enricher.enrichOnInsert("FU-MCY", "system", variables);
 
         assertThat(variables).doesNotContainKey("case_number");
-        verify(primaryKeyAllocationService, never()).allocate(anyLong(), anyString(), any(), anyInt(), anyString());
+        verify(primaryKeyAllocationService, never()).allocate(anyLong(), anyString(), any(), anyInt(), anyString(), anyString());
     }
 
     @Test

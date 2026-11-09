@@ -45,8 +45,8 @@ Table Design 先建 VARCHAR 列，表单上把控件改成 Owner（**主表、�
 
 | 文档 | 覆盖 |
 |------|------|
-| [portal-bu-rbac.md](./portal-bu-rbac.md) | **身份从哪来**：BU + 角色（UBR）模型、工作台上下文、JWT 硬约束 |
-| [portal-permission-self-service.md](./portal-permission-self-service.md) | **门户能做什么**：UBR 自助申请/代办/退出、无 UBR（`C` 为空集）时的访问模式 |
+| [portal-bu-rbac.md](./portal-bu-rbac.md) | **身份从哪来**：BU + 角色（UBR）模型、工作台上下文、JWT 硬约束（门户准入与平台角色见平台访问模型 PRD） |
+| [portal-permission-self-service.md](./portal-permission-self-service.md) | **门户能做什么**：UBR 自助申请/代办/退出、无 UBR（`C` 为空集）时的访问模式（门户准入段已由平台访问模型 PRD §7.1 取代） |
 | [portal-task-delegation.md](./portal-task-delegation.md) | **站立任务委托**：时间窗规则；目标为指定用户 **或** BU+Role；不改 `assignee`；须切工作台；与 UBR「代办申请」分域 |
 | [portal-task-single-delegate.md](./portal-task-single-delegate.md) | **单任务委托按钮**（已定稿）：不改 `assignee`；目标为指定用户 **或** BU+Role；不认领；须切到该工作台才可见 |
 
@@ -56,9 +56,9 @@ Table Design 先建 VARCHAR 列，表单上把控件改成 Owner（**主表、�
 
 | 文档 | 覆盖 |
 |------|------|
-| [developer-workstation-workspace-rbac.md](./developer-workstation-workspace-rbac.md) | 功能单元工作区隔离：Technical Lead / Team Lead / Developer 可见性与操作权限 |
+| [developer-workstation-workspace-rbac.md](./developer-workstation-workspace-rbac.md) | 功能单元工作区隔离：Technical Lead / Team Lead / Developer 可见性与操作权限（**目标规则已由 [platform-access-model-requirements.md](./platform-access-model-requirements.md) 取代**，仅作历史实现参考） |
 
-> 与 [portal-bu-rbac.md](./portal-bu-rbac.md) 互补：这里是**设计器**工作区，那里是**终端用户**门户。
+> 现行的设计器工作区规则见 [platform-access-model-requirements.md](./platform-access-model-requirements.md) §6；终端用户门户见 [portal-bu-rbac.md](./portal-bu-rbac.md)。
 
 ## Table Design 建模规则
 
@@ -77,6 +77,8 @@ Table Design 先建 VARCHAR 列，表单上把控件改成 Owner（**主表、�
 | 文档 | 覆盖 |
 |------|------|
 | [feature-blueprint.md](./feature-blueprint.md) | 1.0 功能总蓝图（三应用 = 三层楼的整体视图，2.0 规划树） |
+| [platform-access-model-requirements.md](./platform-access-model-requirements.md) | **平台访问模型 PRD**（状态：**已定稿，开发中 v1.6**）：4 个平台角色、SYSTEM 组只留 SysAdmin/Auditor、CUSTOM = Portal 唯一入口且不绑角色（SysAdmin 也要 CUSTOM 才能进，进入后无旁路、只按 UBR）、团队 = Workspace（TL/Developer 两个 AD 组、按团队生效）、FU 唯一归属且所属团队随部署带到 Admin、TL 的 Admin 范围（本 WS FU + 全部 BU/业务 Role） |
+| [platform-access-model-implementation-plan.md](./platform-access-model-implementation-plan.md) | 上面这份 PRD 的**实施进度**：10 个工作包、各包明细与状态、范围外问题 |
 | [user-profile-information-architecture.md](./user-profile-information-architecture.md) | 三端「个人中心 / 顶栏用户菜单」的信息边界与术语 |
 | [shared-list-components.md](./shared-list-components.md) | **列表共享组件 + 服务端分页接入规范**（状态：**方案已定稿**）：列头 / 按 kind 筛选排序 / 可调列宽 / 分页；**§6.5 RT**；**§6.6 列宽 fill（宽屏按底宽比例摊余量）**；**§6.7 Portal/Admin 侧栏 list view 必须接全套**；本期不含 DW |
 | [list-file-name-filter.md](./list-file-name-filter.md) | **列表 FILE 列按文件名筛选**（状态：**已实现**）：`Kind.FILE`；与格子同一套抽名；禁止当 TEXT 比 URL |

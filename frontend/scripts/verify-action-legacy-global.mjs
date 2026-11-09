@@ -112,7 +112,9 @@ with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as target:
   target.writestr(entry.filename,data)
 sys.stdout.buffer.write(output.getvalue())
 `],{input:await response.body()})
-  const imported=await manage('POST','/function-units/import',{fileName:'legacy-actions.zip',fileContent:legacy.toString('base64')})
+  const {packageTeam}=await manage('POST','/function-units/import/preview',{fileName:'legacy-actions.zip',fileContent:legacy.toString('base64')})
+  assert(packageTeam?.code,'Exported package names no team')
+  const imported=await manage('POST','/function-units/import',{fileName:'legacy-actions.zip',fileContent:legacy.toString('base64'),teamCode:packageTeam.code})
   const id=imported.functionUnit.id
   if(!catalogs.includes(id))catalogs.push(id)
   const checked=await manage('POST',`/function-units/${id}/validate`)

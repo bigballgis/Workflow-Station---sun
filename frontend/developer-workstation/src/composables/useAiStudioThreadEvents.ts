@@ -6,6 +6,7 @@ import {
   type AiStudioThreadEventType
 } from '@/api/aiStudioThread'
 import { parseSseBlock, reconnectDelay } from '@/utils/aiStudioSharedThread'
+import { fetchWithSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 export type AiStudioThreadEventHandler = (type: AiStudioThreadEventType, data: AiStudioThreadEventData) => void
 
@@ -33,7 +34,7 @@ export function useAiStudioThreadEvents(functionUnitId: () => number, onEvent: A
     controller = ctrl
     let fatal = false
     try {
-      const res = await fetch(AI_STUDIO_THREAD_EVENTS_URL(functionUnitId()), {
+      const res = await fetchWithSessionRefresh(AI_STUDIO_THREAD_EVENTS_URL(functionUnitId()), {
         method: 'GET', headers: headers(), credentials: 'same-origin', signal: ctrl.signal
       })
       if (res.status === 403 || res.status === 404) {

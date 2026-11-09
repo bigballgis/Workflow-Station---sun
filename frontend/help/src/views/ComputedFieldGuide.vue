@@ -26,6 +26,7 @@ const related: GuideRelated[] = [
   { to: '/form-events', titleKey: 'guides.formEvents.title' },
   { to: '/email-send#template', titleKey: 'guides.emailSend.title' },
   { to: '/email-monitor', titleKey: 'guides.emailMonitor.title' },
+  { to: '/relation-table-structure', titleKey: 'guides.rtStructure.title' },
 ]
 
 const sections: GuideSection[] = [

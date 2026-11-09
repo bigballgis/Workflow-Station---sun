@@ -538,11 +538,13 @@ docker exec platform-postgres-dev psql -U platform_dev -d workflow_platform_dev 
 
 该脚本只新增索引，不修改或删除历史记录，可重复执行。非 Docker 环境用实际连接参数运行同一文件，必须保持 psql 自动提交，不可放入 `BEGIN/COMMIT` 或使用 `--single-transaction`，因为它使用 `CREATE INDEX CONCURRENTLY`。若执行曾被中断，先由数据库管理员检查 `idx_change_history_sub_table_latest` 的 `indisvalid/indisready`；`IF NOT EXISTS` 不会修复已存在但无效的索引。
 
-如需手动初始化（非 Docker 场景）：
+如需手动初始化（非 Docker 场景，空库）：
 ```powershell
 cd deploy/init-scripts
 .\init-database.ps1 -DbHost localhost -DbPort 5432 -DbName workflow_platform_dev -DbUser platform_dev -DbPassword dev_password_123
 ```
+
+`init-database.ps1` 运行时读取 `00-init-all.sh`，执行与 Docker 初始化完全相同的脚本和顺序（Flowable 建表与升级、schema、种子、演示功能单元、`90-post-seed/04`、`05`），初始 System Administrator 为 `developer`。加 `-SkipDemoData` 则按 k8s 初始化执行（见 §9.1.2）；`-ListOnly` 只列出将执行的脚本。任一脚本出错即停止（`ON_ERROR_STOP`）。
 
 #### 8.3.1 开发者工作台：部署任务表 `dw_deployment_jobs`
 
@@ -633,21 +635,21 @@ GRANT ALL PRIVILEGES ON DATABASE workflow_platform_{env} TO platform_{env};
 
 #### 9.1.2 数据库 Schema 初始化
 
-首次部署需要初始化数据库 schema。使用 `init-database.ps1` 脚本：
+首次部署需要初始化数据库（空库）。使用 `init-database.ps1` 的 k8s 模式：
 
 ```powershell
 cd deploy/init-scripts
-.\init-database.ps1 -DbHost {postgres-host} -DbPort 5432 -DbName workflow_platform_{env} -DbUser platform_{env} -DbPassword {password}
+.\init-database.ps1 -DbHost {postgres-host} -DbPort 5432 -DbName workflow_platform_{env} -DbUser platform_{env} -DbPassword {password} -SkipDemoData
 ```
 
-或者手动执行 SQL：
-```powershell
-# 使用 standalone schema 文件
-cd deploy/init-scripts
-psql -h {host} -p 5432 -U platform_{env} -d workflow_platform_{env} -f 00-schema/00-init-all-schemas-standalone.sql
-```
+**无仓库工具链的新库**：`deploy/k8s/init-data/` 提供离线纯 SQL，图形客户端或 `psql -v ON_ERROR_STOP=1 -f` **按以下顺序**执行（顺序不能换，`-SkipDemoData` 执行的就是这四步）：
 
-**无仓库工具链的新库**：`deploy/k8s/init-data/` 提供离线 SQL。**图形客户端**请按顺序执行 **`init-platform-schema/all-in-one-for-gui.sql`** → **`init-flowable/create/flowable.postgres.all.create.sql`** → **`init-platform-seed/all-in-one-for-gui.sql`**（纯 SQL；其中 seed **仅为 `01-admin`**，无 08/15/16 演示包）。需要完整演示数据时用 **`deploy/init-scripts/init-database.ps1`**。有 **`psql`** 时也可对上述三个文件执行 `psql -f`。详见 **`deploy/k8s/init-data/README.md`**。
+1. **`init-flowable/create/flowable.postgres.all.create.sql`**（Flowable 建表，7.0.0.0）
+2. **`init-platform-schema/all-in-one-for-gui.sql`**（必须在 Flowable 建表之后：其中给 `act_hi_taskinst` 建索引、加宽 `act_*` 列；第一段把执行账号在本库的默认时区设为 `Asia/Hong_Kong`，所以用平台账号 `platform_{env}` 执行；不需要库 owner 或超级用户，不影响同库其它账号，也不影响该账号在同实例其它库的会话）
+3. **`init-platform-seed/all-in-one-for-gui.sql`**（`01-admin` 与 `90-post-seed`，含访问模型切换；无演示功能单元，无 `developer`，初始 System Administrator 为 `admin`）
+4. **`init-flowable/upgrade/MIGRATE-7.0.0-to-7.2.0-for-gui.sql`**（Flowable 7.0.0.0 → 7.2.0.2；新建库也必须执行，各环境 `FLOWABLE_SCHEMA_UPDATE=false`，否则引擎报 `version mismatch` 拒绝启动）
+
+两个 all-in-one 文件由 `node deploy/k8s/init-data/build-all-in-one.mjs` 按 `00-init-all.sh` 的顺序生成，`deploy/k8s/init-data/verify-init-parity.sh` 校验它们与 Docker 初始化建出的对象一致。`00-schema/00-init-all-schemas*.sql` 两个 `\i` 驱动文件只列到 `51-`，不要再用。需要完整演示数据时用 `init-database.ps1`（不带 `-SkipDemoData`）。详见 **`deploy/k8s/init-data/README.md`**。
 
 若库已初始化、仅需补开发者部署任务表，可单独执行：
 
@@ -815,8 +817,8 @@ confluentinc/cp-kafka:7.5.3           # Docker Hub
 |--------|-----|-----|------|
 | SWAGGER_ENABLED | true | false | false |
 | FLOWABLE_SCHEMA_UPDATE | true | false | false |
-| JWT_EXPIRATION | 24h | 12h | 8h |
-| JWT_REFRESH_EXPIRATION | 7d | 3d | 1d |
+| JWT_EXPIRATION | 15min | 15min | 15min |
+| JWT_REFRESH_EXPIRATION | 8h | 8h | 8h |
 | LOG_LEVEL_ROOT | INFO | INFO | WARN |
 | LOG_LEVEL_SQL | WARN | WARN | ERROR |
 | PASSWORD_MIN_LENGTH | 8 | 10 | 12 |
@@ -854,14 +856,15 @@ Kafka(K8S) ───────────────────────
 | `SPRING_PROFILES_ACTIVE` | Spring Profile | `docker` / `sit` |
 | `SPRING_DATASOURCE_URL` | JDBC URL | `jdbc:postgresql://postgres:5432/workflow_platform_dev` |
 | `SPRING_DATASOURCE_USERNAME` | DB 用户名 | `platform_dev` |
-| `SPRING_DATASOURCE_PASSWORD` | DB 密码 | `dev_password_123` |
+| `SPRING_DATASOURCE_PASSWORD` | DB 密码，**必填**，缺失则服务启动失败 | 见各环境 `.env` |
 | `SPRING_REDIS_HOST` | Redis 主机 | `redis` / `redis-service` |
-| `SPRING_REDIS_PASSWORD` | Redis 密码 | `dev_redis_123` |
+| `SPRING_REDIS_PASSWORD` | Redis 密码，**必填**（可为空字符串），未定义则服务启动失败 | 见各环境 `.env` |
 | `SPRING_KAFKA_BOOTSTRAP_SERVERS` | Kafka 连接地址 | `kafka:29092` / `kafka-service:29092` |
-| `JWT_SECRET` | JWT 签名密钥 | 256-bit 字符串 |
-| `JWT_EXPIRATION` | JWT 过期时间(ms) | `86400000` |
-| `JWT_REFRESH_EXPIRATION` | 刷新令牌过期时间(ms) | `604800000` |
-| `ENCRYPTION_SECRET_KEY` | AES-256 加密密钥 | 32 字节字符串 |
+| `JWT_SECRET` | JWT 签名密钥，**必填**，缺失则服务启动失败 | 256-bit 字符串 |
+| `JWT_EXPIRATION` | access token 有效期(ms)，**必填**，代码内无默认值，缺失则服务启动失败 | `900000`（15 分钟） |
+| `JWT_REFRESH_EXPIRATION` | 续期凭证有效期(ms) = 会话空闲超时，**必填**，缺失则服务启动失败 | `28800000`（8 小时） |
+| `ENCRYPTION_SECRET_KEY` | AES-256 加密密钥，**必填**，缺失则服务启动失败 | 32 字节字符串 |
+| `SERVICE_INTERNAL_TOKEN` | 服务间调用令牌（admin-center / user-portal / DW / 引擎共享，Activepieces 不得持有）；Admin 逐接口鉴权后，后端调 Admin 全靠它。**必填**，缺失则服务启动失败 | 见各环境 `.env` |
 | `CORS_ALLOWED_ORIGINS` | CORS 允许的源 | `http://localhost:3000,...` |
 | `SWAGGER_ENABLED` | 是否启用 Swagger | `true` / `false` |
 
@@ -994,7 +997,8 @@ cd deploy/k8s
 | 问题 | 原因 | 解决 |
 |------|------|------|
 | 后端启动报 `Connection refused` | PostgreSQL 地址配置错误 | 检查 `SPRING_DATASOURCE_URL` 中的主机地址 |
-| Flowable 表不存在 | Schema 未初始化 | 运行 `init-database.ps1` 或设置 `FLOWABLE_SCHEMA_UPDATE=true` |
+| Flowable 表不存在 | Schema 未初始化 | 空库按 §9.1.2 初始化（`init-database.ps1 -SkipDemoData` 或 `deploy/k8s/init-data` 四步）；不要改 `FLOWABLE_SCHEMA_UPDATE`（各环境一律 `false`） |
+| 引擎启动报 `FlowableWrongDbException: version mismatch` | Flowable 表停在 7.0.0.0（只执行了 `init-flowable/create`） | 停引擎、备份后执行 `deploy/k8s/init-data/init-flowable/upgrade/MIGRATE-7.0.0-to-7.2.0-for-gui.sql` |
 
 ---
 

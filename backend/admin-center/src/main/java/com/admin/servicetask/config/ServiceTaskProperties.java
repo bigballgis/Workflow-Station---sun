@@ -114,7 +114,7 @@ public class ServiceTaskProperties {
          * 同值，由种子脚本固定写入）。它映射到 {@link #projectExternalId}（历史共享 project），
          * 因此存量 flow 无需迁移即成为「Public workspace」的内容。
          */
-        private String publicGroupId = "vg-dev-public";
+        private String publicGroupId = com.platform.security.entity.VirtualGroup.PUBLIC_TEAM_ID;
 
         /**
          * 团队 workspace 的 AP {@code externalProjectId} 前缀：团队虚拟组 {@code <id>} 映射到

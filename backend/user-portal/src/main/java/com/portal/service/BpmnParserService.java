@@ -440,12 +440,6 @@ public class BpmnParserService {
                 break;
             case "ELEMENT_VARIABLE":
                 break;
-            case "VIRTUAL_GROUP":
-            case "BU_UNBOUNDED_ROLE":
-                if (taskInfo.getAssigneeValue() != null && !taskInfo.getAssigneeValue().isBlank()) {
-                    taskInfo.setCandidateGroups(taskInfo.getAssigneeValue());
-                }
-                break;
             default:
                 log.debug("Portal assignee preview: no local resolution for type {}", assigneeType);
         }

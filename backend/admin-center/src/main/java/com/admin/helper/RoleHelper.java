@@ -59,14 +59,10 @@ public class RoleHelper {
     /**
      * Checks if a role type string represents a business role.
      * 
-     * <p>Business roles are roles that are bound to business units, either bounded or unbounded.
-     * These include:</p>
-     * <ul>
-     *   <li>BU_BOUNDED - Roles that are specific to a business unit</li>
-     *   <li>BU_UNBOUNDED - Roles that span across business units</li>
-     * </ul>
+     * <p>Business roles are held per business unit (BU_BOUNDED); every role without a business unit is a
+     * platform role (platform access model D-14, D-64).</p>
      * 
-     * @param roleType the role type string from platform-security entity (e.g., "BU_BOUNDED", "BU_UNBOUNDED")
+     * @param roleType the role type string from platform-security entity (e.g., "BU_BOUNDED")
      * @return true if the role type is a business role, false otherwise
      * @throws IllegalArgumentException if the role type string is invalid
      */
@@ -75,7 +71,7 @@ public class RoleHelper {
             return false;
         }
         
-        return "BU_BOUNDED".equals(roleType) || "BU_UNBOUNDED".equals(roleType);
+        return "BU_BOUNDED".equals(roleType);
     }
     
     /**
@@ -180,7 +176,7 @@ public class RoleHelper {
     /**
      * Gets all business roles from the repository.
      * 
-     * <p>This method retrieves all roles that are either BU_BOUNDED or BU_UNBOUNDED.
+     * <p>This method retrieves all BU_BOUNDED roles.
      * The results include both active and inactive business roles.</p>
      * 
      * @return a list of all business roles, empty list if none found
@@ -215,7 +211,7 @@ public class RoleHelper {
      * Validates if a role type string is a valid RoleType.
      * 
      * <p>This method checks if the given string can be converted to a valid RoleType enum.
-     * Valid values are: BU_BOUNDED, BU_UNBOUNDED, DEVELOPER, ADMIN, AUDITOR.</p>
+     * Valid values are: BU_BOUNDED, DEVELOPER, ADMIN, AUDITOR.</p>
      * 
      * @param roleType the role type string to validate
      * @return true if the role type is valid, false if null or invalid

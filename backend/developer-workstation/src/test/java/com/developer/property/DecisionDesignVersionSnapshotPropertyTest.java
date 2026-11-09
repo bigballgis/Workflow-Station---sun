@@ -320,7 +320,7 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
         });
 
         // Execute clone
-        FunctionUnit cloned = cloneComponent.clone(sourceFuId, clonedName);
+        FunctionUnit cloned = cloneComponent.clone(sourceFuId, clonedName, "vg-team-a");
 
         // Verify: exactly N decision definitions were saved
         assertThat(savedDecisions)

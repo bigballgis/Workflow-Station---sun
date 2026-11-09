@@ -2,24 +2,11 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { isAbortError } from './isAbortError'
 import { notifyError } from '@/utils/notify'
 import { ApiError, httpCodeToErrorCode } from '@/types/errors'
-import { refreshToken as refreshAuthToken, USER_ID_KEY, USERNAME_KEY, clearAuth } from './auth'
+import { USER_ID_KEY, USERNAME_KEY, clearAuth } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
-
-let isRefreshing = false
-let failedQueue: Array<{ resolve: Function; reject: Function }> = []
-
-const processQueue = (error: any, token: string | null = null) => {
-  failedQueue.forEach(prom => {
-    if (error) {
-      prom.reject(error)
-    } else {
-      prom.resolve(token)
-    }
-  })
-  failedQueue = []
-}
+import { installSessionRefresh, wasRetriedAfterSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 const request: AxiosInstance = axios.create({
   baseURL: '/api/v1/admin',
@@ -27,6 +14,7 @@ const request: AxiosInstance = axios.create({
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 })
+installSessionRefresh(request, config => axios.request(config))
 
 request.interceptors.request.use(
   (config) => {
@@ -50,39 +38,12 @@ request.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    const originalRequest = error.config
-    
-    // Handle 401 errors with token refresh (cookie-based)
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        // Queue the request while refreshing
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject })
-        }).then(token => {
-          originalRequest.headers.Authorization = `Bearer ${token}`
-          return request(originalRequest)
-        }).catch(err => Promise.reject(err))
-      }
-
-      originalRequest._retry = true
-      isRefreshing = true
-
-      try {
-        const response = await refreshAuthToken()
-        const newToken = response.accessToken
-
-        processQueue(null, newToken)
-        originalRequest.headers.Authorization = `Bearer ${newToken}`
-        return request(originalRequest)
-      } catch (refreshError) {
-        processQueue(refreshError, null)
-        clearAuth()
-        setSsoReturnPath(window.location.pathname + window.location.search)
-        redirectToUnifiedLogin('admin', { autoSso: true })
-        return Promise.reject(refreshError)
-      } finally {
-        isRefreshing = false
-      }
+    // installSessionRefresh already tried a refresh; reaching here un-retried means the session is gone.
+    if (error.response?.status === 401 && !wasRetriedAfterSessionRefresh(error.config)) {
+      clearAuth()
+      setSsoReturnPath(window.location.pathname + window.location.search)
+      redirectToUnifiedLogin('admin', { autoSso: true })
+      return Promise.reject(error)
     }
 
     if (error.response) {
@@ -118,9 +79,14 @@ request.interceptors.response.use(
         case 502:
           userMsg = errorMsg || i18n.global.t('api.serviceUnavailable')
           break
-        case 503:
-          userMsg = i18n.global.t('api.serviceMaintenance')
+        case 503: {
+          // An Admin API error says what is unavailable (e.g. the LDAP sync lock store); a proxy's own 503 page does not.
+          const apiErr = (data as Record<string, unknown> | undefined)?.error as Record<string, unknown> | undefined
+          userMsg = typeof apiErr?.message === 'string' && apiErr.message
+            ? apiErr.message
+            : i18n.global.t('api.serviceMaintenance')
           break
+        }
         default:
           userMsg = errorMsg || `${i18n.global.t('api.requestFailed')} (${status})`
       }

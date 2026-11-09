@@ -32,7 +32,7 @@ Layout `layouts/MainLayout.vue`, no sidebar (full-width). Guard forces unified S
 
 | Controller | Base path | Domain |
 |---|---|---|
-| `FunctionUnitController` | `/function-units` | FU CRUD, publish, restore, clone, validate, versions, compare, rollback, version export, dev-groups, workspace-access, tags |
+| `FunctionUnitController` | `/function-units` | FU CRUD, publish, restore, clone, validate, versions, compare, rollback, version export, dev-groups, my-dev-groups, tags |
 | `DeploymentController` | `/function-units` | `GET /{id}/export`, `POST /{id}/deploy`, `GET /deployments/{depId}/status`, `GET /{id}/deployments` |
 | `TableDesignController` | `/function-units/{fu}/tables` | table/field CRUD, `/{id}/ddl`, `/validate`, `/name-available`, `/foreign-keys`, `POST /primary-keys/allocate` |
 | `TableRelationController` | `/function-units/{fu}/table-relations` | relation-table structure between tables |
@@ -55,7 +55,6 @@ Layout `layouts/MainLayout.vue`, no sidebar (full-width). Guard forces unified S
 | `ExportImportController` | `/export-import` | `GET /function-units/{id}/export`, `POST /import`, `/validate`, `/check-conflicts` |
 | `IconLibraryController` | `/icons` | FU icon library |
 | `FileUploadController` | `/upload` | file upload |
-| `MemberController` | `/members` | member directory (`20-add-members-table.sql`) |
 | `AuthController` / `AuthSsoExchangeController` | `/auth`, `/auth/sso` | login + SSO exchange (see auth.md) |
 | `HealthAliasController` | — | k8s probes |
 | `AiExceptionHandler` / `WorkspaceExceptionHandler` | — | `@RestControllerAdvice` (Workspace one returns a **raw Map**, deviating from `ApiResponse`) |
@@ -69,7 +68,7 @@ Layout `layouts/MainLayout.vue`, no sidebar (full-width). Guard forces unified S
 
 ### Process tab — `ProcessDesigner.vue` (bpmn-js Modeler)
 Zoom/Fit/Undo/Redo (canvas ops, no API); **Validate** → `GET .../process/validate` (client topology guard first); Export SVG/XML (client blob); **Debug** drawer → `ProcessDebugPanel`; **Save** → `POST .../process` (`{bpmnXml}`); auto-save debounced 2s. **Import dialog is wired but has NO toolbar trigger button → unreachable UI.** Property panels (`NodePropertiesPanel` dispatcher → UserTask/ServiceTask/SendTask/Gateway/Event/SequenceFlow/SubProcess/Process/Task) mutate BPMN extension elements only — persistence is via Save/auto-save. Exceptions that persist directly: `StartEventEmailMonitorSection` (email-monitor API) and DecisionList "Bind to Node" (saves process).
-- **Assignee config** (`UserTaskAssigneeConfigSection`): INITIATOR/ENTITY_MANAGER/FUNCTION_MANAGER/HIERARCHY_ROLE/BU_ROLE/MANUAL_ASSIGN/ASSIGNEE_FROM_VARIABLE/ELEMENT_VARIABLE; loads BU tree + roles from admin-center `/task-assignment/roles/*`, `/business-units/tree`. Legacy `BU_UNBOUNDED_ROLE` shows deprecation warning. Stores role/BU **codes** (env-stable).
+- **Assignee config** (`UserTaskAssigneeConfigSection`): INITIATOR/ENTITY_MANAGER/FUNCTION_MANAGER/HIERARCHY_ROLE/BU_ROLE/MANUAL_ASSIGN/ASSIGNEE_FROM_VARIABLE/ELEMENT_VARIABLE; loads BU tree + roles from admin-center `/task-assignment/roles/*`, `/business-units/tree`. No virtual-group or BU-unbounded assignment (the engine resolves those legacy values to nobody, PRD A-30); a legacy value loads as an unknown type to replace. Stores role/BU **codes** (env-stable).
 - **ServiceTask**: http/script/message/**ap**/dmn. AP task (`ApTaskPropertiesPanel`) stores only `flowId`+mapping in BPMN ext — **no AP flow-list fetched** (engine builds webhook URL at runtime; see ai-integrations.md).
 - **Debug** is offline stepping over ONE simulate response: only Start (`POST .../process/simulate` + getActions), Run Action (`.../debug/actions/run`), Lookup Probe (`.../debug/lookup/probe`, self-disables on 404/501) hit the server; Step/Continue/breakpoints are pure client state.
 
@@ -86,7 +85,7 @@ Create/Edit/Test/Delete actions → `POST/PUT/DELETE .../actions[/{id}]`, `POST 
 List/Create/Delete → `decisionApi`; DecisionDesigner load/validate/save → `GET/PUT .../decisions/{id}`, `/validate`. **Falls back to `DEFAULT_DMN_XML` on any load error.** `decisionApi.getModel/updateModel` (`.../model`) defined but **unused**.
 
 ### Views — `MainTableViewDesignTab` + Sub-Table/Relation view designers
-Main table view CRUD + seed-defaults + BU/Role access config (`dw_main_table_view_access`, paired BU+Role, empty=admin-only). Sub-table views (`/api/forms/{formId}/sub-table-views`), relation views, lookup config.
+Main table view CRUD + seed-defaults + BU/Role access config (`dw_main_table_view_access`, paired BU+Role, empty = visible to nobody, no SYS_ADMIN bypass, PRD D-05). Sub-table views (`/api/forms/{formId}/sub-table-views`), relation views, lookup config.
 
 ### Email — `ConnectionDesigner` / `EmailTemplateDesigner` / `EmailMonitorDesigner`
 SMTP/IMAP connections (password never pre-filled on edit, `connectionType` forced SMTP) + `/test`; templates (rich body via wangeditor + variable insert, DOMPurify preview); inbound monitors with `EmailExtractionWizard` (fully client-side rule builder mirroring the backend interpreter). `EmailTemplateDesigner` edit **falls back to list row on detail-fetch failure**.

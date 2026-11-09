@@ -13,6 +13,7 @@ import com.admin.dto.request.FunctionUnitListQueryRequest;
 import com.admin.dto.response.DeploymentInfo;
 import com.admin.dto.response.FunctionUnitAccessInfo;
 import com.admin.dto.response.FunctionUnitAuditAccessInfo;
+import com.admin.dto.response.FunctionUnitImportPreview;
 import com.admin.dto.response.FunctionUnitInfo;
 import com.admin.dto.response.ImportResult;
 import com.admin.dto.response.ValidationResult;
@@ -25,6 +26,7 @@ import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.service.FunctionUnitAccessService;
 import com.admin.service.FunctionUnitAuditAccessService;
+import com.admin.service.FunctionUnitTeamService;
 import com.admin.service.UserReferenceResolver;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.i18n.I18nService;
@@ -44,7 +46,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+import com.admin.security.AdminOwner;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
+import com.admin.security.AdminTeamScope;
 
 /**
  * REST API for Function Unit management.
@@ -60,6 +67,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/function-units")
 @RequiredArgsConstructor
 @Tag(name = "Function unit management", description = "Function package import, deployment, and version APIs")
+@AdminAccess(value = AdminAudience.ADMIN_READ, services = true)
 public class FunctionUnitController extends AbstractBaseController {
     
     /** DOS mitigation: maximum number of IDs per batch operation. */
@@ -74,6 +82,8 @@ public class FunctionUnitController extends AbstractBaseController {
     private final I18nService i18nService;
     private final FunctionUnitListQueryComponent functionUnitListQueryComponent;
     private final FunctionUnitDeploymentListQueryComponent functionUnitDeploymentListQueryComponent;
+    private final FunctionUnitTeamService teamService;
+    private final AdminTeamScope teamScope;
 
     /**
      * Extends base error handling to also map {@link AdminBusinessException}
@@ -91,6 +101,7 @@ public class FunctionUnitController extends AbstractBaseController {
     
     // ==================== Function package import ====================
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PostMapping("/import")
     @Operation(summary = "Import function package", description = "Import a function package file")
     public ResponseEntity<ImportResult> importFunctionPackage(
@@ -98,8 +109,21 @@ public class FunctionUnitController extends AbstractBaseController {
         String importerId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Importing function package: {}", request.getFileName());
-        ImportResult result = functionUnitManager.importFunctionPackage(request, importerId);
+        ImportResult result = functionUnitManager.importFunctionPackage(request, importerId,
+                FunctionUnitTeamService.ImportChannel.MANUAL);
         return ResponseEntity.status(result.isSuccess() ? HttpStatus.CREATED : HttpStatus.BAD_REQUEST).body(result);
+    }
+
+    @AdminAccess(AdminAudience.LEAD_WRITE)
+    @PostMapping("/import/preview")
+    @Operation(summary = "Preview a function package before import",
+            description = "The package's team and its state here, the unit's current team, and the teams the caller "
+                    + "may import into (platform access model §8.1)")
+    public ResponseEntity<FunctionUnitImportPreview> previewFunctionPackage(
+            @Valid @RequestBody FunctionUnitImportRequest request) {
+        String operatorId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
+        return ResponseEntity.ok(functionUnitManager.previewImport(request, operatorId));
     }
     
     @PostMapping("/validate")
@@ -126,6 +150,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.ok(units.map(FunctionUnitInfo::fromEntity));
     }
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @PostMapping("/query")
     @Operation(summary = "Page function units",
             description = "Shared list: latest version per code, then COUNT(*) and the page share one predicate")
@@ -146,14 +171,22 @@ public class FunctionUnitController extends AbstractBaseController {
         });
     }
     
+    @AdminAccess(value = AdminAudience.TEAM_READ, services = true)
     @GetMapping("/deployed/latest")
     @Operation(summary = "Latest deployed per code", description = "Highest version per code (for user portal)")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> getLatestDeployedFunctionUnits() {
         log.info("Getting latest deployed function units (deduplicated by code)");
-        return handleRequest(() -> {
-            var units = functionUnitManager.listLatestDeployedFunctionUnits();
-            return units.stream().map(FunctionUnitInfo::fromEntity).toList();
-        });
+        // Service calls (Portal) see every unit; a Technical Lead only the teams they lead, each row saying whether
+        // they may link it (the relation table form offers only those, D-47).
+        Set<String> visible = teamScope.visibleFunctionUnitCodes();
+        return handleRequest(() -> functionUnitManager.listLatestDeployedFunctionUnits().stream()
+                .filter(unit -> visible == null || visible.contains(unit.getCode()))
+                .map(unit -> {
+                    FunctionUnitInfo info = FunctionUnitInfo.fromEntity(unit);
+                    info.setCanManage(teamScope.mayManageFunctionUnit(unit.getCode()));
+                    return info;
+                })
+                .toList());
     }
     
     @GetMapping("/archived")
@@ -166,6 +199,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.ok(page);
     }
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @PostMapping("/archived/query")
     @Operation(summary = "Page archived function units",
             description = "Shared list: latest archived version per code, then COUNT(*) and the page share one predicate")
@@ -187,6 +221,8 @@ public class FunctionUnitController extends AbstractBaseController {
         }
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, services = true,
+            owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @GetMapping("/{id}")
     @Operation(summary = "Get function unit by id", description = "Function unit detail by id")
     public ResponseEntity<FunctionUnitInfo> getFunctionUnit(
@@ -196,6 +232,8 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit));
     }
     
+    @AdminAccess(value = AdminAudience.TEAM_READ, services = true,
+            owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @GetMapping("/{id}/delete-preview")
     @Operation(summary = "Delete preview", description = "Preview related data counts before delete")
     public ResponseEntity<com.admin.dto.response.DeletePreviewResponse> getDeletePreview(
@@ -208,6 +246,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.ok(preview);
     }
     
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @DeleteMapping("/{id}")
     @Operation(summary = "Archive function unit", description = "Archive all versions by code and remove from portal")
     public ResponseEntity<Void> deleteFunctionUnit(
@@ -217,6 +256,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.noContent().build();
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @PostMapping("/{id}/restore")
     @Operation(summary = "Restore archived function unit", description = "Restore archived unit to DRAFT")
     public ResponseEntity<ApiResponse<FunctionUnitInfo>> restoreFunctionUnit(
@@ -225,6 +265,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return handleRequest(() -> FunctionUnitInfo.fromEntity(functionUnitManager.restoreFunctionUnit(id)));
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @PostMapping("/{id}/deploy")
     @Operation(summary = "Deploy function unit", description = "One-click deploy to user portal")
     public ResponseEntity<ApiResponse<FunctionUnitInfo>> deployFunctionUnit(
@@ -283,6 +324,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return handleRequest(() -> functionUnitManager.purgeRuntimeDataForCatalog(id));
     }
     
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @PutMapping("/{id}/enabled")
     @Operation(summary = "Set enabled flag", description = "Enable or disable a function unit")
     public ResponseEntity<ApiResponse<FunctionUnitInfo>> setEnabled(
@@ -300,6 +342,7 @@ public class FunctionUnitController extends AbstractBaseController {
 
     // ==================== Batch operations (Req 20) ====================
 
+    @AdminAccess(AdminAudience.TEAM_WRITE)
     @PutMapping("/batch/enabled")
     @Operation(summary = "Batch enable/disable", description = "Bulk toggle enabled flag")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> batchSetEnabled(
@@ -314,6 +357,8 @@ public class FunctionUnitController extends AbstractBaseController {
                     i18nService.getMessage("admin.batch.id_count_exceeded", request.getIds().size(), MAX_BATCH_IDS));
         }
 
+        // One unit of another team refuses the whole batch (403) before anything changes.
+        teamScope.requireManageFunctionUnits(request.getIds());
         String op = operatorId != null && !operatorId.isBlank() ? operatorId : "system";
         return handleRequest(() -> request.getIds().stream()
                 .map(id -> {
@@ -323,6 +368,7 @@ public class FunctionUnitController extends AbstractBaseController {
                 .collect(Collectors.toList()));
     }
 
+    @AdminAccess(AdminAudience.TEAM_WRITE)
     @DeleteMapping("/batch")
     @Operation(summary = "Batch archive", description = "Archive function units by code")
     public ResponseEntity<ApiResponse<Void>> batchDelete(
@@ -334,6 +380,8 @@ public class FunctionUnitController extends AbstractBaseController {
             throw new AdminBusinessException("ID_COUNT_EXCEEDED",
                     i18nService.getMessage("admin.batch.id_count_exceeded", request.getIds().size(), MAX_BATCH_IDS));
         }
+        // One unit of another team refuses the whole batch (403) before anything changes.
+        teamScope.requireManageFunctionUnits(request.getIds());
         return handleRequest(() -> {
             for (String id : request.getIds()) {
                 functionUnitManager.archiveFunctionUnitByCode(id);
@@ -352,6 +400,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.noContent().build();
     }
     
+    @AdminAccess(AdminAudience.DEPLOYER)
     @PostMapping("/{id}/validate")
     @Operation(summary = "Validate function unit", description = "Structural checks and Flowable deployability")
     public ResponseEntity<ApiResponse<ValidationResult>> validateFunctionUnit(
@@ -359,6 +408,8 @@ public class FunctionUnitController extends AbstractBaseController {
         String validatorId = SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Validating function unit: {}", id);
+        // A DW deployment reaches here as the deploying user: they deploy in the unit's team (§8.1).
+        teamService.assertMayDeploy(functionUnitManager.getFunctionUnitById(id).getCode(), validatorId);
         String operator = SecurityContextUtils.getCurrentUsername().orElse(validatorId);
         return handleRequest(() -> functionUnitManager.validateFunctionUnit(id, operator));
     }
@@ -386,6 +437,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.ok(deploymentManager.listAllDeployments(pageable));
     }
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @PostMapping("/deployments/query")
     @Operation(summary = "Page deployment records",
             description = "Shared list: COUNT(*) and the page share one predicate")
@@ -407,6 +459,8 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.status(HttpStatus.CREATED).body(deployment);
     }
     
+    @AdminAccess(value = AdminAudience.TEAM_READ, services = true,
+            owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @GetMapping("/{id}/deployments")
     @Operation(summary = "Deployment history", description = "History for one function unit")
     public ResponseEntity<List<FunctionUnitDeployment>> getDeploymentHistory(
@@ -425,6 +479,8 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.ok(deployment);
     }
     
+    @AdminAccess(value = AdminAudience.TEAM_WRITE,
+            owner = AdminOwner.FUNCTION_UNIT_DEPLOYMENT, ownerVariable = "deploymentId")
     @PostMapping("/deployments/{deploymentId}/rollback")
     @Operation(summary = "Rollback deployment", description = "Rollback a completed deployment")
     public ResponseEntity<FunctionUnitDeployment> rollbackDeployment(
@@ -516,6 +572,8 @@ public class FunctionUnitController extends AbstractBaseController {
     
     // ==================== Version management ====================
     
+    @AdminAccess(value = AdminAudience.TEAM_READ, services = true,
+            owner = AdminOwner.FUNCTION_UNIT_CODE, ownerVariable = "code")
     @GetMapping("/code/{code}/versions")
     @Operation(summary = "List versions", description = "All versions for code")
     public ResponseEntity<List<FunctionUnitInfo>> getAllVersions(
@@ -592,6 +650,8 @@ public class FunctionUnitController extends AbstractBaseController {
     
     // ==================== Access control ====================
     
+    @AdminAccess(value = AdminAudience.TEAM_READ, services = true,
+            owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @GetMapping("/{id}/access")
     @Operation(summary = "List access rules", description = "Access configs for unit")
     public ResponseEntity<List<FunctionUnitAccessInfo>> getAccessConfigs(
@@ -601,6 +661,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.ok(configs);
     }
     
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @PostMapping("/{id}/access")
     @Operation(summary = "Add access rule", description = "Grant business role access")
     public ResponseEntity<FunctionUnitAccessInfo> addAccessConfig(
@@ -612,6 +673,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.status(HttpStatus.CREATED).body(config);
     }
     
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @DeleteMapping("/{id}/access/{accessId}")
     @Operation(summary = "Remove access rule", description = "Delete concrete access-config row")
     public ResponseEntity<Void> removeAccessConfig(
@@ -622,6 +684,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.noContent().build();
     }
     
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @PutMapping("/{id}/access")
     @Operation(summary = "Replace access rules", description = "Bulk replace configs")
     public ResponseEntity<List<FunctionUnitAccessInfo>> setAccessConfigs(
@@ -647,6 +710,8 @@ public class FunctionUnitController extends AbstractBaseController {
     // reviewer read every request of the unit, and must never imply the right to
     // start one.
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, services = true,
+            owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @GetMapping("/{id}/audit-access")
     @Operation(summary = "List audit grants", description = "Roles allowed to review all requests of this unit")
     public ResponseEntity<List<FunctionUnitAuditAccessInfo>> getAuditAccessConfigs(
@@ -655,6 +720,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.ok(auditAccessService.getAuditAccessConfigs(id));
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @PostMapping("/{id}/audit-access")
     @Operation(summary = "Add audit grant", description = "Grant a business role review access")
     public ResponseEntity<FunctionUnitAuditAccessInfo> addAuditAccessConfig(
@@ -665,6 +731,7 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.status(HttpStatus.CREATED).body(config);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.FUNCTION_UNIT_ID, ownerVariable = "id")
     @DeleteMapping("/{id}/audit-access/{accessId}")
     @Operation(summary = "Remove audit grant", description = "Delete concrete audit-access row")
     public ResponseEntity<Void> removeAuditAccessConfig(

@@ -5,7 +5,7 @@ import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.entity.User;
 import com.platform.security.service.UserRoleService;
-import com.portal.component.FunctionUnitAccessComponent;
+import com.platform.security.service.PortalEntryService;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
 import io.jsonwebtoken.Jwts;
@@ -17,7 +17,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -27,7 +26,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -43,20 +41,20 @@ public class PortalSessionIssuerService {
     private static final String CLAIM_PORTAL_ACCESS_MODE = "portalAccessMode";
     public static final String PORTAL_ACCESS_MODE_SELF_SERVICE = "PERMISSION_SELF_SERVICE_ONLY";
     public static final String PORTAL_ACCESS_MODE_FULL = "FULL";
+    /** Sign-in refused: the user has no Portal entry (no ACTIVE CUSTOM group, platform access model §7.1). */
+    public static final String LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED = "PORTAL_ENTITLEMENT_DENIED";
     private static final String REFRESH_TYPE = "refresh";
 
-    private final JdbcTemplate jdbcTemplate;
     private final UserRoleService userRoleService;
     private final I18nService i18nService;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
-    private final PortalEntitlementService portalEntitlementService;
-    private final FunctionUnitAccessComponent functionUnitAccessComponent;
+    private final PortalEntryService portalEntryService;
     private final JwtProperties jwtProperties;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    @Value("${jwt.expiration:86400000}")
+    @Value("${jwt.expiration}")
     private long jwtExpiration;
 
     /**
@@ -75,11 +73,10 @@ public class PortalSessionIssuerService {
                                                              HttpServletResponse httpResponse, String logUsername) {
         try {
             String userId = user.getId();
-            if (!portalEntitlementService.hasEligibleVirtualGroupMembership(userId)) {
-                log.warn("Portal entitlement denied for user {} (no ACTIVE SYSTEM/CUSTOM/DEVELOPER virtual group)",
-                        logUsername);
+            if (!portalEntryService.hasPortalEntry(userId)) {
+                log.warn("Portal entitlement denied for user {} (no ACTIVE CUSTOM virtual group)", logUsername);
                 return ResponseEntity.badRequest().body(LoginResponse.builder()
-                        .loginErrorCode(PortalEntitlementService.LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED)
+                        .loginErrorCode(LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED)
                         .message(resolvePortalEntitlementDeniedMessage())
                         .build());
             }
@@ -127,8 +124,8 @@ public class PortalSessionIssuerService {
 
             // Set httpOnly cookies for access token and refresh token
             // Service-specific cookie names (e.g. up_access_token) avoid cross-app overwrite on same origin. See JwtProperties#cookieNames.
-            setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtExpiration / 1000));
-            setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
+            setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), accessToken, jwtProperties.getSessionCookieMaxAgeSeconds());
+            setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), refreshToken, jwtProperties.getSessionCookieMaxAgeSeconds());
 
             log.info("User {} portal session issued", logUsername);
 
@@ -187,7 +184,7 @@ public class PortalSessionIssuerService {
 
     private String generateRefreshToken(String userId, String activeBusinessUnitId, String activeRoleId, String portalAccessMode) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + 604800000);
+        Date expiry = new Date(now.getTime() + jwtProperties.getRefreshExpirationMs());
 
         var builder = Jwts.builder()
                 .subject(userId)
@@ -226,22 +223,9 @@ public class PortalSessionIssuerService {
                     .map(UserEffectiveRole::getRoleCode)
                     .distinct()
                     .collect(Collectors.toList());
-            if (roles.isEmpty()) {
-                roles = new ArrayList<>(getRolesForUserLegacy(userId));
-            }
             List<String> permissions = new ArrayList<>(userRoleService.getPermissionsForUser(userId));
-            if (permissions.isEmpty()) {
-                permissions = new ArrayList<>(getPermissionsForRoles(roles));
-            }
             return new LoginBundle(roles, permissions, buildRolesWithSources(effectiveAll), null, null);
         }
-
-        List<String> unboundedCodes = effectiveAll.stream()
-                .filter(r -> "BU_UNBOUNDED".equals(r.getRoleType()))
-                .map(UserEffectiveRole::getRoleCode)
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
 
         PortalWorkspaceAuthService.WorkspaceContextRow row = wctx.stream()
                 .filter(r -> activeBusinessUnitId != null && activeBusinessUnitId.equals(r.getBusinessUnitId())
@@ -253,11 +237,8 @@ public class PortalSessionIssuerService {
         if (row.getRoleCode() != null && !row.getRoleCode().isBlank()) {
             roles.add(row.getRoleCode());
         }
-        roles.addAll(unboundedCodes);
-        roles = roles.stream().distinct().collect(Collectors.toList());
 
         LinkedHashSet<String> perms = new LinkedHashSet<>(portalWorkspaceAuthService.permissionsForRoleId(activeRoleId));
-        perms.addAll(userRoleService.getPermissionsForRoleCodes(unboundedCodes));
 
         return new LoginBundle(new ArrayList<>(roles), new ArrayList<>(perms), buildRolesWithSources(effectiveAll),
                 row.getBusinessUnitName(), row.getRoleName());
@@ -286,7 +267,6 @@ public class PortalSessionIssuerService {
                 .workspaceSwitcherVisible(workspaceSwitcherVisible)
                 .portalAccessMode(portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)
                 .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
-                .systemAdministrator(functionUnitAccessComponent.isSystemAdministrator(user.getId()))
                 .build();
     }
 
@@ -296,32 +276,6 @@ public class PortalSessionIssuerService {
             keyBytes = Arrays.copyOf(keyBytes, 32);
         }
         return Keys.hmacShaKeyFor(keyBytes);
-    }
-
-    private List<String> getRolesForUserLegacy(String userId) {
-        try {
-            return jdbcTemplate.queryForList(
-                    "SELECT r.code FROM sys_role_assignments ra " +
-                            "JOIN sys_roles r ON ra.role_id = r.id " +
-                            "WHERE ra.target_type = 'USER' AND ra.target_id = ? AND r.status = 'ACTIVE' " +
-                            "AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
-                            "AND (ra.valid_to IS NULL OR ra.valid_to >= NOW())",
-                    String.class, userId);
-        } catch (Exception e) {
-            return List.of("USER");
-        }
-    }
-
-    private List<String> getPermissionsForRoles(List<String> roles) {
-        List<String> permissions = new ArrayList<>();
-        for (String role : roles) {
-            switch (role) {
-                case "MANAGER" -> permissions.addAll(List.of("task:read", "task:write", "task:approve", "team:manage"));
-                case "USER" -> permissions.addAll(List.of("task:read", "task:write", "process:start"));
-                default -> permissions.add("basic:access");
-            }
-        }
-        return permissions.stream().distinct().toList();
     }
 
     /**

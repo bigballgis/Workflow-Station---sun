@@ -104,7 +104,7 @@
             >
               <template #default="{ row }">
                 <el-button
-                  v-if="canEdit"
+                  v-if="row.canEdit"
                   link
                   type="primary"
                   size="small"
@@ -113,7 +113,7 @@
                   {{ t('common.edit') }}
                 </el-button>
                 <el-button
-                  v-if="canEdit && row.leadTimeDays != null"
+                  v-if="row.canEdit && row.leadTimeDays != null"
                   link
                   type="warning"
                   size="small"
@@ -193,7 +193,6 @@ const { t } = useI18n()
 
 const {
   loading,
-  canEdit,
   loadPolicies,
   editDialogVisible,
   saving,

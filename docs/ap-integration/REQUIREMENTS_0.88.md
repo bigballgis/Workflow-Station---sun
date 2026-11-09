@@ -2,6 +2,8 @@
 
 > **Document 1' — 取代 [REQUIREMENTS.md](REQUIREMENTS.md)（0.84 版）作为需求真源。**
 > 状态：**✅ 已确认，可作为设计阶段输入**（2026-08-13）。11 条决策全部拍板，无遗留开放问题：
+> **入口角色已被 [平台访问模型 PRD](../design/platform-access-model-requirements.md) 取代（2026-11，D-20）**：Team Lead 已删除；Automation 进入 = SYS_ADMIN、AUDITOR（只读），或该团队 Technical Lead / Developer 名单；名单外的团队成员不再能只读进入（D-7、FR-B07、FR-B15、FR-B23 的角色口径以 PRD §6.1 为准）。
+>
 >
 > | | 决策 |
 > |---|---|

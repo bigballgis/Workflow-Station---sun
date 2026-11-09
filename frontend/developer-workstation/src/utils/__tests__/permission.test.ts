@@ -1,20 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { USER_KEY } from '@/api/auth'
 import type { UserInfo } from '@/api/auth'
+import type { DevGroupOption } from '@/api/functionUnit'
 import {
+  canCloneFunctionUnits,
   canCreateInActiveScope,
   canCreateInWorkspace,
-  canModifyFunctionUnits,
-  isAuditorBlockedFromWorkstation,
+  canManageFunctionUnit,
   isCurrentScopeReadOnly,
   isFunctionUnitReadOnly,
-  permissions,
 } from '../permission'
 import {
   PUBLIC_GROUP_ID,
   setActiveGroup,
   clearActiveGroup,
-  setMemberGroupIds,
+  setMyDevGroups,
   ALL_GROUPS,
 } from '../devGroupContext'
 
@@ -31,6 +31,11 @@ function user(roles: string[]): UserInfo {
   }
 }
 
+function team(id: string, lists: { techLead?: boolean; developer?: boolean; canCreate?: boolean; status?: string }): DevGroupOption {
+  return { id, name: id, status: lists.status ?? 'ACTIVE', ...lists }
+}
+
+/** Platform access model §6.2: what the buttons offer follows the backend's per-team and per-unit flags. */
 describe('developer-workstation permission', () => {
   const storage = new Map<string, string>()
 
@@ -56,70 +61,80 @@ describe('developer-workstation permission', () => {
     storage.set(USER_KEY, JSON.stringify(user(roles)))
   }
 
-  it('blocks a pure auditor from the workstation', () => {
-    setRoles(['AUDITOR'])
-    expect(isAuditorBlockedFromWorkstation()).toBe(true)
-  })
-
-  it('lets auditor overlay with a capability role enter', () => {
-    setRoles(['AUDITOR', 'DEVELOPER'])
-    expect(isAuditorBlockedFromWorkstation()).toBe(false)
-    expect(permissions.canEdit()).toBe(true)
-  })
-
-  it('treats missing canModify as read-only', () => {
+  it('treats missing unit flags as no', () => {
     expect(isFunctionUnitReadOnly({})).toBe(true)
     expect(isFunctionUnitReadOnly({ canModify: false })).toBe(true)
     expect(isFunctionUnitReadOnly({ canModify: true })).toBe(false)
     expect(isFunctionUnitReadOnly(null)).toBe(true)
+    expect(canManageFunctionUnit({})).toBe(false)
+    expect(canManageFunctionUnit({ canManage: true })).toBe(true)
+    expect(canManageFunctionUnit(undefined)).toBe(false)
   })
 
-  it('makes the Public scope read-only except for SYS_ADMIN', () => {
-    setActiveGroup(PUBLIC_GROUP_ID)
-    setRoles(['DEVELOPER'])
-    expect(isCurrentScopeReadOnly()).toBe(true)
-    expect(canModifyFunctionUnits()).toBe(false)
-    expect(canCreateInActiveScope()).toBe(false)
-
-    setRoles(['SYS_ADMIN'])
-    expect(isCurrentScopeReadOnly()).toBe(false)
-    expect(canModifyFunctionUnits()).toBe(true)
-    expect(canCreateInActiveScope()).toBe(true)
+  // D-35: cloning needs a workspace to land in, not rights on the source unit.
+  it('offers cloning to whoever has a workspace a copy may land in', () => {
+    setMyDevGroups([team('vg-b', { developer: true })], false)
+    expect(canCloneFunctionUnits()).toBe(false)
+    setMyDevGroups([team('vg-a', { techLead: true, canCreate: true }), team('vg-b', { developer: true })], false)
+    expect(canCloneFunctionUnits()).toBe(true)
+    setMyDevGroups([], true)
+    expect(canCloneFunctionUnits()).toBe(true)
   })
 
-  it('keeps other workspaces read-only for an admin without that workspace role', () => {
-    setActiveGroup('vg-team-a')
-    setMemberGroupIds([])
-    setRoles(['SYS_ADMIN'])
-    expect(isCurrentScopeReadOnly()).toBe(true)
-    expect(canCreateInActiveScope()).toBe(false)
-    expect(canModifyFunctionUnits()).toBe(false)
-  })
+  it('creates only where the backend says the user may', () => {
+    setRoles(['TECH_LEAD', 'DEVELOPER'])
+    setMyDevGroups([team('vg-a', { techLead: true, canCreate: true }), team('vg-b', { developer: true })], false)
 
-  it('lets an admin write a workspace they belong to when they hold its role', () => {
-    setActiveGroup('vg-team-a')
-    setMemberGroupIds(['vg-team-a'])
-    setRoles(['SYS_ADMIN', 'DEVELOPER'])
-    expect(isCurrentScopeReadOnly()).toBe(false)
-    expect(canModifyFunctionUnits()).toBe(true)
-    expect(canCreateInActiveScope()).toBe(false)
-
-    setRoles(['SYS_ADMIN', 'TEAM_LEAD'])
-    expect(canCreateInActiveScope()).toBe(true)
-  })
-
-  it('never offers private creation destinations outside membership or Public to non-admins', () => {
-    setMemberGroupIds(['vg-team-a'])
-    setRoles(['SYS_ADMIN', 'TECH_LEAD'])
-    expect(canCreateInWorkspace('vg-team-a')).toBe(true)
-    expect(canCreateInWorkspace('vg-team-b')).toBe(false)
-    expect(canCreateInWorkspace(PUBLIC_GROUP_ID)).toBe(true)
-    setRoles(['TECH_LEAD'])
-    expect(canCreateInWorkspace('vg-team-a')).toBe(true)
+    expect(canCreateInWorkspace('vg-a')).toBe(true)
+    expect(canCreateInWorkspace('vg-b')).toBe(false)
+    expect(canCreateInWorkspace('vg-c')).toBe(false)
     expect(canCreateInWorkspace(PUBLIC_GROUP_ID)).toBe(false)
+    expect(canCreateInWorkspace(ALL_GROUPS)).toBe(false)
+    setActiveGroup('vg-a')
+    expect(canCreateInActiveScope()).toBe(true)
+  })
+
+  it('lets only a System Administrator write Public', () => {
+    setActiveGroup(PUBLIC_GROUP_ID)
+    setRoles(['TECH_LEAD'])
+    setMyDevGroups([team('vg-a', { techLead: true, canCreate: true })], false)
+    expect(isCurrentScopeReadOnly()).toBe(true)
+    expect(canCreateInActiveScope()).toBe(false)
+
     setRoles(['SYS_ADMIN'])
-    expect(canCreateInWorkspace('vg-team-a')).toBe(false)
-    expect(canCreateInWorkspace(PUBLIC_GROUP_ID)).toBe(true)
+    setMyDevGroups([], true)
+    expect(isCurrentScopeReadOnly()).toBe(false)
+    expect(canCreateInActiveScope()).toBe(true)
+  })
+
+  it('makes a team writable for its lists only', () => {
+    setRoles(['DEVELOPER'])
+    setMyDevGroups([team('vg-b', { developer: true }), team('vg-off', { developer: true, status: 'INACTIVE' })], false)
+
+    setActiveGroup('vg-b')
+    expect(isCurrentScopeReadOnly()).toBe(false)
+    setActiveGroup('vg-c')
+    expect(isCurrentScopeReadOnly()).toBe(true)
+    setActiveGroup('vg-off')
+    expect(isCurrentScopeReadOnly()).toBe(true)
+  })
+
+  it('lets a System Administrator write every team without being on it', () => {
+    setRoles(['SYS_ADMIN'])
+    setMyDevGroups([team('vg-a', { canCreate: true })], true)
+    setActiveGroup('vg-a')
+    expect(isCurrentScopeReadOnly()).toBe(false)
+    expect(canCreateInActiveScope()).toBe(true)
+  })
+
+  it('keeps an Auditor read-only everywhere', () => {
+    setRoles(['AUDITOR'])
+    setMyDevGroups([team('vg-a', {})], false)
+    for (const scope of [ALL_GROUPS, PUBLIC_GROUP_ID, 'vg-a']) {
+      setActiveGroup(scope)
+      expect(isCurrentScopeReadOnly()).toBe(true)
+      expect(canCreateInActiveScope()).toBe(false)
+    }
   })
 
   it('does not treat the all-groups sentinel as the Public scope', () => {

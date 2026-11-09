@@ -2,6 +2,7 @@ package com.portal.util;
 
 import com.platform.common.dto.UserPrincipal;
 import com.platform.security.util.SecurityContextUtils;
+import com.portal.service.PortalSessionIssuerService;
 
 import java.util.Optional;
 
@@ -28,6 +29,14 @@ public final class PortalUserSecurityUtils {
         } catch (ReflectiveOperationException e) {
             return null;
         }
+    }
+
+    /** The signed-in session is a permission self-service one (no UBR yet). */
+    public static boolean isCurrentSessionSelfService() {
+        return SecurityContextUtils.getCurrentUser()
+                .map(PortalUserSecurityUtils::getPortalAccessMode)
+                .filter(PortalSessionIssuerService.PORTAL_ACCESS_MODE_SELF_SERVICE::equals)
+                .isPresent();
     }
 
     public static Optional<String> getCurrentActiveBusinessUnitId() {

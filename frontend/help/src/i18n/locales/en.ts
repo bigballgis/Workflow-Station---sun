@@ -7,6 +7,8 @@ import viewDesignMessages from './viewDesign.en'
 import fuDocumentsMessages from './fuDocuments.en'
 import aiStudioMessages from './aiStudio.en'
 import slaPoliciesMessages from './slaPolicies.en'
+import ldapSyncMessages from './ldapSync.en'
+import rtStructureMessages from './rtStructure.en'
 
 export default {
   biAudienceGuide: {
@@ -24,6 +26,12 @@ export default {
     status: 'Enabled defaults to on. Use Enable or Disable in the Actions column, beside Edit and Delete. Confirm the change; the Enabled column shows the saved status. The edit dialog also lets you preserve settings without granting access. Re-enabling checks that the Dashboard is active and the target still exists. Existing embedded sessions can last until their current token expires.',
     troubleTitle: 'If the Dashboard does not appear',
     trouble: 'Check assignment Enabled, Dashboard active status, target membership and Superset role mappings. Disabled, locked or pending accounts can be configured, but must satisfy platform login rules before use.',
+    permTitle: 'Who can do what',
+    permBody: 'Audience Assignment is not limited by team: any active Dashboard can be assigned to any User, Role or Business Unit.',
+    permAdmin: 'Every assignment. New Assignment, and Edit, Enable / Disable and Delete on every row.',
+    permLead: 'The same as a System Administrator, on every assignment, whichever team you lead. Whether a person can open a Dashboard that carries Superset roles is still decided by RBAC Mapping, which only a System Administrator changes. Once opened, the embedded Dashboard always runs with the guest role; RBAC Mapping does not filter what it shows.',
+    permAuditor: 'Every assignment, read-only: no New Assignment and no Actions column. An Auditor who also leads a team can change assignments as a Technical Lead does.',
+    permFigure: 'Audience Assignment as an Auditor: the assignment is listed, with no New Assignment and no Actions column.',
   },
   biViewGuide: {
     title: 'Data View Assignment',
@@ -40,6 +48,13 @@ export default {
     status: 'Use Enable or Disable in the Actions column, beside Edit and Delete. Confirm the change; the Enabled column shows the saved status. Disable only the selected binding. Other Views and home-page audiences are unaffected. When no accessible enabled Dashboards remain, the View shows Records only. Legacy table assignments are expanded to the published Views present at upgrade; future Views do not inherit them.',
     troubleTitle: 'If the Dashboard does not appear',
     trouble: 'Check Enabled, View publication and user access, Dashboard active status and Superset role mappings. View unavailable means the original View was removed, rebuilt or unpublished: edit the assignment and explicitly select a published View. Loading errors offer Retry; you can return to Records.',
+    permTitle: 'Who can do what',
+    permBody: 'The list, the Target filter and the Target choices in New Assignment follow your Admin Center role. Dashboard is never limited.',
+    permAdmin: 'Every assignment. New Assignment, and Edit, Enable / Disable and Delete on every row.',
+    permLead: 'Only assignments of Function Units of the teams you lead. Target, in the toolbar and in New Assignment, offers only those Function Units; Dashboard can be any active Dashboard. Edit, Enable / Disable and Delete appear on those rows. A Function Unit that Admin Center has no team for yet is not offered.',
+    permAuditor: 'Every assignment, read-only: no New Assignment and no Actions column. An Auditor who also leads a team gets New Assignment, and the row actions on that team’s assignments.',
+    permFigure: 'New Assignment as a Technical Lead: Target offers only the team’s Function Unit; the row behind the dialog keeps Edit, Disable and Delete.',
+    failNotLed: 'This belongs to team X (code), which you do not lead: the selected Function Unit is not one of your teams’. Pick one of yours, or ask a System Administrator.',
   },
 
   newRequestsGuide: {"title": "New Requests", "intro": "Choose a request card to open its form. Only workflows available in your current workspace are listed.", "crumb": "User Portal · Request", "flowTitle": "Start a request", "flow1": "Open Request → New Requests.", "flow2": "Search for the workflow or choose a card from Favorites.", "flow3": "Select the card, complete the form and use its submit action.", "browseTitle": "Find a workflow", "browseBody": "Use the search field beside the page title to narrow the cards. Clear it to restore the list. Each card shows the workflow icon, name, description when provided, and version. Hover over a shortened name or description to read it in full.", "favoritesTitle": "Favorites", "favoritesBody": "Select the outline star at the top right of a card to add it to Favorites. Select the filled star to remove it. The star does not open the request form. Both grids update after the server confirms the change, and favorites are saved for your account across refreshes. While saving, the same workflow star is disabled in both grids. If saving fails, a message asks you to refresh to check the saved state. Search also filters the Favorites section. Removing the final favorite hides the section; the workflow remains in the main grid.", "emptyTitle": "When a card is missing", "emptyBody": "No matching requests means the search found no results: clear the search or try another keyword. No processes available means the workspace returned no accessible workflows. Check the selected Business Unit and Role, or contact your administrator about access. Choosing a card opens a form; it does not submit a request."},
@@ -167,6 +182,7 @@ export default {
     acAudit: 'Audit Log',
     acAuditAdmin: 'Admin Center Audit Logs',
     acAuditPortal: 'User Portal Audit Logs',
+    acAuditLdapSync: 'LDAP Sync Records',
     acRelationTables: 'Relation Tables',
     acTableStructure: 'Table Structure',
     acTableData: 'Table Data',
@@ -226,7 +242,7 @@ export default {
     actionAllowedRoles: {
       title: 'Allowed Roles',
       summary:
-        'Who sees an Action button in Portal. Empty means every portal user. System Administrator always sees it.',
+        'Who sees an Action button in Portal. Empty means every portal user. System Administrator is checked like everyone else.',
     },
     emailMonitor: {
       title: 'Email Monitor',
@@ -243,10 +259,20 @@ export default {
       summary:
         'Admin SLA Policies: lead time in days per Function Unit, recalculation of open cases\' due dates, job and change history. Fields are mapped in Table Design.',
     },
+    rtStructure: {
+      title: 'Table Structure',
+      summary:
+        'Admin Relation Tables: create tables, fields and keys, Lookup and Computed fields, Function Unit links, Deploy, versions and User Portal Access. A Technical Lead changes only tables linked solely to their teams’ Function Units.',
+    },
+    ldapSync: {
+      title: 'LDAP Sync Records',
+      summary:
+        'Admin Audit Log: every LDAP / AD sync run with type, status, counts and message. Read-only for System Administrators, Technical Leads and Auditors; only a System Administrator starts a sync.',
+    },
     upTasksToClaim: {
       title: 'To Do — claim pool',
       summary:
-        'Business-unit role requests live on To Do. Claim before you edit; Claim all takes every free request in batches; the selection bar Claims or Unclaims only checked rows. Unclaim all releases only your holds. Optional auto-claim on open is off by default. Leaders, BU Approvers, and System Administrators can force-release someone else’s hold or Reassign it to another member of the same role.',
+        'Business-unit role requests live on To Do, in the workspace of that business unit and role. Claim before you edit; Claim all takes every free request in batches; the selection bar Claims or Unclaims only checked rows. Unclaim all releases only your holds. Optional auto-claim on open is off by default. A Leader of the same business unit and role, or the business-unit Approver, can force-release someone else’s hold or Reassign it. Once the holder has lost Portal access, any pool member with access can release it, Take over, or Reassign it.',
     },
     taskDelegate: {
       title: 'Delegate a task',
@@ -575,14 +601,14 @@ export default {
     fPlaceholder: 'Shown while nothing is selected. An empty selection is not an error.',
     portalTitle: 'What Portal does',
     portalBody:
-      'On the task page and on the process start page, Portal hides the button unless the signed-in session holds at least one listed role. The session is the current workspace role plus roles that are not bound to a business unit. System Administrator always sees the button. A button with no Allowed Roles stays visible.',
+      'On the task page and on the process start page, Portal hides the button unless the signed-in session holds at least one listed role. The session is the current workspace role plus roles that are not bound to a business unit. System Administrator gets no exception. A button with no Allowed Roles stays visible.',
     failTitle: 'What this does not do',
     failBody: 'The field only hides the button in Portal.',
     failEmpty: 'Empty Allowed Roles means no restriction. Existing Actions stay visible.',
     failMissing:
-      'A role that was deleted after you saved it still appears as its code. Portal matches that code against the session. If nobody holds it, only System Administrator sees the button.',
+      'A role that was deleted after you saved it still appears as its code. Portal matches that code against the session. If nobody holds it, nobody sees the button.',
     failAdmin:
-      'System Administrator is not a business role, so it is not in this dropdown. That account still sees every Action button.',
+      'System Administrator is not a business role, so it is not in this dropdown. Holding it does not reveal an Action button either: that account needs one of the listed roles like everyone else.',
     failApi:
       'Hiding the button does not reject the Action on the server. A direct call with a valid session can still run it.',
   },
@@ -826,6 +852,16 @@ export default {
       'In Developer Workstation → Connections, Username plus Password (VAULT) select a VAULT key from this catalog. Host still comes from System Config SMTP/IMAP. See [[/email-send#connection]] and [[/email-monitor]].',
     fBindPassword:
       'Required when Username is set. Only VAULT keys are listed. Opening an old connection after this change: re-select a VAULT key; ciphertext is gone.',
+    permTitle: 'Who can do what',
+    permBody:
+      'Only a System Administrator adds, edits or deletes variables. Technical Leads and Auditors open the same list read-only: Add variable and the Actions column (Edit, Delete) are not shown.',
+    permLead: 'Value / secret path, by kind.',
+    permFigure: 'Environment variables as a Technical Lead: no Add variable and no Actions column; TEXT shows the value, VAULT shows only Configured.',
+    fPermText: 'TEXT: the current value, or the default value when the current value is blank. The same for every role.',
+    fPermVault:
+      'VAULT: a System Administrator sees the stored secret path. Technical Leads and Auditors see only Configured or Not configured; Admin Center does not send them the path. Not configured: no secret path is stored for the key.',
+    failReadOnly:
+      'No Add variable button and no Actions column — you are signed in as a Technical Lead or an Auditor. Ask a System Administrator to change the variable.',
     failTitle: 'What fails',
     failBody: 'Fix the catalog or the Connection binding, then Test or Deploy again.',
     failTextBlank: 'TEXT default empty — save is blocked. Whitespace current value falls back to default.',
@@ -836,11 +872,11 @@ export default {
   },
   upTasksToClaimGuide: {
     historyTitle: 'Change History',
-    historyBody: 'Open Change History on a task or My Request. Click a group header to collapse or expand its details. The header shows Stage, Change Date (or a time range), Changed By, and the number of visible changes. Consecutive field saves by the same user in the same task and stage are grouped when each save is no more than five minutes after the previous one. The whole group can span longer than five minutes. When task identity is missing, separate saves stay separate because the return round cannot be determined; legacy entries without batch information group only at exactly the same timestamp. Saving unchanged values adds no field-change entries. Claim, Unclaim, Release Claim, Reassign and note events appear separately and interrupt field-edit groups. Every field change keeps its Event, Changed Field, Old Value and New Value; repeated edits are not replaced by a final value. Older history uses the same layout, grouped by its existing task, stage, user and timestamps. Completed snapshots retain their time cutoff. Collapsed groups stay collapsed when history refreshes on the current page. Use the search box above the groups to find a stage, operator, event, field or displayed old/new value. Matching a group header keeps all its details; matching a detail keeps only matching rows. Search is case-insensitive and uses masked display values, not concealed text. The result count shows matching changes out of all visible history. Clear the search to restore all groups. Choose Oldest first (default) or Newest first to order groups and their details by time. Equal-time fields keep their existing order. Search and sorting preserve group boundaries and collapsed states.',
+    historyBody: 'Open Change History on a task or My Request. Click a group header to collapse or expand its details. The header shows Stage, Change Date (or a time range), Changed By, and the number of visible changes. Consecutive field saves by the same user in the same task and stage are grouped when each save is no more than five minutes after the previous one. The whole group can span longer than five minutes. When task identity is missing, separate saves stay separate because the return round cannot be determined; legacy entries without batch information group only at exactly the same timestamp. Saving unchanged values adds no field-change entries. Claim, Unclaim, Release Claim, Reassign and note events appear separately and interrupt field-edit groups. Take over is recorded as Reassign. Changes the system makes by itself show System as Changed By, with the reason in the changed field: Reassigned to manager shows Claimed By · Reassigned by the system: the assignee has left, and Release Claim shows Claimed By · Released: the holder no longer holds this BU + Role. When a delegated task changes hands, a Delegation ended entry shows Delegated to · Ended: the task changed hands, with the delegate as Old Value. Every field change keeps its Event, Changed Field, Old Value and New Value; repeated edits are not replaced by a final value. Older history uses the same layout, grouped by its existing task, stage, user and timestamps. Completed snapshots retain their time cutoff. Collapsed groups stay collapsed when history refreshes on the current page. Use the search box above the groups to find a stage, operator, event, field or displayed old/new value. Matching a group header keeps all its details; matching a detail keeps only matching rows. Search is case-insensitive and uses masked display values, not concealed text. The result count shows matching changes out of all visible history. Clear the search to restore all groups. Choose Oldest first (default) or Newest first to order groups and their details by time. Equal-time fields keep their existing order. Search and sorting preserve group boundaries and collapsed states.',
     pageTitle: 'To Do — claiming role requests',
     crumb: 'User Portal · Task · To Do',
     intro:
-      'To Do lists requests assigned to you and business-unit role requests for your role. Role requests that nobody holds yet, that you hold, and that a colleague holds all stay on this one list. You must Claim a free role request before you can edit or submit it. Assignment Type uses a different colour for each category. Claim all claims every request that is free for you. Unclaim all releases only the role requests you hold. Auto-claim on open, off by default, claims a free role request when you open it from this list.',
+      'To Do lists requests assigned to you and the business-unit role requests of your current workspace. Role requests that nobody holds yet, that you hold, and that a colleague holds all stay on this one list. You must Claim a free role request before you can edit or submit it. Assignment Type uses a different colour for each category. Claim all claims every request that is free for you. Unclaim all releases only the role requests you hold. Auto-claim on open, off by default, claims a free role request when you open it from this list.',
     flowTitle: 'Order of work',
     flow1: 'Open To Do',
     flow2: 'Find a role request with an empty Current Assignee cell, or click Claim all',
@@ -848,14 +884,16 @@ export default {
     flow4: 'Use Unclaim or Unclaim all if you need to let another role member take it',
     listTitle: 'What the list shows',
     listBody:
-      'Open User Portal → Task → To Do. Direct-user, department-role, and delegated requests appear with their Assignment Type colour. Role-pool requests use the BU + role colour. Current Assignee shows the assigned person on those rows. On a role request it stays empty until someone holds it; after a claim it shows You for your own hold, or the other person’s name (Held). Click the Request ID to open the form.',
+      'Open User Portal → Task → To Do. Direct-user, department-role, and delegated requests appear with their Assignment Type colour. Role-pool requests use the BU + role colour. Current Assignee shows the assigned person on those rows. On a role request it stays empty until someone holds it; after a claim it shows You for your own hold, or the other person’s name (Held). If the holder has lost Portal access, the cell also shows Assignee has lost Portal access. Role-pool requests, free or held (yours included), are listed only while the header workspace is that business unit and role; after you switch workspace they leave the list until you switch back. The task page itself opens in any workspace, for example from an email link. Click the Request ID to open the form.',
     rowActionsTitle: 'Action-column buttons',
     rowActionsBody:
-      'The buttons in the Action column change with the request state and your permissions. Claim appears when a role request is free; it makes you the Current Assignee so you can edit and submit it. Unclaim appears when you hold the request; it removes you as Current Assignee and returns the request to the role pool. Release Claim appears only to a Leader of the same role, the business-unit Approver, or a System Administrator when another member holds the request; after confirmation, it clears that member’s hold and leaves the request free for any eligible member to Claim. Reassign appears to the same privileged users; it opens a dialog and moves the request directly to a selected member of the same role instead of returning it to the pool. These buttons only change who holds the request—they do not approve, reject, or complete it.',
+      'The buttons in the Action column change with the request state and your permissions. Claim appears when a role request is free; it makes you the Current Assignee so you can edit and submit it. Unclaim appears when you hold the request; it removes you as Current Assignee and returns the request to the role pool. Release Claim appears when another member holds the request and you are a Leader of the same business unit and role or that business unit’s Approver; after confirmation, it clears that member’s hold and leaves the request free for any eligible member to Claim. Reassign appears to the same users; it opens a dialog and moves the request directly to a selected member of the same role instead of returning it to the pool. When the holder has lost Portal access and you may take the request over, the row shows Take over and a More menu; More holds Release Claim and Reassign, each only when you may use it. These buttons only change who holds the request—they do not approve, reject, or complete it.',
     claimButtonSample: 'free role request → assigns it to you and enables editing',
     unclaimButtonSample: 'request held by you → returns it to the role pool',
-    releaseClaimButtonSample: 'request held by another member → clears their hold after confirmation; privileged users only',
-    reassignButtonSample: 'free or held role request → assigns it directly to another member; privileged users only',
+    releaseClaimButtonSample: 'request held by another member → clears their hold after confirmation; Leader of that business unit and role, or its business-unit Approver, or any pool member with access once the holder has lost Portal access (then under More)',
+    reassignButtonSample: 'free or held role request → assigns it directly to another member; Leader or business-unit Approver, or any pool member with access once the holder has lost Portal access (then under More)',
+    takeOverButtonSample: 'request whose holder has lost Portal access → assigns it to you after confirmation; any pool member with Portal access',
+    moreButtonSample: 'next to Take over on the row; opens Release Claim and Reassign, each only when you may use it',
     claimTitle: 'Claim, Unclaim, Claim all, and Unclaim all',
     claimBody:
       'Claim locks the request to you. Other members of the role can only view it until you Unclaim or complete it. Completing the task does not need a second Claim if you already hold it. Claim all (top right) confirms once, then claims every free request in batches of 100 until none remain. After a search, tick rows and use Claim or Unclaim on the bar between “N selected” and Batch Urge: those buttons always show; they are disabled when none of the ticked rows can be claimed or released. The confirm dialog shows how many of the selection will be processed. Unclaim all confirms once, then releases every role request you hold, in the same batch size. Selection Unclaim and Unclaim all never force-release a colleague’s hold. If some rows fail, the toast shows claimed / skipped / failed counts.',
@@ -882,10 +920,25 @@ export default {
     filePreviewSample: 'a new window each click; Ctrl + scroll zoom; Fit / 100%; Previous file / Next file',
     detailTitle: 'On the task page',
     detailBody:
-      'If nobody holds the role request, or someone else holds it, the form is view-only and the action bar is hidden. The banner at the top says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit. If you are a Leader of this role, a BU Approver of this business unit, or a System Administrator, the banner and the list also show Release Claim and Reassign.',
-    leaderTitle: 'Leader, Approver, and Admin',
+      'The claim banner at the top of the task page appears on BU + role requests, and on requests offered to a list of named people whenever you can act on them (for example after the holder lost Portal access). If nobody holds the request, or someone else holds it, the form is view-only and the action bar is hidden. The banner says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit. If you are a Leader of this business unit and role, or the Approver of this business unit, the banner and the list also show Release Claim and Reassign. If the holder has lost Portal access, the banner title adds Assignee has lost Portal access, and every pool member with access sees all three buttons there: Release Claim, Take over, and Reassign.',
+    leaderTitle: 'Leader and business-unit Approver',
     leaderBody:
-      'Member and Leader are per business unit and role, not a platform-wide flag. A Member Claims and Unclaims only their own hold. A Leader of that same role can Release Claim on a request held by someone else, or Reassign the request to another member of the same role (including a free request or one already held). The business unit Approver and a System Administrator (SYS_ADMIN) have the same Release Claim and Reassign rights. An Auditor cannot. Release Claim and Reassign are separate: Release Claim returns the request to the pool; Reassign assigns it to a chosen member and does not send it back to the pool. Confirm before Release Claim: Current Assignee becomes empty, and another Member can Claim it. Reassign opens a dialog to pick a member of the same role; Change History and Admin Center → User Portal Audit Log record who assigned, when, from whom, and to whom. Admin Center → User Management shows Member or Leader on each business unit role. Organization → Eligible Roles lists the Leaders of each role so you can find who can release or reassign a stuck hold.',
+      'Member and Leader are per business unit and role, not a platform-wide flag. A Member Claims and Unclaims only their own hold. While the holder still has Portal access, a Leader of that same business unit and role can Release Claim on a request held by someone else, or Reassign the request to another member of the same role (including a free request or one already held). The Approver of that business unit has the same Release Claim and Reassign rights. System Administrator gets no exception, and an Auditor cannot either. Once the holder has lost Portal access, every pool member with access can act; see [[/up-tasks-to-claim#lost-access]]. Release Claim and Reassign are separate: Release Claim returns the request to the pool; Reassign assigns it to a chosen member and does not send it back to the pool. Confirm before Release Claim: Current Assignee becomes empty, and another Member can Claim it. Reassign opens a dialog to pick a member of the same role; Change History and Admin Center → User Portal Audit Log record who assigned, when, from whom, and to whom. Admin Center → User Management shows Member or Leader on each business unit role. Organization → Eligible Roles lists the Leaders of each role so you can find who can release or reassign a stuck hold.',
+    lostTitle: 'When people lose access, leave, or change role',
+    lostBody:
+      'A person loses Portal access when their account is disabled or locked, or when they are no longer in any group that grants Portal access. If they hold a pool request, To Do and the task banner show Assignee has lost Portal access next to their name, and every other pool member who still has Portal access can act on it: Release Claim returns it to the pool, Take over makes you the holder after a confirmation, and Reassign hands it to another pool member with Portal access. On To Do the row shows Take over, with Release Claim and Reassign under More; the task banner shows all three. No Leader or Approver is needed. For a BU + role request the pool is that business unit and role; for a request offered to a list of named people it is that list, and those people now see the held request on their To Do too.',
+    lostDirectBody:
+      'A request assigned to one person does not move while that person’s account is still active. It waits for them; they get Portal access back by requesting it again.',
+    leftBody:
+      'A person has left when an administrator disables or deletes their account in Admin Center; a locked account has not left. Requests assigned to that person, and pool requests they held where nobody else in the pool has Portal access, are reassigned automatically to their Entity Manager, or to their Function Manager when the Entity Manager is missing, disabled, or has no Portal access. The request simply appears on the manager’s To Do, and the manager completes it or transfers it like any other request. If neither manager is available, the request stays where it is until an administrator fixes the manager data. A free request offered to a list of named people goes to a manager only once all of those people have left; a free BU + role request just waits in its pool. A manager with Portal access but no business role yet still receives the request and can work on it after getting one.',
+    roleChangeBody:
+      'BU + role pools follow grants. Someone granted a business unit and role joins that pair’s open pool requests right away, including requests created before the grant. When the grant is revoked, they leave those pools, and a request they held there goes back to the pool by itself.',
+    standingDelegationBody:
+      'On Setup → Delegations, a standing rule stops applying while its delegator or delegate has lost Portal access. The Status column keeps the rule’s status and adds Not in effect: the delegator has lost Portal access, or Not in effect: the delegate has lost Portal access. The rule is not deleted and applies again once that person has Portal access. A single-task delegation made with Delegate on the task page ([[/task-delegate]]) follows the same rule: the delegate stops seeing it under To Do → Delegated, the task stays with the delegator, and the Delegated to line on Basic Info adds the same Not in effect text. A single-task delegation ends for good when the task changes hands, including Take over, Reassign, a release, or the system releasing the task or passing it to a manager; the new holder can delegate again.',
+    lostTagSample: 'Current Assignee cell on To Do and the task banner; the holder of this pool request has lost Portal access',
+    takeOverSample: 'on the row and the task banner once the holder has lost Portal access; confirm, then you hold the request',
+    managerReassignSample: 'Change History event by System; the request of someone who left went to their manager',
+    delegationInactiveSample: 'Status column on Setup → Delegations, and after Delegated to on a delegated task; for the other side it reads Not in effect: the delegate has lost Portal access',
     applyTitle: 'Apply as Member or Leader',
     applyBody:
       'Open User Profile Setup → Apply Permission. Choose the business unit and role, then Member or Leader. The approver’s Approve Request dialog shows that Member or Leader choice and the role. If you already have that role as a Member, you can apply to become Leader. After approval, the User Profile Setup card and Admin user page show Leader on that role.',
@@ -894,7 +947,7 @@ export default {
       'Tasks to Claim is no longer a separate menu. Free role requests, your holds, and colleague holds all appear on To Do. Assignment Type no longer offers Virtual Group as a filter; use BU + role for the claim pool. Older bookmarks to /tasks/to-claim open To Do.',
     failTitle: 'When Claim fails',
     failBody:
-      'Claim fails if another member already holds the request, you are no longer in the role that was written when the task was created, or the engine is unavailable. Refresh the list: the Current Assignee column shows the current holder. Unclaim fails if you are not the holder. Unclaim all skips colleague holds and reports skipped or failed counts. Release Claim and Reassign fail if you are not a Leader of that role, a BU Approver of that business unit, or a System Administrator. Reassign also fails if the chosen user is not in the same role pool, or is already the holder. Claim all continues after a failed row and reports the failed count at the end.',
+      'Claim fails if another member already holds the request, you no longer hold that business unit and role, or the engine is unavailable. Refresh the list: the Current Assignee column shows the current holder. Unclaim fails if you are not the holder. Unclaim all skips colleague holds and reports skipped or failed counts. Release Claim and Reassign fail if you are neither a Leader of that business unit and role nor the Approver of that business unit, unless the holder has lost Portal access and you are a pool member with access. Take over fails once the holder has Portal access again or the request already has another holder. Reassign also fails if the chosen user is not in the same pool, or is already the holder. Claim all continues after a failed row and reports the failed count at the end.',
   },
   taskDelegateGuide: {
     pageTitle: 'Delegate a task',
@@ -909,8 +962,8 @@ export default {
     flow5: 'The other person opens Delegated on To Do (match workspace for BU+Role)',
     openTitle: 'Open the dialog',
     openBody:
-      'On task detail, click Delegate. The red question mark next to the dialog title opens this page. If nobody is assigned yet (unclaimed candidate pool), Delegate is hidden. Claim first so there is a Current Assignee.',
-    openSample: 'button on the task action bar',
+      'On task detail, click Delegate. The red question mark next to the dialog title opens this page. If nobody is assigned yet (unclaimed candidate pool), Delegate is hidden. Claim first so there is a Current Assignee. Delegate appears only on tasks that can be delegated; some tasks do not offer it.',
+    openSample: 'button on the task action bar; only on tasks that can be delegated',
     userTitle: 'Specified user',
     userBody:
       'Tick Specified user. Click Target User (placeholder Click to search). A table lists Username, Display Name, Full Name, Email, and Employee ID; scroll sideways if the columns do not fit. Type to search those fields on the server, pick a row, then Confirm. You stay Current Assignee. An extra line reads Delegated to that person. They see On behalf of you. You can still complete the task yourself.',
@@ -925,22 +978,24 @@ export default {
     roleFieldSample: 'second of the required pair; disabled until a unit is chosen',
     afterTitle: 'After you confirm',
     afterBody:
-      'A success toast says Delegated successfully. Current Assignee is still you. The extra line is Delegated to the person, or Delegated to the unit and role names. Transfer is a different button and still changes the assignee.',
+      'A success toast says Delegated successfully. Current Assignee is still you. The extra line is Delegated to the person, or Delegated to the unit and role names. While the delegation is not in effect, that line adds · Not in effect: the delegate has lost Portal access, or · Not in effect: the delegator has lost Portal access. Transfer is a different button and still changes the assignee.',
     assigneeSample: 'still you after Delegate',
-    delegatedToSample: 'extra line on Basic Info',
+    delegatedToSample: 'extra line on Basic Info; adds · Not in effect: … while you or the delegate has lost Portal access',
     seeTitle: 'Who sees it and can complete',
     seeBody:
-      'The named user, or anyone whose current workspace matches that BU and Role, finds the task under To Do → Delegated. They complete it as On behalf of you. Anyone else has no permission. Switch workspace from Select workspace identity in the header when you were given a BU+Role target.',
+      'The named user, or anyone whose current workspace matches that BU and Role, finds the task under To Do → Delegated. They complete it as On behalf of you. Anyone else has no permission. Switch workspace from Select workspace identity in the header when you were given a BU+Role target. While you or the delegate has lost Portal access, the delegation is not in effect: the delegate no longer sees the task under To Do → Delegated and cannot complete it. The task stays in your name, so you can complete it yourself. The delegation is not deleted and applies again once access is back. With a BU+Role target, a member of that pair who has no Portal access cannot complete it on your behalf. The pair as a whole never counts as having lost Portal access. If nobody in the pair can complete the task for now, the task stays in your name and you can complete it as usual. The pair as a whole is never marked Not in effect; the task page shows only the delegator’s Not in effect line, when the delegator has lost Portal access.',
+    endBody:
+      'A delegation belongs to the person who holds the task. It ends as soon as their hold ends or the task moves to someone else: Unclaim or Release Claim, Take over, Reassign by a Leader, an Approver or a pool member, a release by the system after the holder lost that business unit and role, or the system passing the task to the manager of a holder who left. The delegate then no longer sees the task under To Do → Delegated and cannot complete it, and the Delegated to line disappears from Basic Info. Change History adds Delegation ended, with Delegated to · Ended: the task changed hands, the delegate as Old Value, and as Changed By the person who released, took over or reassigned (System when the system did it). The delegation does not come back by itself; the new holder can delegate again.',
     todoFilterSample: 'To Do filter for delegated work',
     onBehalfSample: 'what the other person sees on Basic Info',
     notTitle: 'What this is not',
     notBody:
-      'Transfer changes Current Assignee. Setup → Delegations standing rules are a different page and do not use this dialog. Permission self-service requests are also different.',
+      'Transfer changes Current Assignee. Setup → Delegations standing rules are a different page and do not use this dialog. Both kinds stop applying while the delegator or the delegate has lost Portal access ([[/up-tasks-to-claim#lost-access]]). Permission self-service requests are also different.',
     transferSample: 'reassign button on the same action bar',
     standingSample: 'Setup menu; standing rules, not this one task',
     failTitle: 'When it fails',
     failBody:
-      'Confirm without a user shows Please select user. Confirm without both Business Unit and Role shows Please select both business unit and role. Delegating to yourself is rejected. A completed task cannot be delegated. An unclaimed pool task has no Delegate button.',
+      'Confirm without a user shows Please select user. Confirm without both Business Unit and Role shows Please select both business unit and role. Delegating to yourself is rejected. A completed task cannot be delegated. An unclaimed pool task has no Delegate button. A task that cannot be delegated shows This task cannot be delegated: delegation is not available for it.',
   },
   formUploadGuide: {
     pageTitle: 'Form Design — Advanced Upload',
@@ -986,4 +1041,6 @@ export default {
   ...aiStudioMessages,
   ...slaPoliciesMessages,
   ...tableDataMessages,
+  ...ldapSyncMessages,
+  ...rtStructureMessages,
 }

@@ -109,7 +109,7 @@ public class ProcessStartFormEnricherComponent {
                 if (!Boolean.TRUE.equals(field.get("isPrimaryKey")) || !isBlank(variables.get(name)) || field.get("pkGenerationJson") == null) continue;
                 PkGenerationConfig config = objectMapper.convertValue(field.get("pkGenerationJson"), PkGenerationConfig.class);
                 if ("manual".equalsIgnoreCase(config.getStrategy())) continue;
-                var values = primaryKeyAllocationService.allocate(id, name, config, 1, "", "dw_pk_sequences");
+                var values = primaryKeyAllocationService.allocate(id, name, config, 1, "", "up_pk_sequences");
                 if (values.size() != 1) throw com.platform.common.functionunit.CatalogSnapshotReader.invalid(catalogId);
                 variables.put(name, values.get(0));
             }
@@ -164,7 +164,7 @@ public class ProcessStartFormEnricherComponent {
                 continue;
             }
             List<String> values = primaryKeyAllocationService.allocate(
-                    tableId, pk.fieldName(), pk.config(), 1, "");
+                    tableId, pk.fieldName(), pk.config(), 1, "", "up_pk_sequences");
             if (values != null && !values.isEmpty()) {
                 variables.put(pk.fieldName(), values.get(0));
             }

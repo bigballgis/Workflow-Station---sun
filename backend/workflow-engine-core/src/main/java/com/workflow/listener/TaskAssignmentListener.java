@@ -31,14 +31,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static com.workflow.listener.AssigneeUserIdNormalizer.extractUserIdFromRefMap;
-import static com.workflow.listener.AssigneeUserIdNormalizer.sanitizeFlowableUserIds;
-import static com.workflow.listener.AssigneeUserIdNormalizer.splitUserList;
 import static com.workflow.listener.UserTaskExtensionPropertyReader.getExtensionProperty;
 
 /**
@@ -423,8 +419,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
             if (roleId == null || roleId.isEmpty()) {
                 roleId = assigneeValue;
             }
-            if ((businessUnitId == null || businessUnitId.isEmpty()) && resolvedType == AssigneeType.BU_ROLE) {
-                businessUnitId = assigneeValue;
+            if (resolvedType == AssigneeType.BU_ROLE) {
+                businessUnitId = com.workflow.util.BpmnPoolBusinessUnit.resolve(resolvedType, businessUnitId, assigneeValue);
             }
 
             if (resolvedType == AssigneeType.BU_ROLE && (businessUnitId == null || businessUnitId.isEmpty())) {
@@ -671,37 +667,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     .build();
         }
         Object raw = variables != null ? variables.get(varName.trim()) : null;
-        List<String> ids = new ArrayList<>();
-        if (raw == null) {
-            return taskAssigneeResolver.resolveFromUserIdList(AssigneeType.ASSIGNEE_FROM_VARIABLE, ids);
-        }
-        if (raw instanceof Collection<?> col) {
-            for (Object o : col) {
-                if (o == null) {
-                    continue;
-                }
-                if (o instanceof Map<?, ?> m) {
-                    String uid = extractUserIdFromRefMap(m);
-                    if (uid != null) {
-                        ids.addAll(splitUserList(uid));
-                    } else {
-                        log.warn("ASSIGNEE_FROM_VARIABLE: collection element map has no id/userId/user_id/value; skip (avoid Map#toString)");
-                    }
-                } else {
-                    ids.addAll(splitUserList(o.toString()));
-                }
-            }
-        } else if (raw instanceof Map<?, ?> map) {
-            String uid = extractUserIdFromRefMap(map);
-            if (uid != null) {
-                ids.addAll(splitUserList(uid));
-            } else {
-                log.warn("ASSIGNEE_FROM_VARIABLE: map has no id/userId/user_id/value; skip (avoid Map#toString length overflow in Flowable identity link)");
-            }
-        } else {
-            ids.addAll(splitUserList(raw.toString()));
-        }
-        ids = sanitizeFlowableUserIds(ids);
+        List<String> ids = AssigneeUserIdNormalizer.userIdsOfVariable(raw);
         return taskAssigneeResolver.resolveFromUserIdList(AssigneeType.ASSIGNEE_FROM_VARIABLE, ids);
     }
 

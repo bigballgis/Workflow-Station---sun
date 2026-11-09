@@ -1,6 +1,8 @@
 // NOTE: This file is duplicated across admin-center, developer-workstation, user-portal.
 // Consider extracting to a shared package. See ISSUE-095.
 import axios from "axios";
+import { ref } from "vue";
+import { installSessionRefresh } from "@platform-shared/auth/sessionRefresh";
 
 /**
  * Authentication API module.
@@ -16,6 +18,8 @@ const authRequest = axios.create({
   withCredentials: true,
   headers: { "Content-Type": "application/json" },
 });
+// /me (the router guard's session check) renews an expired access token instead of bouncing to login.
+installSessionRefresh(authRequest, (config) => axios.request(config));
 
 /** Per-app keys so DW / Portal / Admin on the same origin do not clobber each other's sessions */
 export const TOKEN_KEY = "ws_ac_access_token";
@@ -56,6 +60,33 @@ export interface RoleWithSource {
   sourceName: string;
 }
 
+/** Admin Center pages, as the backend's `AdminCapabilities.Feature` keys them. */
+export type AdminFeature =
+  | "dashboard"
+  | "users"
+  | "organization"
+  | "organizationMembers"
+  | "virtualGroups"
+  | "roles"
+  | "functionUnits"
+  | "slaPolicies"
+  | "relationTables"
+  | "automationFlows"
+  | "automationRuns"
+  | "automationPieces"
+  | "auditAdminCenter"
+  | "auditUserPortal"
+  | "biDashboardRegistry"
+  | "biAudienceAssignment"
+  | "biDataViewAssignment"
+  | "biRbacMapping"
+  | "environmentVariables"
+  | "systemConfig"
+  | "ldapSync";
+
+/** NONE: hidden; READ: read-only; TEAM: writes only for the teams the user leads; WRITE: everything. */
+export type AdminAccessLevel = "NONE" | "READ" | "TEAM" | "WRITE";
+
 export interface UserInfo {
   userId: string;
   username: string;
@@ -66,6 +97,8 @@ export interface UserInfo {
   rolesWithSources?: RoleWithSource[];
   language: string;
   hasAvatar: boolean;
+  /** Computed by the backend from the user's current roles; absent in a profile stored before WP9. */
+  adminAccess?: Partial<Record<AdminFeature, AdminAccessLevel>>;
 }
 
 export const AUTH_BASE_URL = '/api/v1/admin/auth';
@@ -125,10 +158,12 @@ export const exchangeSsoCode = async (
 };
 
 /**
- * Get current user info.
+ * Get current user info and store it, so menus and buttons follow the user's current roles (a Technical Lead taken
+ * off a team list loses the pages without signing in again).
  */
 export const getCurrentUser = async (): Promise<UserInfo> => {
   const response = await authRequest.get<UserInfo>("/me");
+  saveUser(response.data);
   return response.data;
 };
 
@@ -150,11 +185,16 @@ export const saveTokens = (_accessToken: string, _refreshToken: string) => {
   // Tokens are now managed via httpOnly cookies — no localStorage writes needed
 };
 
+/** Bumped whenever the stored user changes, so computeds over getUser() re-evaluate. */
+const storedUserVersion = ref(0);
+
 export const saveUser = (user: UserInfo) => {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+  storedUserVersion.value++;
 };
 
 export const getStoredUser = (): UserInfo | null => {
+  void storedUserVersion.value;
   const userStr = localStorage.getItem(USER_KEY);
   if (userStr) {
     try {
@@ -175,6 +215,7 @@ export const clearAuthBroadcast = (broadcast = true) => {
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(USER_ID_KEY);
   localStorage.removeItem(USERNAME_KEY);
+  storedUserVersion.value++;
 
   // Tokens are stored in httpOnly cookies; optionally notify other tabs.
   if (broadcast) {

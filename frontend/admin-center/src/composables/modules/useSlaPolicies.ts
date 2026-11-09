@@ -5,7 +5,6 @@
 import { computed, reactive, ref, type CSSProperties } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { notifyConfirm, notifySuccess, notifyWarning } from '@/utils/notify'
-import { hasPermission } from '@/utils/permission'
 import {
   slaPolicyApi,
   type SlaPolicyHistory,
@@ -23,7 +22,6 @@ export function useSlaPolicies() {
   const { t } = useI18n()
 
   const loading = ref(false)
-  const canEdit = computed(() => hasPermission('sla:policy:edit'))
   const grid = useAdminListGrid<SlaPolicyRow>({
     storageKey: 'admin-list-layout:sla-policies',
     extraWidth: SLA_ACTIONS_COL_WIDTH,
@@ -145,7 +143,6 @@ export function useSlaPolicies() {
 
   return {
     loading,
-    canEdit,
     loadPolicies,
     editDialogVisible,
     saving,

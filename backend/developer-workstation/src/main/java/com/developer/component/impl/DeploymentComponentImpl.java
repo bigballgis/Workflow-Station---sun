@@ -120,6 +120,23 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         this.emailMonitorRuleComponent = emailMonitorRuleComponent;
     }
 
+    /**
+     * The deployment sends the service token and the user's access token to the target, so the target can only
+     * be this environment's Admin Center: an arbitrary URL would hand both to whoever runs it.
+     */
+    String resolveTargetUrl(String requested) {
+        String configured = withoutTrailingSlash(defaultAdminCenterUrl);
+        if (requested == null || requested.isBlank() || withoutTrailingSlash(requested.trim()).equals(configured)) {
+            return defaultAdminCenterUrl;
+        }
+        throw new DeveloperBusinessException("DEPLOY_TARGET_NOT_ALLOWED",
+                i18nService.getMessage("deploy.target_not_allowed", configured));
+    }
+
+    private static String withoutTrailingSlash(String url) {
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
     @Override
     public DeployResponse deployToAdminCenter(Long functionUnitId, DeployRequest request) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
@@ -137,7 +154,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         }
 
         String deploymentId = UUID.randomUUID().toString();
-        String targetUrl = request.getTargetUrl() != null ? request.getTargetUrl() : defaultAdminCenterUrl;
+        String targetUrl = resolveTargetUrl(request.getTargetUrl());
 
         DeployResponse response = DeployResponse.builder()
                 .deploymentId(deploymentId)
@@ -364,8 +381,14 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             applyOutboundAdminHeaders(deployHeaders, authorizationHeader, adminUserId);
             HttpEntity<Map<String, Object>> deployRequestEntity = new HttpEntity<>(deployBody, deployHeaders);
 
-            ResponseEntity<Map> deployResponse = restTemplate.exchange(
-                    deployUrl, HttpMethod.POST, deployRequestEntity, Map.class);
+            ResponseEntity<Map> deployResponse;
+            try {
+                deployResponse = restTemplate.exchange(
+                        deployUrl, HttpMethod.POST, deployRequestEntity, Map.class);
+            } catch (org.springframework.web.client.HttpStatusCodeException e) {
+                throw new DeveloperBusinessException("DEPLOY_FAILED",
+                        i18nService.getMessage("deploy.failed") + ": " + extractAdminError(e));
+            }
 
             if (!deployResponse.getStatusCode().is2xxSuccessful()) {
                 throw new DeveloperBusinessException("DEPLOY_FAILED", i18nService.getMessage("deploy.failed"));
@@ -433,7 +456,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     }
 
     @SuppressWarnings("unchecked")
-    private String extractAdminError(org.springframework.web.client.HttpStatusCodeException e) {
+    static String extractAdminError(org.springframework.web.client.HttpStatusCodeException e) {
         String body = e.getResponseBodyAsString();
         if (body == null || body.isBlank()) {
             return e.getStatusCode() + " " + e.getStatusText();
@@ -444,6 +467,9 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             Object message = parsed.get("message");
             if (message == null && parsed.get("data") instanceof Map<?, ?> data) {
                 message = data.get("message");
+            }
+            if (message == null && parsed.get("error") instanceof Map<?, ?> error) {
+                message = error.get("message");
             }
             if (message != null) {
                 return String.valueOf(message);

@@ -12,7 +12,6 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -88,7 +87,7 @@ public class AdminCenterClient {
             
         } catch (Exception e) {
             // FALLBACK(external): 权限查询降级为"无权限"（功能变少而非数据变错）；
-            // 分派链路不走本方法（走 getUsersByVirtualGroupCode，那个会抛）。
+            // 分派链路不按虚拟组取人（旧写法 VIRTUAL_GROUP 解析为空，见 AssigneeType）。
             log.error("Failed to check if user {} is in virtual group {}: {}", userId, groupId, e.getMessage());
             return false;
         }
@@ -528,62 +527,6 @@ public class AdminCenterClient {
     }
     
     /**
-     * 获取拥有指定BU无关型角色的用户ID列表
-     * @param roleId 角色ID（BU_UNBOUNDED类型）
-     * @return 用户ID列表
-     */
-    public List<String> getUsersByUnboundedRole(String roleId) {
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/task-assignment/roles/" + SafeUrlInput.requirePathToken(roleId) + "/users";
-            ResponseEntity<List<String>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<List<String>>() {}
-            );
-            
-            List<String> userIds = response.getBody();
-            return userIds != null ? userIds : Collections.emptyList();
-
-        } catch (HttpClientErrorException.NotFound e) {
-            return Collections.emptyList();
-        } catch (RestClientException e) {
-            log.error("admin-center unavailable getting users by unbounded role {}: {}", roleId, e.getMessage());
-            throw new AdminCenterUnavailableException(
-                    "Failed to get users by unbounded role " + roleId, e);
-        }
-    }
-
-    /**
-     * 按虚拟组编码（BPMN VIRTUAL_GROUP 的 assigneeValue，如 DOCUMENT_VERIFIERS）获取成员用户 ID。
-     */
-    public List<String> getUsersByVirtualGroupCode(String code) {
-        if (code == null || code.isBlank()) {
-            return Collections.emptyList();
-        }
-        try {
-            String url = UriComponentsBuilder
-                    .fromUriString(adminCenterUrl + "/api/v1/admin/task-assignment/virtual-groups/by-code/{code}/users")
-                    .buildAndExpand(code.trim())
-                    .toUriString();
-            ResponseEntity<List<String>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<List<String>>() {}
-            );
-            List<String> userIds = response.getBody();
-            return userIds != null ? userIds : Collections.emptyList();
-        } catch (HttpClientErrorException.NotFound e) {
-            return Collections.emptyList();
-        } catch (RestClientException e) {
-            log.error("admin-center unavailable getting users by virtual group code {}: {}", code, e.getMessage());
-            throw new AdminCenterUnavailableException(
-                    "Failed to get users by virtual group code " + code, e);
-        }
-    }
-    
-    /**
      * 获取业务单元的准入角色ID列表
      * @param businessUnitId 业务单元ID
      * @return 角色ID列表
@@ -667,29 +610,6 @@ public class AdminCenterClient {
         }
     }
     
-    /**
-     * 获取所有BU无关型角色
-     * @return 角色列表
-     */
-    public List<Map<String, Object>> getBuUnboundedRoles() {
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/task-assignment/roles/bu-unbounded";
-            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
-            );
-            
-            List<Map<String, Object>> roles = response.getBody();
-            return roles != null ? roles : Collections.emptyList();
-            
-        } catch (Exception e) {
-            log.error("Failed to get BU unbounded roles: {}", e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
     /**
      * 获取功能单元邮件连接凭据（内部 API）
      *

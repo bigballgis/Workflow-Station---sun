@@ -17,7 +17,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * DB-backed PK allocation using {@code dw_pk_sequences} / {@code rt_pk_sequences}.
+ * DB-backed PK allocation using {@code up_pk_sequences} / {@code rt_pk_sequences}.
  *
  * <p>{@code autoIncrement} / {@code prefixedSequence} / {@code customFormat} (reset none)
  * counters are global per (table_id, field_name).
@@ -52,12 +52,6 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public List<String> allocate(Long tableId, String fieldName, PkGenerationConfig config, int count, String scopeKey) {
-        return allocate(tableId, fieldName, config, count, scopeKey, null);
-    }
-
-    @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<String> allocate(Long tableId, String fieldName, PkGenerationConfig config, int count,
                                  String scopeKey, String sequenceTable) {
         if (tableId == null || fieldName == null || fieldName.isBlank()) {
@@ -67,7 +61,7 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
         PkGenerationConfig effective = CustomPkFormat.normalizeConfig(config);
         String strategy = effective != null && effective.getStrategy() != null
                 ? effective.getStrategy() : "manual";
-        String table = resolveSequenceTable(tableId, sequenceTable);
+        String table = requireSequenceTable(sequenceTable);
         if (CalendarDateSequence.Period.forStrategy(strategy) != null) {
             return allocateCalendarDateSequence(table, tableId, fieldName, effective, n);
         }
@@ -274,17 +268,11 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
                 SCOPE_KEY_GLOBAL);
     }
 
-    private String resolveSequenceTable(Long tableId, String override) {
-        if ("dw_pk_sequences".equals(override) || "rt_pk_sequences".equals(override)) {
-            return override;
+    /** The counter table is named by the caller's domain; it is never inferred from a table id. */
+    private static String requireSequenceTable(String sequenceTable) {
+        if ("up_pk_sequences".equals(sequenceTable) || "rt_pk_sequences".equals(sequenceTable)) {
+            return sequenceTable;
         }
-        Integer dw = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM dw_table_definitions WHERE id = ?",
-                Integer.class,
-                tableId);
-        if (dw != null && dw > 0) {
-            return "dw_pk_sequences";
-        }
-        return "rt_pk_sequences";
+        throw new IllegalArgumentException("Unknown PK sequence table: " + sequenceTable);
     }
 }

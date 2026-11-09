@@ -8,13 +8,14 @@ import com.workflow.dto.response.ServiceTaskExecutionResult;
 import com.workflow.entity.ServiceTaskExecutionRecord;
 import com.workflow.repository.ServiceTaskExecutionRecordRepository;
 import com.platform.common.security.SsrfProtection;
-import lombok.RequiredArgsConstructor;
+import com.workflow.config.RestTemplateConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.ExtensionElement;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.ServiceTask;
 import org.flowable.engine.delegate.DelegateExecution;
 import org.flowable.engine.delegate.JavaDelegate;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
@@ -82,7 +83,6 @@ import java.util.*;
  */
 @Slf4j
 @Component("apTaskExecutor")
-@RequiredArgsConstructor
 public class ServiceTaskExecutor implements JavaDelegate {
 
     private static final String STATUS_PENDING = "PENDING";
@@ -107,6 +107,22 @@ public class ServiceTaskExecutor implements JavaDelegate {
     private final ObjectMapper objectMapper;
     private final PlatformTransactionManager transactionManager;
     private final AdminCenterClient adminCenterClient;
+
+    /**
+     * @param restTemplate the webhook template ({@link RestTemplateConfig#WEBHOOK_REST_TEMPLATE}): a webhook URL may
+     *                     come from the BPMN ({@code ap:webhookUrl}), so every connection is SSRF-checked when made
+     */
+    public ServiceTaskExecutor(ServiceTaskExecutionRecordRepository executionRecordRepository,
+                               @Qualifier(RestTemplateConfig.WEBHOOK_REST_TEMPLATE) RestTemplate restTemplate,
+                               ObjectMapper objectMapper,
+                               PlatformTransactionManager transactionManager,
+                               AdminCenterClient adminCenterClient) {
+        this.executionRecordRepository = executionRecordRepository;
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+        this.transactionManager = transactionManager;
+        this.adminCenterClient = adminCenterClient;
+    }
 
     /** REQUIRES_NEW template for the failure record — see {@link #persistFailureOutsideCallerTx}. */
     private volatile TransactionTemplate failureTx;
@@ -366,6 +382,11 @@ public class ServiceTaskExecutor implements JavaDelegate {
     }
 
     private Set<String> allowedHosts() {
+        return allowedHostsOf(webhookBaseUrl);
+    }
+
+    /** The configured AP runtime's host: the only webhook host allowed to be internal. */
+    public static Set<String> allowedHostsOf(String webhookBaseUrl) {
         try {
             String host = new URI(webhookBaseUrl.trim()).getHost();
             if (host != null && !host.isBlank()) {

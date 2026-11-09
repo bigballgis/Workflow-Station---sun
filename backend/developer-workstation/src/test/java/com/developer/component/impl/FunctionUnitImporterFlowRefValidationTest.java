@@ -138,7 +138,7 @@ class FunctionUnitImporterFlowRefValidationTest {
                 "process/process.bpmn", BPMN_WITH_FLOW_REF);
 
         DeveloperBusinessException e = assertThrows(DeveloperBusinessException.class,
-                () -> impl.importFunctionUnit(file, null));
+                () -> impl.importFunctionUnit(file, null, "vg-team-a"));
 
         assertEquals("AP_FLOW_REF_MISSING", e.getErrorCode());
         assertTrue(e.getMessage().contains(FLOW_KEY), "缺失清单必须点名引用");
@@ -158,7 +158,7 @@ class FunctionUnitImporterFlowRefValidationTest {
                 "process/process.bpmn", BPMN_WITH_FLOW_REF);
 
         DeveloperBusinessException e = assertThrows(DeveloperBusinessException.class,
-                () -> impl.importFunctionUnit(file, null));
+                () -> impl.importFunctionUnit(file, null, "vg-team-a"));
 
         assertEquals("AP_FLOW_CHANNEL_UNAVAILABLE", e.getErrorCode());
         verify(functionUnitRepository, never()).save(any());
@@ -173,7 +173,7 @@ class FunctionUnitImporterFlowRefValidationTest {
                 "manifest.json", "{\"name\":\"FlowFU\",\"code\":\"flow-fu\",\"version\":\"1.0.0\"}",
                 "process/process.bpmn", BPMN_WITH_FLOW_REF);
 
-        Map<String, Object> result = impl.importFunctionUnit(file, null);
+        Map<String, Object> result = impl.importFunctionUnit(file, null, "vg-team-a");
 
         assertEquals("SUCCESS", result.get("status"));
         verify(processDefinitionRepository).save(any());
@@ -186,7 +186,7 @@ class FunctionUnitImporterFlowRefValidationTest {
                 "manifest.json", "{\"name\":\"LegacyFU\",\"code\":\"legacy-fu\",\"version\":\"1.0.0\"}",
                 "automation-flows/flow_0.json", "{\"hermesFlowExport\":1,\"flowKey\":\"k\"}");
 
-        Map<String, Object> result = impl.importFunctionUnit(file, null);
+        Map<String, Object> result = impl.importFunctionUnit(file, null, "vg-team-a");
 
         assertEquals("SUCCESS", result.get("status"));
         // 没有 BPMN 引用 → 不该有任何解析调用；更不允许还原（方法已删，编译期即保证）

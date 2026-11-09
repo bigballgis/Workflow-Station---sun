@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
 /**
  * 开发者权限检查器
@@ -26,11 +27,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class DeveloperPermissionChecker {
 
-    /** 团队成员只读基线权限码（与 {@code @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")} 对应）。 */
-    private static final String FUNCTION_UNIT_VIEW_CODE = "function_unit:view";
-
     private final RestTemplate restTemplate;
-    private final FunctionUnitWorkspaceAccessService workspaceAccessService;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -40,6 +37,9 @@ public class DeveloperPermissionChecker {
     
     // 缓存过期时间（毫秒）
     private static final long CACHE_TTL = TimeUnit.MINUTES.toMillis(5);
+
+    /** Clock of the cache; tests move it forward. */
+    LongSupplier clock = System::currentTimeMillis;
     
     /**
      * 获取用户的开发者权限
@@ -49,7 +49,7 @@ public class DeveloperPermissionChecker {
         
         // 检查缓存
         CachedPermissions cached = permissionCache.get(userId);
-        if (cached != null && !cached.isExpired()) {
+        if (cached != null && !cached.isExpired(clock.getAsLong())) {
             log.info("Returning cached permissions for user: {}, permissions: {}", userId, cached.permissions);
             return cached.permissions;
         }
@@ -67,41 +67,19 @@ public class DeveloperPermissionChecker {
             );
             
             Set<String> permissions = new HashSet<>(response.getBody() != null ? response.getBody() : Collections.emptyList());
-            augmentWithTeamViewIfEligible(userId, permissions);
 
             // 更新缓存
-            permissionCache.put(userId, new CachedPermissions(permissions));
+            permissionCache.put(userId, new CachedPermissions(permissions, clock.getAsLong()));
             
             log.info("Loaded {} permissions for user {}: {}", permissions.size(), userId, permissions);
             return permissions;
             
         } catch (Exception e) {
             log.error("Failed to load permissions for user {}: {}", userId, e.getMessage(), e);
-            // 如果有过期的缓存，返回过期的数据
-            if (cached != null) {
-                log.warn("Returning expired cached permissions for user: {}", userId);
-                return cached.permissions;
-            }
-            // admin-center 不可用时，仍让「拥有 FU 的团队」成员保有只读能力（不阻塞 DW 只读浏览）
-            Set<String> fallback = new HashSet<>();
-            augmentWithTeamViewIfEligible(userId, fallback);
-            return fallback;
-        }
-    }
-
-    /**
-     * 团队成员身份 → DW 只读基线：若用户是任一团队（CUSTOM 或 DEVELOPER 虚拟组）成员，则补充
-     * {@code function_unit:view}，使其通过所有读接口的能力门禁。可见/可改的具体 FU
-     * 仍由工作区拦截器按团队 scope + Public 逐 FU 校验，故不会越权。写权限一律不补。
-     */
-    private void augmentWithTeamViewIfEligible(String userId, Set<String> permissions) {
-        if (permissions.contains(FUNCTION_UNIT_VIEW_CODE)) {
-            return;
-        }
-        if (workspaceAccessService.canSeeAllGroups(userId)
-                || workspaceAccessService.isMemberOfAnyDevTeam(userId)) {
-            permissions.add(FUNCTION_UNIT_VIEW_CODE);
-            log.info("Granted read-only {} to global-view or team-member user {}", FUNCTION_UNIT_VIEW_CODE, userId);
+            // Admin Center 不可用、缓存已过期或没有缓存：权限未知，由调用方报 503。不沿用过期的能力集合——
+            // 宕机期间已被移出名单的人会照旧用旧权限（DW 准入只看名单与平台角色，§6.1）。
+            throw new DeveloperPermissionUnavailableException(
+                    "Admin Center did not return the developer permissions of user " + userId, e);
         }
     }
     
@@ -159,13 +137,13 @@ public class DeveloperPermissionChecker {
         final Set<String> permissions;
         final long timestamp;
         
-        CachedPermissions(Set<String> permissions) {
+        CachedPermissions(Set<String> permissions, long timestamp) {
             this.permissions = permissions;
-            this.timestamp = System.currentTimeMillis();
+            this.timestamp = timestamp;
         }
         
-        boolean isExpired() {
-            return System.currentTimeMillis() - timestamp > CACHE_TTL;
+        boolean isExpired(long now) {
+            return now - timestamp > CACHE_TTL;
         }
     }
 }

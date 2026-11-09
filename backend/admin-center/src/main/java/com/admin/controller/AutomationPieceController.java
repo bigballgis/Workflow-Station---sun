@@ -25,12 +25,14 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 自动化组件(piece)管理 — P1 只读目录 + 导出。
  *
- * <p>权限:本服务 Spring 层 permitAll(Kong 做边缘认证),故此处显式做 systemadmin
- * 校验(SYS_ADMIN / SUPER_ADMIN / 权限 {@code system:admin}),与 LdapSyncController 同模式。</p>
+ * <p>权限:目录与导出由 {@code @AdminAccess} 对 SYS_ADMIN、Technical Lead、AUDITOR 只读开放(D-21);
+ * 导入、启停、删除仍只给 SYS_ADMIN,并保留显式的 systemadmin 校验。</p>
  *
  * <p>P2(import/delete/启停)将经 AP API 走写路径,本控制器当前不含任何写操作。</p>
  */
@@ -38,6 +40,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/automation/pieces")
 @RequiredArgsConstructor
+@AdminAccess(AdminAudience.SHARED_READ)
 public class AutomationPieceController {
 
     private static final String ERR_FORBIDDEN = "FORBIDDEN";
@@ -46,20 +49,16 @@ public class AutomationPieceController {
     private final AutomationPieceService automationPieceService;
     private final AutomationPieceListQueryComponent pieceListQueryComponent;
 
+    // The catalog is read by SYS_ADMIN, Technical Leads and Auditors (D-21); writes below stay SYS_ADMIN.
     @GetMapping
     public ResponseEntity<ApiResponse<List<AutomationPieceSummary>>> listPieces() {
-        if (!isSystemAdmin()) {
-            return forbidden();
-        }
         return ResponseEntity.ok(ApiResponse.success(automationPieceService.listPieces()));
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/query")
     public ResponseEntity<ApiResponse<AdminListPage<AutomationPieceSummary>>> queryPieces(
             @RequestBody @Valid AutomationPieceListQueryRequest request) {
-        if (!isSystemAdmin()) {
-            return forbidden();
-        }
         return ResponseEntity.ok(ApiResponse.success(pieceListQueryComponent.query(request)));
     }
 
@@ -67,9 +66,6 @@ public class AutomationPieceController {
     public ResponseEntity<byte[]> exportPiece(
             @RequestParam String name,
             @RequestParam String version) {
-        if (!isSystemAdmin()) {
-            return ResponseEntity.status(403).build();
-        }
         AutomationPieceService.PieceExportFile file = automationPieceService.exportPiece(name, version);
         log.info("Automation piece exported: {}@{} by {}", name, version,
                 SecurityContextUtils.getCurrentUsername());

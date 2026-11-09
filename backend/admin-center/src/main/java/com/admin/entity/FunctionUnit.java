@@ -118,6 +118,10 @@ public class FunctionUnit {
     @Column(name = "icon_svg", columnDefinition = "TEXT")
     private String iconSvg;
 
+    /** Code of the owning team, written on the imported version row (platform access model §8.1). */
+    @Column(name = "team_code", length = 50)
+    private String teamCode;
+
     
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

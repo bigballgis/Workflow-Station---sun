@@ -1,6 +1,6 @@
 package com.developer.property;
 
-import com.developer.component.impl.SecurityComponentImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.UserPrincipal;
 import com.platform.security.config.JwtProperties;
 import com.platform.security.filter.JwtAuthenticationFilter;
@@ -63,7 +63,7 @@ public class JwtAuthBugConditionPropertyTest {
     private JwtAuthenticationFilter createPlatformFilter() {
         JwtProperties props = new JwtProperties();
         props.setSecret(JWT_SECRET);
-        return new JwtAuthenticationFilter(createJwtTokenService(), props);
+        return new JwtAuthenticationFilter(createJwtTokenService(), props, new ObjectMapper(), "");
     }
 
     private SecretKey getSigningKey() {
@@ -195,49 +195,6 @@ public class JwtAuthBugConditionPropertyTest {
         } finally {
             SecurityContextHolder.clearContext();
         }
-    }
-
-    // =========================================================================
-    // Test C4: SecurityComponentImpl.validateToken() 签名绕过
-    //
-    // Expected behavior: A JWT token with invalid signature but valid payload
-    // containing `sub` field should be rejected (validateToken returns false).
-    //
-    // On unfixed code this will FAIL because parseWorkflowEngineToken() bypasses
-    // signature verification for 3-part tokens.
-    //
-    // **Validates: Requirements 2.3**
-    // =========================================================================
-
-    /**
-     * C4: validateToken() MUST return false for a JWT token with an invalid signature,
-     * even if the payload contains a valid `sub` field and unexpired `exp`.
-     *
-     * On unfixed code: FAILS — parseWorkflowEngineToken() decodes the payload
-     * without verifying the signature for 3-part tokens, returning true.
-     */
-    @Property(tries = 100)
-    void c4_validateTokenShouldRejectInvalidSignature(
-            @ForAll("validUserIds") String userId,
-            @ForAll("validUsernames") String username,
-            @ForAll("validRoleLists") List<String> roles) {
-
-        SecurityComponentImpl securityComponent = new SecurityComponentImpl();
-
-        // Generate a valid token first, then tamper with the signature
-        String validToken = generateValidToken(userId, username, roles);
-        String[] parts = validToken.split("\\.");
-        assertThat(parts).hasSize(3);
-
-        // Replace the signature with a fake one (keeping header and payload intact)
-        String forgedToken = parts[0] + "." + parts[1] + ".INVALID_SIGNATURE_AAAA";
-
-        // EXPECTED: validateToken should return false for forged signature
-        boolean result = securityComponent.validateToken(forgedToken);
-        assertThat(result)
-                .as("validateToken() should reject token with invalid signature, "
-                        + "but parseWorkflowEngineToken() bypasses signature verification")
-                .isFalse();
     }
 
     // =========================================================================

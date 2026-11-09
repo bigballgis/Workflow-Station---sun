@@ -26,7 +26,8 @@ try{await mkdir('frontend/developer-workstation/verification-screenshots',{recur
   s.form=await api('POST',`/function-units/${unit.id}/forms`,{formName:'QA task form',formType:'TASK',scene:'TASK',configJson:{rule:[],options:{}}});s.xml=diagram(s);await api('POST',`/function-units/${unit.id}/process`,{bpmnXml:s.xml});await persist()
  }}
  for(const s of samples){
-  const clone=await api('POST',`/function-units/${s.unit.id}/clone?newName=${encodeURIComponent(`Action Quoted QA clone ${phase} ${Date.now()}`)}`)
+  const {workspaceId}=await api('GET',`/function-units/${s.unit.id}`);assert(workspaceId,`Function unit ${s.unit.id} has no workspace for its clone`)
+  const clone=await api('POST',`/function-units/${s.unit.id}/clone?newName=${encodeURIComponent(`Action Quoted QA clone ${phase} ${Date.now()}`)}&targetGroupId=${encodeURIComponent(workspaceId)}`)
   s[`${phase}CloneId`]=clone.id;await persist();const actual=await bindingNames(clone.id)
   const healthy=[['Save Draft','Approve'],['Reject']]
   if(phase==='red'&&s.quoted){assert(actual[0][0].startsWith('missing:'));assert(actual[1][0].startsWith('missing:'))}else assert.deepEqual(actual,healthy)

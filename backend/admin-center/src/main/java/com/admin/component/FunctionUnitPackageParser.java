@@ -1,6 +1,7 @@
 package com.admin.component;
 
 import com.admin.enums.ContentType;
+import com.admin.service.FunctionUnitTeamService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Builder;
 import lombok.Data;
@@ -47,6 +48,7 @@ public class FunctionUnitPackageParser {
         String version = manifest != null ? stringOrNull(manifest.get("version")) : null;
         String description = manifest != null ? stringOrNull(manifest.get("description")) : null;
         String iconSvg = FunctionUnitIconSvgSanitizer.sanitize(extractIconSvg(manifest));
+        FunctionUnitTeamService.PackageTeam team = extractTeam(manifest);
 
         List<FunctionUnitManagerComponent.ContentInfo> contents = new ArrayList<>();
         List<FunctionUnitManagerComponent.ContentInfo> forms = new ArrayList<>();
@@ -89,7 +91,21 @@ public class FunctionUnitPackageParser {
                 .connections(connections)
                 .emailMonitors(emailMonitors)
                 .iconSvg(iconSvg)
+                .team(team)
                 .build();
+    }
+
+    /** The team the package says the unit belongs to ({@code manifest.team}); null for a package from before teams. */
+    private FunctionUnitTeamService.PackageTeam extractTeam(Map<String, Object> manifest) {
+        if (manifest == null || !(manifest.get("team") instanceof Map<?, ?> team)) {
+            return null;
+        }
+        String code = stringOrNull(team.get("code"));
+        if (code == null) {
+            return null;
+        }
+        String name = stringOrNull(team.get("name"));
+        return new FunctionUnitTeamService.PackageTeam(code, name != null ? name : code);
     }
 
     private void addProcessAndTableContents(Map<String, byte[]> rawFiles,
@@ -301,5 +317,7 @@ public class FunctionUnitPackageParser {
         private List<Map<String, Object>> connections;
         private List<Map<String, Object>> emailMonitors;
         private String iconSvg;
+        /** Team named in the package; null for a package from before teams (platform access model §8.1). */
+        private FunctionUnitTeamService.PackageTeam team;
     }
 }

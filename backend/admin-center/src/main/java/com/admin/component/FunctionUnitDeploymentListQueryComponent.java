@@ -10,6 +10,7 @@ import com.admin.list.FunctionUnitDeploymentColumnSpec;
 import com.admin.list.ListQuerySupport;
 import com.admin.repository.FunctionUnitDeploymentRepository;
 import com.admin.service.UserReferenceResolver;
+import com.admin.security.AdminTeamScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -44,6 +45,7 @@ public class FunctionUnitDeploymentListQueryComponent {
     private final JdbcTemplate jdbcTemplate;
     private final FunctionUnitDeploymentRepository deploymentRepository;
     private final UserReferenceResolver userReferenceResolver;
+    private final AdminTeamScope teamScope;
 
     @Transactional(readOnly = true)
     public AdminListPage<DeploymentInfo> query(FunctionUnitDeploymentListQueryRequest request) {
@@ -51,6 +53,8 @@ public class FunctionUnitDeploymentListQueryComponent {
         ListFilterSql filterSql = FunctionUnitDeploymentColumnSpec.sql();
         List<Object> params = new ArrayList<>();
         StringBuilder where = new StringBuilder(FROM);
+        // A Technical Lead sees the deployments of the teams they lead (§8.2).
+        AdminTeamScope.appendCodeFilter(where, params, "fu.code", teamScope.visibleFunctionUnitCodes());
         appendKeyword(where, params, request.keyword());
         where.append(filterSql.whereClause(request.filters(), params));
 

@@ -25,7 +25,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
@@ -59,6 +58,9 @@ public class TaskController {
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.portal.component.SubTableBatchAssignmentHistory batchAssignmentHistory;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.portal.component.TaskDelegateDisplayNames taskDelegateDisplayNames;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -97,16 +99,18 @@ public class TaskController {
             @CurrentUserId String userId,
             @PathVariable String taskId) {
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+                .orElseThrow(() -> new PortalException("404", "Task not found: " + taskId));
         taskProcessComponent.annotateClaimState(task, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null));
-        // Consistent with TaskFormController: canView = canViewTaskForm (initiator + assignee), not just canProcessTask
-        if (userId != null && !taskProcessComponent.canViewTaskForm(task, userId,
+        // Consistent with TaskFormController: canView = canViewTaskForm (initiator + assignee), not just canProcessTask.
+        // A refusal is a real HTTP 403 (handlePortalException), as for /history and /sub-table-data/all.
+        if (!taskProcessComponent.canViewTaskForm(task, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null))) {
             log.warn("User {} denied access to task {} (assignee={}, assignmentType={}, initiatorId={})",
                     userId, taskId, task.getAssignee(), task.getAssignmentType(), task.getInitiatorId());
-            return ApiResponse.error("403", "You do not have permission to access this task");
+            throw new PortalException("403", "You do not have permission to access this task");
         }
+        taskDelegateDisplayNames.annotate(task);
         return ApiResponse.success(task);
     }
 
@@ -114,7 +118,14 @@ public class TaskController {
     @GetMapping("/{taskId}/history")
     public ApiResponse<List<TaskHistoryInfo>> getTaskHistory(
             @PathVariable String taskId,
+            @CurrentUserId String userId,
             @RequestParam(value = "processInstanceId", required = false) String processInstanceId) {
+        TaskInfo task = requireViewableTask(taskId, userId);
+        // The optional instance id only saves the engine a lookup; it must be this task's own instance.
+        if (processInstanceId != null && !processInstanceId.isBlank()
+                && !processInstanceId.trim().equals(task.getProcessInstanceId())) {
+            throw new PortalException("403", "You do not have permission to access this task");
+        }
         List<TaskHistoryInfo> history = taskQueryComponent.getTaskHistory(taskId, processInstanceId);
         return ApiResponse.success(history);
     }
@@ -180,15 +191,7 @@ public class TaskController {
     public ApiResponse<List<Map<String, Object>>> getReturnableActivities(
             @PathVariable String taskId,
             @CurrentUserId String userId) {
-        if (userId == null || userId.isBlank()) {
-            throw new PortalException("401", "Authentication required");
-        }
-        TaskInfo task = taskQueryComponent.getTaskById(taskId)
-                .orElseThrow(() -> new PortalException("404", "Task not found: " + taskId));
-        if (!taskProcessComponent.canViewTaskForm(task, userId,
-                SecurityContextUtils.getCurrentUsername().orElse(null))) {
-            throw new PortalException("403", "You do not have permission to access this task");
-        }
+        requireViewableTask(taskId, userId);
         List<Map<String, Object>> activities = workflowEngineClient.getReturnableActivities(taskId)
                 .orElse(Collections.emptyList());
         return ApiResponse.success(activities);
@@ -200,9 +203,6 @@ public class TaskController {
             @PathVariable String taskId,
             @CurrentUserId String userId,
             @Valid @RequestBody TaskCompleteRequest request) {
-        if (userId == null || userId.isBlank()) {
-            throw new PortalException("401", "Authentication required");
-        }
         request.setTaskId(taskId);
         var observationPlan = actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
                 .actionId(request.getActionId())
@@ -220,9 +220,6 @@ public class TaskController {
     @Operation(summary = "To Do batch groups (process version + node with allowBatch)")
     @GetMapping("/batch/groups")
     public ApiResponse<List<BatchTaskGroup>> getBatchGroups(@CurrentUserId String userId) {
-        if (userId == null || userId.isBlank()) {
-            throw new PortalException("401", "Authentication required");
-        }
         return ApiResponse.success(batchTaskComponent.listGroups(userId));
     }
 
@@ -231,9 +228,6 @@ public class TaskController {
     public ApiResponse<BatchCompleteResponse> batchComplete(
             @CurrentUserId String userId,
             @Valid @RequestBody BatchCompleteRequest request) {
-        if (userId == null || userId.isBlank()) {
-            throw new PortalException("401", "Authentication required");
-        }
         return ApiResponse.success(batchTaskComponent.complete(userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null), request));
     }
@@ -246,9 +240,6 @@ public class TaskController {
             @RequestBody(required = false) TaskDelegateRequest body,
             @RequestParam(required = false) String delegateId,
             @RequestParam(required = false) String reason) {
-        if (userId == null || userId.isBlank()) {
-            throw new PortalException("401", "Authentication required");
-        }
         TaskDelegateRequest effective = resolveDelegateBody(body, delegateId, reason);
         actionPostEmailComponent.runWithPostEmail(ActionPostEmailContext.builder()
                 .actionId(effective.getActionId())
@@ -256,7 +247,8 @@ public class TaskController {
                 .taskId(taskId)
                 .operatorId(userId)
                 .comment(effective.getReason())
-                .build(), () -> taskProcessComponent.delegateTask(taskId, userId, effective));
+                .build(), () -> taskProcessComponent.delegateTask(taskId, userId, effective,
+                SecurityContextUtils.getCurrentUsername().orElse(null)));
         return ApiResponse.success();
     }
 
@@ -274,7 +266,8 @@ public class TaskController {
                 .taskId(taskId)
                 .operatorId(userId)
                 .comment(reason)
-                .build(), () -> taskProcessComponent.transferTask(taskId, userId, toUserId, reason));
+                .build(), () -> taskProcessComponent.transferTask(taskId, userId, toUserId, reason,
+                SecurityContextUtils.getCurrentUsername().orElse(null)));
         return ApiResponse.success();
     }
 
@@ -324,6 +317,7 @@ public class TaskController {
     @GetMapping("/users/search")
     @SuppressWarnings("unchecked")
     public ApiResponse<List<Map<String, Object>>> searchUsers(
+            @CurrentUserId String userId, // signed-in users only: the directory carries personal data
             @RequestParam(required = false, defaultValue = "") String keyword) {
         try {
             // URI.create keeps the already-encoded keyword. RestTemplate.exchange(String)
@@ -359,10 +353,27 @@ public class TaskController {
 
     @Operation(summary = "Query main task sub-table data (proxy workflow-engine)")
     @GetMapping("/{taskId}/sub-table-data/all")
-    public ApiResponse<Map<String, Object>> getSubTableDataAll(@PathVariable String taskId) {
+    public ApiResponse<Map<String, Object>> getSubTableDataAll(
+            @PathVariable String taskId,
+            @CurrentUserId String userId) {
+        requireViewableTask(taskId, userId);
         return workflowEngineClient.getSubTableDataAll(taskId)
                 .map(ApiResponse::success)
                 .orElseGet(() -> ApiResponse.error("502", "Failed to fetch sub-table data from workflow engine"));
+    }
+
+    /**
+     * Same "may view this task" rule as {@code GET /tasks/{taskId}} ({@code canViewTaskForm}); every
+     * endpoint that reads a task's data goes through it, so a task id alone opens nothing.
+     */
+    private TaskInfo requireViewableTask(String taskId, String userId) {
+        TaskInfo task = taskQueryComponent.getTaskById(taskId)
+                .orElseThrow(() -> new PortalException("404", "Task not found: " + taskId));
+        if (!taskProcessComponent.canViewTaskForm(task, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null))) {
+            throw new PortalException("403", "You do not have permission to access this task");
+        }
+        return task;
     }
 
     private static TaskDelegateRequest resolveDelegateBody(
@@ -404,14 +415,7 @@ public class TaskController {
      */
     @ExceptionHandler(PortalException.class)
     public ApiResponse<Void> handlePortalException(PortalException e, HttpServletResponse response) {
-        int statusCode = switch (e.getCode()) {
-            case "404" -> HttpStatus.NOT_FOUND.value();
-            case "403" -> HttpStatus.FORBIDDEN.value();
-            case "400" -> HttpStatus.BAD_REQUEST.value();
-            case "503" -> HttpStatus.SERVICE_UNAVAILABLE.value();
-            default -> HttpStatus.INTERNAL_SERVER_ERROR.value();
-        };
-        response.setStatus(statusCode);
+        response.setStatus(com.portal.exception.PortalExceptionStatus.of(e));
         return ApiResponse.error(e.getCode(), e.getMessage());
     }
 

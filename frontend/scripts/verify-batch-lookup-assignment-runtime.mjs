@@ -182,7 +182,7 @@ async function deployFixture(context) {
   const validation = await dw('GET', `${base}/validate`)
   assert.equal(validation.valid, true, JSON.stringify(validation))
   const deployment = await dw('POST', `${base}/deploy`, { environment: 'DEVELOPMENT', autoEnable: true,
-    conflictStrategy: 'FAIL', changeLog: 'Isolated Lookup assignment verification clone' })
+    changeLog: 'Isolated Lookup assignment verification clone' })
   await waitForFixtureDeployment(dw, deployment.deploymentId)
   await loginViaPortalPassword(page)
   const user = await page.evaluate(() => JSON.parse(localStorage.getItem('ws_up_user')))

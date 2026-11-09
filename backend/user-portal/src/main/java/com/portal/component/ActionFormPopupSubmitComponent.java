@@ -90,7 +90,7 @@ public class ActionFormPopupSubmitComponent {
                         : mapper.convertValue(field.get("pkGenerationJson"), PkGenerationConfig.class);
                 // Counters have no FK to DW definitions and survive rollback. Explicitly retain
                 // this snapshot's namespace instead of auto-detecting a deleted DW table as RT.
-                List<String> values = primaryKeys.allocate(Long.valueOf(sourceId), name, pk, 1, "", "dw_pk_sequences");
+                List<String> values = primaryKeys.allocate(Long.valueOf(sourceId), name, pk, 1, "", "up_pk_sequences");
                 if (values.isEmpty()) throw new PortalException("400", "Action primary key is required");
                 data.put(name, values.get(0));
             }

@@ -8,8 +8,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
 import java.util.Optional;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Virtual group role binding controller.
@@ -18,7 +19,8 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/virtual-groups/{groupId}")
 @RequiredArgsConstructor
-@Tag(name = "Virtual Group Role Binding", description = "Manage bindings between virtual groups and business roles (single role binding)")
+@Tag(name = "Virtual Group Role Binding", description = "Read the fixed role of a SYSTEM group; group role bindings are not editable (platform access model §5.1)")
+@AdminAccess(value = AdminAudience.WORKSTATION, services = true)
 public class VirtualGroupRoleController {
     
     private final VirtualGroupRoleService virtualGroupRoleService;
@@ -29,25 +31,5 @@ public class VirtualGroupRoleController {
         Optional<Role> role = virtualGroupRoleService.getBoundRole(groupId);
         return role.map(ResponseEntity::ok)
                 .orElse(ResponseEntity.noContent().build());
-    }
-    
-    @PostMapping("/role")
-    @Operation(summary = "Bind a role to the virtual group (replaces existing binding)")
-    public ResponseEntity<Void> bindRole(
-            @PathVariable String groupId,
-            @RequestBody Map<String, String> request) {
-        String roleId = request.get("roleId");
-        if (roleId == null || roleId.isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
-        virtualGroupRoleService.bindRole(groupId, roleId);
-        return ResponseEntity.ok().build();
-    }
-    
-    @DeleteMapping("/role")
-    @Operation(summary = "Unbind role from virtual group")
-    public ResponseEntity<Void> unbindRole(@PathVariable String groupId) {
-        virtualGroupRoleService.unbindRole(groupId);
-        return ResponseEntity.ok().build();
     }
 }

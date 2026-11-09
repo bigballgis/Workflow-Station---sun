@@ -25,8 +25,10 @@ try {
     assert.equal(Array.isArray(integrations) && integrations.length === 0, true, 'Fixture source must have no mail integrations')
   }
   const name = `MI verification ${Date.now().toString(36)}`
+  const { workspaceId } = await api('GET', `/function-units/${sourceId}`)
+  if (!process.env.MI_FIXTURE_UNIT_ID) assert.ok(workspaceId, 'Fixture source has no workspace for its clone')
   const clone = process.env.MI_FIXTURE_UNIT_ID ? await api('GET', `/function-units/${process.env.MI_FIXTURE_UNIT_ID}`)
-    : await api('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(name)}`)
+    : await api('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(name)}&targetGroupId=${encodeURIComponent(workspaceId)}`)
   assert.match(clone.name, /^MI verification [a-z0-9]+$/)
   const base = `/function-units/${clone.id}`
   console.log(JSON.stringify({ step: 'isolated-mi-cloned', fixtureUnitId: clone.id }))
@@ -182,7 +184,7 @@ try {
   }, workflowDesign.bpmnXml)
   await api('POST', `${base}/process`, { bpmnXml })
   const deploy = await api('POST', `${base}/deploy`, { environment: 'DEVELOPMENT', autoEnable: true,
-    conflictStrategy: 'FAIL', changeLog: 'Isolated synthetic MI regression fixture' })
+    changeLog: 'Isolated synthetic MI regression fixture' })
   console.log(JSON.stringify({ step: 'mi-deploy-requested', fixtureUnitId: clone.id, deploymentId: deploy.deploymentId }))
   await waitForFixtureDeployment(api, deploy.deploymentId)
   console.log(JSON.stringify({ step: 'mi-deployed', fixtureUnitId: clone.id }))

@@ -18,6 +18,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Service-to-service catalog + Vault password resolve for DW test connection.
@@ -26,6 +28,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/internal/environment-variables")
 @Tag(name = "内部-环境变量", description = "服务间读取环境变量与 Vault 密码")
+@AdminAccess(AdminAudience.SERVICE)
 public class InternalEnvironmentVariableController {
 
     private final EnvironmentVariableComponent environmentVariableComponent;

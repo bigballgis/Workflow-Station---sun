@@ -9,7 +9,6 @@ import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.dto.LoginResponse;
 import com.portal.dto.SsoExchangeRequest;
 import com.portal.repository.LoginAuditQueryRepository;
-import com.portal.service.PortalEntitlementService;
 import com.portal.service.PortalSessionIssuerService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -98,7 +97,7 @@ public class AuthSsoExchangeController {
                 // Workspace not yet selected — defer audit until the second exchange when workspace is set
                 pendingRedeems.put(body.getCode(), new PendingRedeem(userId, Instant.now()));
             } else if (responseBody != null
-                    && PortalEntitlementService.LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED.equals(
+                    && PortalSessionIssuerService.LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED.equals(
                     responseBody.getLoginErrorCode())) {
                 recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
                         responseBody.getMessage() != null ? responseBody.getMessage()

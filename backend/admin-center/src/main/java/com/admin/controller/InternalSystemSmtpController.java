@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Internal API for service-to-service global SMTP settings lookup.
@@ -21,6 +23,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/internal/system-smtp")
 @Tag(name = "内部-系统 SMTP", description = "服务间读取全局 SMTP 配置")
+@AdminAccess(AdminAudience.SERVICE)
 public class InternalSystemSmtpController {
 
     private final SystemSmtpConfigResolver systemSmtpConfigResolver;

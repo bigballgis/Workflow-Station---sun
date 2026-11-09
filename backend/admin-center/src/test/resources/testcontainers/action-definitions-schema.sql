@@ -9,6 +9,9 @@
 --   sys_action_definitions    -> 00-schema/07-add-action-definitions-table.sql:11
 --   description 列            -> 00-schema/37-sys-action-definitions-description.sql
 --                                （该脚本把 display_name 改名为 description，此处直接采用改名后的形态）
+--   source_id 列与 uk_sys_action_catalog_source
+--                             -> 00-schema/96-function-unit-runtime-versioning.sql
+--                                （同一脚本的 protect_released_fu_action 触发器不在本测试范围内，未照抄）
 --
 -- 只建被测实体真正需要的两张表；sys_function_units 仅保留 NOT NULL 列 + 被引用的主键，
 -- 其余列省略不影响 FK / 级联行为的验证。
@@ -29,6 +32,7 @@ CREATE TABLE IF NOT EXISTS sys_function_units (
 CREATE TABLE IF NOT EXISTS sys_action_definitions (
     id               VARCHAR(64) PRIMARY KEY,
     function_unit_id VARCHAR(64)  NOT NULL,
+    source_id        VARCHAR(64),
     action_name      VARCHAR(100) NOT NULL,
     action_type      VARCHAR(50)  NOT NULL,
     description      TEXT,
@@ -49,3 +53,5 @@ CREATE INDEX IF NOT EXISTS idx_sys_action_name ON sys_action_definitions(action_
 CREATE INDEX IF NOT EXISTS idx_sys_action_type ON sys_action_definitions(action_type);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_sys_action_name_fu
     ON sys_action_definitions(function_unit_id, action_name);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_sys_action_catalog_source
+    ON sys_action_definitions(function_unit_id, source_id) WHERE source_id IS NOT NULL;

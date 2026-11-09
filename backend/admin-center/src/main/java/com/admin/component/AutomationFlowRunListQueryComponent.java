@@ -6,6 +6,7 @@ import com.admin.dto.response.AutomationFlowRunSummary;
 import com.admin.list.AutomationFlowRunColumnSpec;
 import com.admin.list.ListQuerySupport;
 import com.admin.service.AutomationFlowRunService;
+import com.admin.security.AdminTeamScope;
 import com.admin.servicetask.ApWorkspaceSql;
 import com.platform.common.list.ListFilterSql;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class AutomationFlowRunListQueryComponent {
     private final JdbcTemplate jdbcTemplate;
     private final AutomationFlowRunService automationFlowRunService;
     private final ApWorkspaceSql workspaceSql;
+    private final AdminTeamScope teamScope;
 
     public AdminListPage<AutomationFlowRunSummary> query(AutomationFlowRunListQueryRequest request) {
         long started = System.nanoTime();
@@ -57,6 +59,8 @@ public class AutomationFlowRunListQueryComponent {
         StringBuilder where = new StringBuilder(FROM_HEAD)
                 .append(workspaceSql.joinClause())
                 .append(FROM_TAIL);
+        // A Technical Lead sees the runs of the teams they lead and of Public (D-48).
+        teamScope.appendVisibleWorkspaces(where, params, "vg.id");
         appendKeyword(where, params, request.keyword());
         where.append(filterSql.whereClause(request.filters(), params));
 

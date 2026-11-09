@@ -23,8 +23,11 @@ import com.developer.repository.MainTableViewAccessRepository;
 import com.developer.repository.MainTableViewConfigRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.developer.service.MainTableViewService;
 import com.developer.util.MainTableViewAccessRulesValidator;
+import com.developer.util.MainTableViewNameValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -52,6 +55,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final WorkspaceRouteOwnership routeOwnership;
 
     @Override
     @Transactional(readOnly = true)
@@ -74,6 +78,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     public MainTableViewDTO createView(Long functionUnitId, CreateMainTableViewRequest request) {
         FunctionUnit functionUnit = assertFunctionUnitExists(functionUnitId);
         TableDefinition table = resolveViewableTable(functionUnitId, request.tableId());
+        assertViewNameAvailable(functionUnitId, null, request.viewName());
 
         // A manually-created view starts empty (no fields); the developer adds columns from the catalog.
         MainTableViewConfig created = MainTableViewConfig.builder()
@@ -98,6 +103,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         if (request.viewName() != null && !request.viewName().isBlank()) {
             config.setViewName(request.viewName().trim());
         }
+        assertViewNameAvailable(functionUnitId, viewId, config.getViewName());
         if (request.sortConfig() != null) {
             config.setSortConfig(request.sortConfig());
         }
@@ -284,6 +290,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     @Transactional
     public void publishViewsForFunctionUnit(Long functionUnitId) {
         List<MainTableViewConfig> views = viewConfigRepository.findByFunctionUnitIdWithFields(functionUnitId);
+        MainTableViewNameValidator.assertUnique(views.stream().map(MainTableViewConfig::getViewName).toList());
         for (MainTableViewConfig view : views) {
             validateAccessRules(loadAccessRuleDtos(view.getId()));
             view.setStatus(MainTableViewStatus.PUBLISHED);
@@ -304,6 +311,8 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     public void cloneViewsForFunctionUnit(Long sourceFunctionUnitId, FunctionUnit targetFunctionUnit,
                                           Map<Long, TableDefinition> tableIdMapping, Map<Long, Long> formIdMapping) {
         List<MainTableViewConfig> sourceViews = viewConfigRepository.findByFunctionUnitIdWithFields(sourceFunctionUnitId);
+        // The clone copies names verbatim, so it would inherit any clash in the source.
+        MainTableViewNameValidator.assertUnique(sourceViews.stream().map(MainTableViewConfig::getViewName).toList());
         for (MainTableViewConfig source : sourceViews) {
             Long clonedMainTableId = tableIdMapping.containsKey(source.getMainTableId())
                     ? tableIdMapping.get(source.getMainTableId()).getId()
@@ -556,6 +565,8 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         if (detailFormId == null) {
             return;
         }
+        // The form id comes from the body: it must be a form of the view's unit (§6.1, §6.2).
+        routeOwnership.requireInUnit(Owned.FORM, detailFormId, config.getFunctionUnit().getId());
         if (isMainTable(config.getMainTableId())) {
             throw new DeveloperBusinessException("BIZ_VIEW_MAIN_NO_DETAIL_FORM",
                     "MAIN table views open the request detail page and cannot bind a detail form");
@@ -582,6 +593,15 @@ public class MainTableViewServiceImpl implements MainTableViewService {
             throw new DeveloperBusinessException("BIZ_VIEW_FU_MISMATCH", "View does not belong to this function unit");
         }
         return config;
+    }
+
+    /** Only this View's name is checked, so a clash between two other Views does not block its save. */
+    private void assertViewNameAvailable(Long functionUnitId, Long viewId, String viewName) {
+        MainTableViewNameValidator.assertAvailable(viewName,
+                viewConfigRepository.findByFunctionUnitIdOrderByIsDefaultDescViewNameAsc(functionUnitId).stream()
+                        .filter(other -> !java.util.Objects.equals(other.getId(), viewId))
+                        .map(MainTableViewConfig::getViewName)
+                        .toList());
     }
 
     private FunctionUnit assertFunctionUnitExists(Long functionUnitId) {

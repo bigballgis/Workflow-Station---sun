@@ -377,6 +377,28 @@ public class CatalogSnapshotReader {
         return result;
     }
 
+    /**
+     * The release's SLA mapping: the {@code slaConfig} of the data table its start form ({@link #processForm}
+     * outside the request scene) binds PRIMARY — the criterion Admin Center's SLA policy list applies to released
+     * versions. Empty when the form has no PRIMARY binding or that table's value is not an object; a mapping
+     * without a due date field, or taking the start from a field it does not name, makes the release invalid.
+     */
+    public java.util.Optional<Map<String, Object>> slaConfig(String catalogId) {
+        var primary = objects(processForm(catalogId, false).get("tableBindings")).stream()
+                .filter(binding -> "PRIMARY".equals(binding.get("bindingType"))).findFirst();
+        if (primary.isEmpty()
+                || !(table(catalogId, String.valueOf(primary.get().get("tableId"))).get("slaConfig") instanceof Map<?, ?> raw)) {
+            return java.util.Optional.empty();
+        }
+        @SuppressWarnings("unchecked") Map<String, Object> config = (Map<String, Object>) raw;
+        boolean fromField = "FIELD".equals(config.get("startDateSource"));
+        if (!(config.get("dueDateField") instanceof String due) || due.isBlank()
+                || fromField && (!(config.get("startDateField") instanceof String start) || start.isBlank())) {
+            throw invalid(catalogId);
+        }
+        return java.util.Optional.of(config);
+    }
+
     public Map<String, Object> table(String catalogId, String sourceId) {
         List<Map<String, Object>> tables = contents(catalogId, "DATA_TABLE").stream()
                 .filter(t -> sourceId.equals(String.valueOf(t.get("tableId")))).toList();
@@ -404,6 +426,27 @@ public class CatalogSnapshotReader {
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw invalid(null);
         }
+    }
+
+    /**
+     * The release's published Main Table Views, in package order. A View is named by its name, which is unique
+     * within a function unit; a release holding two published Views of one name is invalid. Drafts are exported
+     * with the package but never shown.
+     */
+    public List<Map<String, Object>> publishedViews(String catalogId) {
+        var views = contents(catalogId, "MAIN_TABLE_VIEW").stream()
+                .flatMap(content -> objects(content.get("views")).stream())
+                .filter(view -> "PUBLISHED".equals(view.get("status"))).toList();
+        if (views.stream().map(view -> view.get("viewName")).anyMatch(name -> !(name instanceof String s) || s.isBlank())
+                || views.stream().map(view -> view.get("viewName")).distinct().count() != views.size()) {
+            throw invalid(catalogId);
+        }
+        return views;
+    }
+
+    /** The release's published View of this name; empty when the release has none. */
+    public java.util.Optional<Map<String, Object>> publishedView(String catalogId, String viewName) {
+        return publishedViews(catalogId).stream().filter(view -> view.get("viewName").equals(viewName)).findFirst();
     }
 
     public Map<String, Object> detailFormForView(String catalogId, String viewName) {

@@ -1,6 +1,7 @@
 package com.admin.component;
 
 import com.admin.dto.request.FunctionUnitImportRequest;
+import com.admin.dto.response.FunctionUnitImportPreview;
 import com.admin.dto.response.FunctionUnitInfo;
 import com.admin.dto.response.ImportResult;
 import com.admin.dto.response.ValidationResult;
@@ -19,6 +20,7 @@ import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.service.FunctionUnitAccessService;
 import com.admin.service.FunctionUnitAuditAccessService;
+import com.admin.service.FunctionUnitTeamService;
 import com.admin.util.ChecksumUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.i18n.I18nService;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Function package import: validation, ZIP parse, catalog persist.
@@ -60,16 +63,22 @@ public class FunctionUnitImportComponent {
     private final EmailMonitorSyncComponent emailMonitorSyncComponent;
     private final ImportBpmnStructureValidator importBpmnStructureValidator;
     private final ImportViewAccessValidator importViewAccessValidator;
+    private final FunctionUnitTeamService teamService;
 
+    /**
+     * @param channel a DW deployment lands in the package's team; the Admin import dialog in the chosen
+     *                {@link FunctionUnitImportRequest#getTeamCode()} (platform access model §8.1)
+     */
     @Transactional
-    public ImportResult importFunctionPackage(FunctionUnitImportRequest request, String importerId) {
+    public ImportResult importFunctionPackage(FunctionUnitImportRequest request, String importerId,
+                                              FunctionUnitTeamService.ImportChannel channel) {
         log.info("Importing function package: {}", request.getFileName());
         ValidationResult validationResult = validatePackage(request);
         if (!validationResult.isValid()) {
             return ImportResult.validationFailed(validationResult.getErrors());
         }
         try {
-            return persistImportedPackage(request, importerId);
+            return persistImportedPackage(request, importerId, channel);
         } catch (DataIntegrityViolationException e) {
             throw new AdminBusinessException("FU_IMPORT_CONSTRAINT", constraintMessage(e), e);
         } catch (IOException e) {
@@ -78,7 +87,36 @@ public class FunctionUnitImportComponent {
         }
     }
 
-    private ImportResult persistImportedPackage(FunctionUnitImportRequest request, String importerId)
+    /**
+     * What the Admin import dialog needs before the team is chosen: the package's team and its state here, the team
+     * the unit already has here, and the teams the caller may choose (platform access model §8.1).
+     */
+    @Transactional(readOnly = true)
+    public FunctionUnitImportPreview previewImport(FunctionUnitImportRequest request, String operatorId) {
+        ValidationResult validationResult = validatePackage(request);
+        if (!validationResult.isValid()) {
+            throw new AdminBusinessException("FU_IMPORT_INVALID_PACKAGE", validationResult.getErrors().stream()
+                    .map(ImportResult.ValidationError::getMessage).collect(Collectors.joining("; ")));
+        }
+        try {
+            FunctionUnitPackageParser.ParsedImportPackage parsed = parseImportRequest(request);
+            FunctionUnitManagerComponent.FunctionPackageContent content = parsed.getPackageContent();
+            FunctionUnit existing = resolveExistingByCode(content);
+            FunctionUnitTeamService.PackageTeam team = parsed.getTeam();
+            return new FunctionUnitImportPreview(
+                    existing != null ? existing.getCode() : content.getCode(), content.getName(), content.getVersion(),
+                    team == null ? null : teamService.describe(team.code(), team.name()),
+                    existing == null ? null : teamService.teamOf(existing.getCode())
+                            .map(code -> teamService.describe(code, code)).orElse(null),
+                    teamService.selectableTeams(operatorId));
+        } catch (IOException e) {
+            throw new AdminBusinessException("FU_IMPORT_INVALID_PACKAGE",
+                    i18nService.getMessage("admin.fu.import_failed", e.getMessage()), e);
+        }
+    }
+
+    private ImportResult persistImportedPackage(FunctionUnitImportRequest request, String importerId,
+                                                FunctionUnitTeamService.ImportChannel channel)
             throws IOException {
         FunctionUnitPackageParser.ParsedImportPackage parsed = parseImportRequest(request);
         ImportBatchDefinitionValidator.validate(parsed, objectMapper);
@@ -88,6 +126,11 @@ public class FunctionUnitImportComponent {
 
         FunctionUnit existingByCode = resolveExistingByCode(packageContent);
         rejectNameCollision(packageContent, existingByCode);
+        // The team is settled, and the importer's right to put the unit there checked, before anything is written.
+        String existingTeam = existingByCode == null ? null
+                : teamService.teamOf(existingByCode.getCode()).orElse(null);
+        String teamCode = teamService.resolveImportTeam(channel, parsed.getTeam(), request.getTeamCode(),
+                existingTeam, importerId);
 
         boolean versioned = false;
         if (existingByCode != null) packageContent.setCode(existingByCode.getCode());
@@ -107,6 +150,7 @@ public class FunctionUnitImportComponent {
                             "VERSION_IMPORT_CONFLICT", published.getId());
                 }
                 restoreActionSourceIds(published, parsed.getActions());
+                recordTeamOfReimport(published, teamCode, existingTeam, importerId);
                 return ImportResult.success(FunctionUnitInfo.fromEntity(published), true);
             }
         }
@@ -118,7 +162,7 @@ public class FunctionUnitImportComponent {
 
         List<ImportResult.DependencyConflict> conflicts = detectConflicts(packageContent);
 
-        FunctionUnit functionUnit = createFunctionUnit(packageContent, request, importerId);
+        FunctionUnit functionUnit = createFunctionUnit(packageContent, request, importerId, teamCode);
         functionUnit.setContentChecksum(fingerprint);
         functionUnitRepository.save(functionUnit);
 
@@ -432,9 +476,25 @@ public class FunctionUnitImportComponent {
         return normalized;
     }
 
+    /**
+     * Re-importing a version already in the catalog writes nothing new, but it is still this import's version row:
+     * when the team differs from this row's or from the unit's current one (the latest imported row may be another
+     * version), this row takes the team and becomes the latest import, so the unit's team is the one imported (§8.1).
+     */
+    private void recordTeamOfReimport(FunctionUnit published, String teamCode, String unitTeam, String importerId) {
+        if (teamCode.equals(published.getTeamCode()) && teamCode.equals(unitTeam)) {
+            return;
+        }
+        published.setTeamCode(teamCode);
+        published.setImportedAt(Instant.now());
+        published.setImportedBy(importerId);
+        functionUnitRepository.save(published);
+    }
+
     private FunctionUnit createFunctionUnit(FunctionUnitManagerComponent.FunctionPackageContent packageContent,
                                             FunctionUnitImportRequest request,
-                                            String importerId) {
+                                            String importerId,
+                                            String teamCode) {
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .id(UUID.randomUUID().toString())
                 .code(packageContent.getCode())
@@ -450,6 +510,7 @@ public class FunctionUnitImportComponent {
                 .importedBy(importerId)
                 .deployedAt(Instant.now())
                 .iconSvg(request.getIconSvg())
+                .teamCode(teamCode)
                 .build();
         return functionUnitRepository.save(functionUnit);
     }

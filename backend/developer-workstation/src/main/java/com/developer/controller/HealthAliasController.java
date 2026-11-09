@@ -1,37 +1,41 @@
 package com.developer.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.HttpStatus;
+import org.springframework.boot.actuate.health.HealthComponent;
+import org.springframework.boot.actuate.health.HealthEndpoint;
+import org.springframework.boot.actuate.health.HttpCodeStatusMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.Optional;
+import java.util.Map;
 
 /**
  * Health probe standardization endpoints.
  * <p>
- * This controller keeps existing business APIs unchanged, and only proxies to Spring Boot Actuator health groups.
+ * This controller keeps existing business APIs unchanged and answers with the Spring Boot Actuator health groups,
+ * read in-process. It used to call its own actuator over HTTP at the request's Host and port, which fails wherever
+ * the probe reaches the service through a different port than the one it listens on (from the host through the
+ * mapped port 8083 it answered 503 while the service was up).
  */
 @RestController
 public class HealthAliasController {
 
-    private final RestTemplate restTemplate;
+    private final HealthEndpoint healthEndpoint;
+    private final HttpCodeStatusMapper statusMapper;
 
-    public HealthAliasController(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
+    public HealthAliasController(HealthEndpoint healthEndpoint, HttpCodeStatusMapper statusMapper) {
+        this.healthEndpoint = healthEndpoint;
+        this.statusMapper = statusMapper;
     }
 
     @GetMapping("/health/live")
-    public ResponseEntity<String> live(HttpServletRequest request) {
-        return proxyToActuatorHealthGroup(request, "live");
+    public ResponseEntity<Map<String, String>> live() {
+        return healthGroup("live");
     }
 
     @GetMapping("/health/ready")
-    public ResponseEntity<String> ready(HttpServletRequest request) {
-        return proxyToActuatorHealthGroup(request, "ready");
+    public ResponseEntity<Map<String, String>> ready() {
+        return healthGroup("ready");
     }
 
     @GetMapping("/.well-known/health")
@@ -40,19 +44,13 @@ public class HealthAliasController {
         return ResponseEntity.ok("{\"status\":\"ok\"}");
     }
 
-    private ResponseEntity<String> proxyToActuatorHealthGroup(HttpServletRequest request, String group) {
-        String scheme = Optional.ofNullable(request.getScheme()).orElse("http");
-        String host = request.getServerName();
-        int port = request.getServerPort();
-        String contextPath = Optional.ofNullable(request.getContextPath()).orElse("");
-
-        String url = scheme + "://" + host + ":" + port + contextPath + "/actuator/health/" + group;
-        try {
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
-        } catch (RestClientException e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("{\"status\":\"unavailable\"}");
+    /** The group's status as /actuator/health/{group} reports it to an anonymous caller, with the same HTTP code. */
+    private ResponseEntity<Map<String, String>> healthGroup(String group) {
+        HealthComponent health = healthEndpoint.healthForPath(group);
+        if (health == null) {
+            throw new IllegalStateException("Health group '" + group + "' is not configured (management.endpoint.health.group)");
         }
+        return ResponseEntity.status(statusMapper.getStatusCode(health.getStatus()))
+                .body(Map.of("status", health.getStatus().getCode()));
     }
 }
-

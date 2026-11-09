@@ -2,8 +2,6 @@ package com.admin.service;
 
 import com.platform.security.entity.BusinessUnit;
 import com.platform.security.entity.Role;
-import com.platform.security.entity.VirtualGroup;
-import com.platform.security.entity.VirtualGroupMember;
 import com.platform.security.entity.UserBusinessUnitRole;
 import com.admin.enums.RoleType;
 import com.admin.util.EntityTypeConverter;
@@ -35,9 +33,6 @@ public class TaskAssignmentQueryService {
     private final BusinessUnitRepository businessUnitRepository;
     private final RoleRepository roleRepository;
     private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
-    private final VirtualGroupRoleRepository virtualGroupRoleRepository;
-    private final VirtualGroupMemberRepository virtualGroupMemberRepository;
-    private final VirtualGroupRepository virtualGroupRepository;
     private final BusinessUnitRoleRepository businessUnitRoleRepository;
     
     /**
@@ -169,67 +164,6 @@ public class TaskAssignmentQueryService {
     }
     
     /**
-     * 获取拥有指定BU无关型角色的用户ID列表
-     * 通过查询绑定了该角色的虚拟组的所有成员
-     * @param roleId 角色ID（BU_UNBOUNDED类型）
-     * @return 用户ID列表
-     */
-    /**
-     * 入参为 role code（任务分配链路统一 code）。内部解析为 id 后查询虚拟组成员。
-     */
-    public List<String> getUsersByUnboundedRole(String roleCode) {
-        log.debug("Getting users by unbounded role code: {}", roleCode);
-
-        // 解析 role code → 实体，校验为 BU_UNBOUNDED 类型
-        Role role = roleRepository.findByCode(roleCode)
-                .orElseThrow(() -> new RoleNotFoundException(roleCode));
-
-        if (EntityTypeConverter.toRoleType(role.getType()) != RoleType.BU_UNBOUNDED) {
-            log.warn("Role {} is not BU_UNBOUNDED type, actual type: {}", roleCode, role.getType());
-            return Collections.emptyList();
-        }
-
-        // 查找绑定了该角色的所有虚拟组
-        List<String> virtualGroupIds = virtualGroupRoleRepository.findVirtualGroupIdsByRoleId(role.getId());
-        if (virtualGroupIds.isEmpty()) {
-            log.debug("No virtual groups bound to role {}", roleCode);
-            return Collections.emptyList();
-        }
-
-        // 查找这些虚拟组的所有成员
-        List<String> userIds = virtualGroupMemberRepository.findUserIdsByVirtualGroupIds(virtualGroupIds);
-        log.debug("Found {} users with unbounded role {} through {} virtual groups",
-                userIds.size(), roleCode, virtualGroupIds.size());
-        return userIds;
-    }
-
-    /**
-     * 按虚拟组 <strong>业务编码</strong>（如 BPMN 中 VIRTUAL_GROUP 的 assigneeValue：DOCUMENT_VERIFIERS）解析成员用户 ID。
-     * 与 {@link #getUsersByUnboundedRole(String)} 不同：后者参数为角色主键 ID。
-     */
-    public List<String> getUsersByVirtualGroupCode(String code) {
-        if (code == null || code.isBlank()) {
-            return Collections.emptyList();
-        }
-        String trimmed = code.trim();
-        log.debug("Getting users by virtual group code: {}", trimmed);
-
-        VirtualGroup group = virtualGroupRepository.findByCode(trimmed).orElse(null);
-        if (group == null) {
-            log.debug("No virtual group found for code {}", trimmed);
-            return Collections.emptyList();
-        }
-
-        List<VirtualGroupMember> members = virtualGroupMemberRepository.findByGroupId(group.getId());
-        List<String> userIds = members.stream()
-                .map(VirtualGroupMember::getUserId)
-                .distinct()
-                .collect(Collectors.toList());
-        log.debug("Found {} users in virtual group {} (code={})", userIds.size(), group.getId(), trimmed);
-        return userIds;
-    }
-    
-    /**
      * 获取业务单元的准入角色ID列表
      * @param businessUnitId 业务单元ID
      * @return 角色ID列表
@@ -283,12 +217,5 @@ public class TaskAssignmentQueryService {
     public List<Role> getBuBoundedRoles() {
         return roleRepository.findByType("BU_BOUNDED");
     }
-    
-    /**
-     * 获取所有BU无关型角色
-     * @return 角色列表
-     */
-    public List<Role> getBuUnboundedRoles() {
-        return roleRepository.findByType("BU_UNBOUNDED");
-    }
+
 }

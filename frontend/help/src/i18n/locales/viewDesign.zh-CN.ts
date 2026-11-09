@@ -9,7 +9,7 @@ export default {
     flow2: '选中一个视图，或 Create view / Generate default views',
     flow3: '添加 Table columns（需要时再加 Lookup / Related columns）',
     flow4: '设 Name、Export、Detail form、Access control，再设 Sort / Filter',
-    flow5: '保存。门户只给符合访问控制的人看这个视图',
+    flow5: '保存，然后部署功能单元。视图随功能单元部署后才在用户门户生效，且只给符合访问控制的人看',
     whatTitle: '视图设计是什么',
     whatBody:
       '功能单元页签「视图设计」。左侧：按表分组的 Views。Default 表示该表的默认视图。这不是表单设计，也不是表设计。',
@@ -24,7 +24,7 @@ export default {
     catAddSelected: '把目录里勾选的字段追加到视图网格。',
     propsTitle: '名称、工具栏、排序、过滤',
     propsBody:
-      'Name 是门户上的名称。Portal toolbar 的 Show Export button 默认关闭。Detail form 用于 SUB 表；主表行打开申请详情页，使用 No detail page。',
+      'Name 是门户上的名称。同一功能单元内 Name 必须唯一（不区分大小写，忽略首尾空格），因为用户门户和 BI [[/bi-data-view-assignment]] 按名称找视图；改名后，该视图已有的 BI 看板分派需要重新绑定。Portal toolbar 的 Show Export button 默认关闭。Detail form 用于 SUB 表；主表行打开申请详情页，使用 No detail page。',
     catName: '门户视图列表里的名称，必填。',
     catExport: '打开：门户用户看到 Export。关闭是默认。',
     catDetail: 'SUB 视图：打开一行用哪张表单。主表：No detail page。',
@@ -32,18 +32,18 @@ export default {
     catFilter: 'Filter by。Edit filters 打开条件对话框（Equals、Contains 等）。',
     accessTitle: '访问控制',
     accessBody:
-      'Business Units 和 Roles 都空时，只有 System Administrator 能看见此视图。若配置访问控制，至少选一个 Business Unit 和一个 Role。用户必须两边都匹配。System Administrator 始终能看见全部视图和全部行。',
+      'Business Units 和 Roles 都空时，发布后任何人都看不见此视图。若配置访问控制，至少选一个 Business Unit 和一个 Role。用户当前的 Business Unit 和 Role 必须两边都匹配。System Administrator 与其他人按同样规则判断。',
     catAccess: '右侧这一段。标题下的说明写明留空和成对规则。',
     catBu: '按业务单元谁能看见。占位：Select BUs that can see this view。',
     catRoles: '在已选单元内按角色谁能看见。选项来自这些单元的准入角色，不是全局角色列表。',
     catRolesFirst: '未选 Business Unit 时 Roles 禁用。此时占位：Select a Business Unit first。',
     catInvolved:
-      '关闭：通过 BU+Role 的人看见全部行。打开：仅发起人、办理人和 MI 参与者。System Administrator 仍看见全部行。',
+      '关闭：通过 BU+Role 的人看见全部行。打开：仅发起人、办理人和 MI 参与者，对所有人生效，包括 System Administrator。',
     failTitle: '失败时',
     failPair:
-      '只配了 BU 或只配了 Role 时无法保存。提示：Configure both BU and Role together, or leave both empty (System Administrator only)。',
-    failEmpty: '两边都空：没有 System Administrator 的人在门户里看不见此视图。',
-    failAnd: 'BU 和 Role 都配了：该人必须属于已选单元之一，并拥有已选角色之一。',
+      '只配了 BU 或只配了 Role 时无法保存。提示：Configure both BU and Role together, or leave both empty (nobody can see the view)。',
+    failEmpty: '两边都空：仍可保存，并提示发布后无人可见；门户里任何人都看不见此视图，包括 System Administrator。',
+    failAnd: 'BU 和 Role 都配了：该人当前工作区的单元必须是已选单元之一、角色必须是已选角色之一。不同工作区的单元和角色不拼合。',
     failMainTable: '先在表设计里创建主表。列表显示 Create a Main Table in Table Design first。',
   },
 }

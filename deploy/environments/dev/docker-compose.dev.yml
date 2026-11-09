@@ -488,12 +488,8 @@ services:
       LDAP_ATTR_LINE_MANAGER_NAME: ${LDAP_ATTR_LINE_MANAGER_NAME:-hsbc-ad-LineManagerName}
       LDAP_ATTR_AUTH_MANAGER_NAME: ${LDAP_ATTR_AUTH_MANAGER_NAME:-hsbc-ad-AuthManagerName}
       LDAP_ATTR_LINE_MANAGER_ID: ${LDAP_ATTR_LINE_MANAGER_ID:-manager}
-      # Hermes AD 组同步（本地 mock 使用 test-ldap 组名）
-      LDAP_HERMES_ENV: ${LDAP_HERMES_ENV:-DEV}
+      # AD group sync: groups and lists are mapped on each virtual group in Admin
       LDAP_GROUP_SEARCH_BASE_DN: ${LDAP_GROUP_SEARCH_BASE_DN:-dc=example,dc=org}
-      LDAP_HERMES_GROUP_SYNC_GROUPS: ${LDAP_HERMES_GROUP_SYNC_GROUPS:-}
-      LDAP_HERMES_GROUP_SYNC_ROLES: ${LDAP_HERMES_GROUP_SYNC_ROLES:-Admin,User,Developer}
-      LDAP_HERMES_GROUP_SYNC_PATTERN: ${LDAP_HERMES_GROUP_SYNC_PATTERN:-Hermes-Dev-{env}-{role}}
       LDAP_HERMES_GROUP_SYNC_BATCH_SIZE: ${LDAP_HERMES_GROUP_SYNC_BATCH_SIZE:-20}
       # DSP SSO (local mock)
       DSP_SSO_ENABLED: ${DSP_SSO_ENABLED:-true}

@@ -1,6 +1,7 @@
 // NOTE: This file is duplicated across admin-center, developer-workstation, user-portal.
 // Consider extracting to a shared package. See ISSUE-095.
 import axios from 'axios'
+import { installSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 /**
  * Authentication API module.
@@ -13,6 +14,8 @@ const authRequest = axios.create({
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 })
+// /me (the router guard's session check) renews an expired access token instead of bouncing to login.
+installSessionRefresh(authRequest, config => axios.request(config))
 
 /** Per-app keys so DW / Portal / Admin on the same origin do not clobber each other's sessions */
 export const TOKEN_KEY = 'ws_up_access_token'
@@ -93,8 +96,6 @@ export interface UserInfo {
   /** FULL | PERMISSION_SELF_SERVICE_ONLY */
   portalAccessMode?: string
   hasAvatar: boolean
-  /** SYS_ADMIN. Not included in roles. */
-  systemAdministrator?: boolean
 }
 
 export const AUTH_BASE_URL = '/api/portal/auth'

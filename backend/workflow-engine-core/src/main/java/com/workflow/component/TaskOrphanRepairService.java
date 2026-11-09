@@ -12,7 +12,6 @@ import org.flowable.bpmn.model.UserTask;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
-import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -71,6 +70,9 @@ public class TaskOrphanRepairService {
     @Autowired
     private BpmnActionParser bpmnActionParser;
 
+    @Autowired
+    private ClaimPoolMembershipSync claimPoolMembershipSync;
+
     // ==================== Rate-limited Orphan Repair ====================
 
     void maybeRepairOrphanTasks(int fetchLimit) {
@@ -90,104 +92,49 @@ public class TaskOrphanRepairService {
 
     // ==================== BU_ROLE Orphan Repair ====================
 
+    /**
+     * Unclaimed BU + Role pool tasks follow the current UBR holders, not only pools left empty (WP8b-2). MI rows are
+     * repaired by {@link #repairOrphanMultiInstanceTasks}.
+     */
     private void repairOrphanBuRolePoolTasks(int fetchLimit) {
         List<Task> unassigned = taskService.createTaskQuery()
                 .taskUnassigned()
                 .orderByTaskCreateTime().desc()
                 .listPage(0, fetchLimit);
-        for (Task t : unassigned) {
-            try {
-                restoreBuRoleClaimPool(t);
-            } catch (AdminCenterUnavailableException ex) {
-                // 服务不可用时继续逐条重试只会放大对 admin-center 的压力，中止本轮，等下一轮限频窗口。
-                log.error("admin-center unavailable during orphan BU_ROLE repair; aborting this run: {}",
-                        ex.getMessage());
-                return;
-            } catch (Exception ex) {
-                log.warn("Repair orphan BU_ROLE task {} failed: {}", t.getId(), ex.getMessage());
-            }
+        try {
+            claimPoolMembershipSync.resyncUnclaimed(unassigned).forEach(this::clearAssignmentFailureTrace);
+        } catch (AdminCenterUnavailableException ex) {
+            // 服务不可用时继续逐条重试只会放大对 admin-center 的压力，中止本轮，等下一轮限频窗口。
+            log.error("admin-center unavailable during orphan BU_ROLE repair; aborting this run: {}",
+                    ex.getMessage());
+        } catch (RuntimeException ex) {
+            // FALLBACK(ux): the repair runs on To Do reads; a broken pool task must not fail the list. The periodic
+            // full resync (ClaimPoolResyncScheduler) hits the same task and reports it at ERROR there too.
+            log.error("Orphan BU_ROLE repair pass failed: {}", ex.getMessage(), ex);
         }
     }
 
     /**
-     * Put an unassigned BU Role task back in the claim pool. Never {@code setAssignee}, even for a
-     * single eligible member — that path made Unclaim look successful then immediately re-hold the
-     * row (and hid the task from Unclaim All, which only sees candidate-pool tasks).
-     * Aligns with {@code TaskAssigneeResolver#toClaimPoolResult}.
+     * Bring a task's BU + Role pool back to the current holders after an unclaim. Never {@code setAssignee}, even
+     * for a single eligible member — that path made Unclaim look successful then immediately re-hold the row (and
+     * hid the task from Unclaim All, which only sees candidate-pool tasks).
      */
     void restoreBuRoleClaimPool(Task t) {
         if (t == null || !StringUtils.hasText(t.getId())) {
             return;
         }
-        if (hasCandidateIdentityLink(t)) {
+        ClaimPoolMembershipSync.Outcome outcome;
+        try {
+            outcome = claimPoolMembershipSync.resyncTask(t.getId());
+        } catch (AdminCenterUnavailableException e) {
+            // FALLBACK(external): the release stands; the pool keeps the candidates it had, which the periodic full
+            // resync (ClaimPoolResyncScheduler, D-37) brings back to the current holders once Admin Center answers.
+            log.error("Pool of released task {} not resynced, Admin Center unavailable: {}", t.getId(), e.getMessage());
             return;
         }
-        List<String> userList = resolveBuRolePoolUserIds(t);
-        if (userList.isEmpty()) {
-            return;
+        if (outcome == ClaimPoolMembershipSync.Outcome.RESTORED) {
+            clearAssignmentFailureTrace(t.getId());
         }
-        for (String uid : userList) {
-            taskService.addCandidateUser(t.getId(), uid);
-        }
-        log.info("Restored BU_ROLE claim pool for task {} with {} candidate users", t.getId(), userList.size());
-        clearAssignmentFailureTrace(t.getId());
-    }
-
-    private boolean hasCandidateIdentityLink(Task t) {
-        List<IdentityLink> links = taskService.getIdentityLinksForTask(t.getId());
-        if (links == null) {
-            return false;
-        }
-        for (IdentityLink l : links) {
-            if ("candidate".equals(l.getType())
-                    && ((l.getUserId() != null && !l.getUserId().isBlank())
-                    || (l.getGroupId() != null && !l.getGroupId().isBlank()))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private List<String> resolveBuRolePoolUserIds(Task t) {
-        String pdId = t.getProcessDefinitionId();
-        String defKey = t.getTaskDefinitionKey();
-        String at = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeType");
-        if (at == null || at.isBlank()) {
-            return List.of();
-        }
-        String u = at.trim().toUpperCase(Locale.ROOT);
-        if (!"BU_ROLE".equals(u) && !"FIXED_BU_ROLE".equals(u)) {
-            return List.of();
-        }
-        String roleId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleId");
-        String roleIdsRaw = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleIds");
-        String buId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "businessUnitId");
-        List<String> roleIds = AssigneeRoleIdsSupport.parseRoleIds(roleIdsRaw, roleId);
-        if (roleIds.isEmpty() || buId == null || buId.isBlank()) {
-            log.warn("Orphan BU_ROLE task {} has missing roleIds/businessUnitId; skip repair", t.getId());
-            return List.of();
-        }
-        LinkedHashSet<String> users = new LinkedHashSet<>();
-        for (String rid : roleIds) {
-            if (!adminCenterClient.isEligibleRole(buId.trim(), rid.trim())) {
-                log.warn("Orphan BU_ROLE task {} role {} not eligible for bu {}; skip repair",
-                        t.getId(), rid, buId);
-                return List.of();
-            }
-            List<String> chunk = adminCenterClient.getUsersByBusinessUnitAndRole(buId.trim(), rid.trim());
-            if (chunk != null) {
-                for (String uid : chunk) {
-                    if (uid != null && !uid.isBlank()) {
-                        users.add(uid.trim());
-                    }
-                }
-            }
-        }
-        if (users.isEmpty()) {
-            log.warn("Orphan BU_ROLE task {} resolved no users for bu={} roleIds={}", t.getId(), buId, roleIds);
-            return List.of();
-        }
-        return new ArrayList<>(users);
     }
 
     /**
@@ -271,7 +218,7 @@ public class TaskOrphanRepairService {
 
     /**
      * MI role 模式孤儿修复：从 {@code currentItem} 读逐行 role code（{@code roleField}）与可选 BU code
-     * （{@code buField}，空则回退进程 active BU），走 BU_ROLE 池解析并重做 setAssignee/addCandidateUser。
+     * （{@code buField}，空则回退进程 active BU），走 BU_ROLE 池解析并重做 addCandidateUser（一人也进池）。
      * 与创建期 {@code MultiInstanceTaskWriter.handleRoleModeAssignment} 行为对齐。
      *
      * @return 是否成功落地（成功才清除失败留痕）
@@ -330,18 +277,13 @@ public class TaskOrphanRepairService {
             log.warn("Orphan MI role task {} resolved no users for bu={} roles={}", t.getId(), buCode, roleCodes);
             return false;
         }
-        List<String> userList = new ArrayList<>(users);
-        if (userList.size() == 1) {
-            taskService.setAssignee(t.getId(), userList.get(0));
-            log.info("Repaired orphan MI role task {} with direct assignee {} (bu={}, roles={})",
-                    t.getId(), userList.get(0), buCode, roleCodes);
-        } else {
-            for (String uid : userList) {
-                taskService.addCandidateUser(t.getId(), uid);
-            }
-            log.info("Repaired orphan MI role task {} with {} candidate users (bu={}, roles={})",
-                    t.getId(), userList.size(), buCode, roleCodes);
+        // A role row always lands in the candidate pool, even with a single holder (as at task creation): a direct
+        // assignee would not be a pool member, so losing the BU + Role could not release the row (D-40).
+        for (String uid : users) {
+            taskService.addCandidateUser(t.getId(), uid);
         }
+        log.info("Repaired orphan MI role task {} with {} candidate users (bu={}, roles={})",
+                t.getId(), users.size(), buCode, roleCodes);
         return true;
     }
 

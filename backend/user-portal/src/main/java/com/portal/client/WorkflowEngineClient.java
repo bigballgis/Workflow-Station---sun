@@ -15,12 +15,11 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.platform.security.config.JwtProperties;
+import com.platform.security.filter.JwtAuthenticationFilter;
 
 import java.util.List;
 import java.util.Map;
@@ -45,7 +44,6 @@ import java.util.Optional;
 public class WorkflowEngineClient {
 
     private final RestTemplate restTemplate;
-    private final JwtProperties jwtProperties;
     private final I18nService i18nService;
 
     // 协作类用字段注入；@Lazy 破除门面 ↔ 协作类的构造期循环依赖
@@ -110,12 +108,12 @@ public class WorkflowEngineClient {
     /**
      * workflow-engine requires authenticated JWT for /api/v1/** (same {@code JWT_SECRET} as portal).
      *
-     * <p>Resolution order matches {@link com.platform.security.filter.JwtAuthenticationFilter#extractToken}:
-     * Prefer {@code Authorization} header; else fall back to {@code platform.security.jwt.cookie-names}
-     * configured httpOnly cookies (user-portal writes {@code up_access_token}),
-     * and sends {@code Authorization: Bearer <token>} to workflow-engine (cross-service calls do not forward cookies).
+     * <p>Forwards, as {@code Authorization: Bearer <token>}, exactly the token
+     * {@link JwtAuthenticationFilter} accepted for this request (the Authorization header, or the first valid
+     * configured cookie such as {@code up_access_token}); cross-service calls do not forward cookies.
      *
-     * <p>No request context (e.g. scheduled job): no header — protected APIs return 403; caller handles.
+     * <p>No request context (e.g. scheduled job) or no authenticated token: no header — protected APIs
+     * return 401/403; caller handles.
      */
     void forwardInboundAuthorization(HttpHeaders headers) {
         var attrs = RequestContextHolder.getRequestAttributes();
@@ -123,38 +121,10 @@ public class WorkflowEngineClient {
             return;
         }
         HttpServletRequest request = servletAttrs.getRequest();
-        String auth = request.getHeader(PlatformConstants.HEADER_AUTHORIZATION);
-        if (auth != null && !auth.isBlank()) {
-            headers.set(PlatformConstants.HEADER_AUTHORIZATION, auth.trim());
-            return;
+        if (request.getAttribute(JwtAuthenticationFilter.AUTHENTICATED_TOKEN_ATTRIBUTE) instanceof String token
+                && !token.isBlank()) {
+            headers.set(PlatformConstants.HEADER_AUTHORIZATION, PlatformConstants.HEADER_BEARER_PREFIX + token);
         }
-        String cookieToken = extractAccessTokenFromCookie(request);
-        if (cookieToken != null && !cookieToken.isBlank()) {
-            headers.set(PlatformConstants.HEADER_AUTHORIZATION,
-                    PlatformConstants.HEADER_BEARER_PREFIX + cookieToken.trim());
-        }
-    }
-
-    private String extractAccessTokenFromCookie(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) {
-            return null;
-        }
-        List<String> names = jwtProperties.getCookieNames();
-        if (names == null || names.isEmpty()) {
-            names = List.of("access_token");
-        }
-        for (String name : names) {
-            for (Cookie cookie : cookies) {
-                if (cookie != null
-                        && name.equals(cookie.getName())
-                        && cookie.getValue() != null
-                        && !cookie.getValue().isBlank()) {
-                    return cookie.getValue();
-                }
-            }
-        }
-        return null;
     }
 
     /** Extracts business message field from engine JSON response body */

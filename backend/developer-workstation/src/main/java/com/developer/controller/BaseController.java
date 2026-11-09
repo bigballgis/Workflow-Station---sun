@@ -60,7 +60,8 @@ public abstract class BaseController {
             T result = processor.process();
             return ResponseEntity.ok(ApiResponse.success(result));
         } catch (Exception e) {
-            log.error("Request processing failed", e);
+            // handleError logs at the level of the answer: an expected 4xx refusal as one WARN line without the stack
+            // trace, an unexpected 5xx as ERROR with it.
             return handleError(e);
         }
     }
@@ -277,6 +278,7 @@ public abstract class BaseController {
         
         // 工作区隔离拒绝：与 WorkspaceExceptionHandler 同语义的 403（在 handleRequest 内抛出时不会走到那边）
         if (e instanceof com.developer.security.FunctionUnitWorkspaceAccessDeniedException denied) {
+            log.warn("Workspace access denied: {}", denied.getMessage());
             ErrorResponse error = ErrorResponse.builder()
                     .code("WORKSPACE_FORBIDDEN")
                     .message(denied.getMessage())

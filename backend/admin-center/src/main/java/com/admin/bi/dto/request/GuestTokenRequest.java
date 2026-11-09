@@ -1,7 +1,6 @@
 package com.admin.bi.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Positive;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -25,10 +24,12 @@ public class GuestTokenRequest {
     private String activeBusinessUnitId;
 
     /**
-     * Optional User Portal Data View context. When present, authorization is based on the
-     * dashboard-to-table binding and the current user's access to this published view.
-     * When absent, the legacy Audience Assignment authorization path is retained.
+     * Optional User Portal Data View context, named by function unit code and View name (both or
+     * neither). When present, authorization is based on the dashboard-to-View binding and the
+     * current user's access to that View in the unit's active release. When absent, the Audience
+     * Assignment authorization path is used.
      */
-    @Positive(message = "Data View ID must be positive")
-    private Long dataViewId;
+    private String dataViewFunctionUnitCode;
+
+    private String dataViewName;
 }

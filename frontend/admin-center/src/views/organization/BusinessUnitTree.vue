@@ -3,7 +3,7 @@
     <PageHeader :title="t('menu.organization')">
       <template #actions>
         <el-button
-          v-if="!readOnly"
+          v-if="canWriteUnits"
           type="primary"
           @click="showCreateDialog()"
         >
@@ -26,7 +26,7 @@
             </template>
           </el-input>
           <p
-            v-if="!readOnly"
+            v-if="canWriteUnits"
             class="drag-hint"
           >
             {{ t('organization.dragHint') }}
@@ -40,7 +40,7 @@
               node-key="id"
               default-expand-all
               highlight-current
-              :draggable="!readOnly"
+              :draggable="canWriteUnits"
               :allow-drag="allowDrag"
               :allow-drop="allowDrop"
               :indent="24"
@@ -64,7 +64,7 @@
                     </el-tag>
                   </div>
                   <div
-                    v-if="!readOnly"
+                    v-if="canWriteUnits"
                     class="node-actions"
                   >
                     <el-button
@@ -268,23 +268,25 @@
       v-model="dialogVisible"
       :business-unit="currentBusinessUnit"
       :parent="parentBusinessUnit"
+      :references="currentReferences"
       @success="handleFormSuccess"
     />
+    <!-- Bindable roles belong to the unit (D-50); members and approvers stay SYS_ADMIN's (D-13, D-19). -->
     <BusinessUnitRolesDialog
       v-model="rolesDialogVisible"
       :business-unit="selectedBusinessUnit"
-      :read-only="readOnly"
+      :read-only="!canWriteUnits"
     />
     <BusinessUnitApproversDialog
       v-model="approversDialogVisible"
       :business-unit="selectedBusinessUnit"
-      :read-only="readOnly"
+      :read-only="!canWriteMembers"
       @success="fetchApprovers"
     />
     <BusinessUnitMembersDialog
       v-model="membersDialogVisible"
       :business-unit="selectedBusinessUnit"
-      :read-only="readOnly"
+      :read-only="!canWriteMembers"
       @success="handleMembersChange"
     />
     <UserDetailDialog
@@ -299,7 +301,7 @@ import { watch, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Search, OfficeBuilding } from '@element-plus/icons-vue'
 import { useOrganizationStore } from '@/stores/organization'
-import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { canWrite } from '@/utils/permission'
 import BusinessUnitFormDialog from './components/BusinessUnitFormDialog.vue'
 import BusinessUnitRolesDialog from './components/BusinessUnitRolesDialog.vue'
 import BusinessUnitApproversDialog from './components/BusinessUnitApproversDialog.vue'
@@ -311,7 +313,10 @@ import { useBusinessUnit } from '@/composables/modules/useBusinessUnit'
 
 const { t } = useI18n()
 const orgStore = useOrganizationStore()
-const readOnly = computed(() => !hasPermission(PERMISSIONS.USER_WRITE))
+/** Units themselves (create, edit, move, delete, bindable roles): every Technical Lead (§8.3, D-12, D-50). */
+const canWriteUnits = computed(() => canWrite('organization'))
+/** Members and approvers: SYS_ADMIN only (D-13, D-19). */
+const canWriteMembers = computed(() => canWrite('organizationMembers'))
 
 const {
   treeRef,
@@ -326,6 +331,7 @@ const {
   userDetailVisible,
   selectedUserId,
   currentBusinessUnit,
+  currentReferences,
   parentBusinessUnit,
   filterNode,
   fetchMembers,

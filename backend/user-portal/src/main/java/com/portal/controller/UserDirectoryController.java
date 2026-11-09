@@ -4,6 +4,7 @@ import com.platform.common.dto.ApiResponse;
 import com.portal.component.UserDirectoryComponent;
 import com.portal.dto.UserSummariesRequest;
 import com.portal.dto.UserSummaryResponse;
+import com.portal.security.CurrentUserId;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class UserDirectoryController {
 
     @PostMapping("/summaries")
     public ApiResponse<List<UserSummaryResponse>> summaries(
+            @CurrentUserId String userId, // signed-in users only: the directory carries personal data
             @RequestBody @Valid UserSummariesRequest request) {
         return ApiResponse.success(userDirectoryComponent.summaries(request.userIds()));
     }

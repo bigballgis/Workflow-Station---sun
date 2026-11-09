@@ -3,7 +3,6 @@ package com.admin.bi.component;
 import com.platform.common.dto.UserPrincipal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -13,6 +12,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/** The guard only names the signed-in user; @AdminAccess decides who gets in (WP9: Technical Leads too). */
 class BiAdminAccessGuardTest {
 
     private final BiAdminAccessGuard guard = new BiAdminAccessGuard();
@@ -29,17 +29,11 @@ class BiAdminAccessGuardTest {
     }
 
     @Test
-    void rejectsAuthenticatedPortalOrServiceUserWithoutAnAdminRole() {
-        authenticate("portal-user", List.of());
+    void returnsTheSignedInUserWhateverTheRoleTheInterceptorAdmitted() {
+        authenticate("tech-lead", List.of("TECH_LEAD"));
+        assertThat(guard.requireAdminUserId()).isEqualTo("tech-lead");
 
-        assertThatThrownBy(guard::requireAdminUserId)
-                .isInstanceOf(AccessDeniedException.class);
-    }
-
-    @Test
-    void acceptsARealAdminCenterRole() {
         authenticate("admin-user", List.of("SYS_ADMIN"));
-
         assertThat(guard.requireAdminUserId()).isEqualTo("admin-user");
     }
 

@@ -5,7 +5,7 @@ import com.admin.bi.entity.BiDashboardRegistry;
 import com.admin.bi.entity.BiSupersetRole;
 import com.admin.bi.service.BiRbacMappingService;
 import com.admin.bi.support.SupersetRoleIdCsv;
-import com.admin.repository.UserRoleRepository;
+import com.admin.service.UserRoleIdResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -35,11 +35,11 @@ public class DashboardRoleGate {
 
     private final BiRbacMappingService rbacMappingService;
     private final BiProperties biProperties;
-    private final UserRoleRepository userRoleRepository;
+    private final UserRoleIdResolver userRoleIdResolver;
 
     /** Gate for a user whose sys role IDs are looked up lazily (including virtual-group roles). */
     public Check forUser(String userId) {
-        return new Check(userId, () -> userRoleRepository.findAllRoleIdsByUserId(userId));
+        return new Check(userId, () -> userRoleIdResolver.allRoleIds(userId));
     }
 
     /** Gate for a user whose sys role IDs the caller already holds. */

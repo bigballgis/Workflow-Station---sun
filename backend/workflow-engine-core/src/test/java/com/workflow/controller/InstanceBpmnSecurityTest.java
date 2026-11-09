@@ -1,5 +1,6 @@
 package com.workflow.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.UserPrincipal;
 import com.platform.security.config.JwtProperties;
 import com.platform.security.filter.JwtAuthenticationFilter;
@@ -86,7 +87,7 @@ class InstanceBpmnSecurityTest {
     static class TestConfig {
         @Bean JwtTokenService tokens() { return mock(JwtTokenService.class); }
         @Bean JwtAuthenticationFilter jwtFilter(JwtTokenService tokens) {
-            return new JwtAuthenticationFilter(tokens, new JwtProperties());
+            return new JwtAuthenticationFilter(tokens, new JwtProperties(), new ObjectMapper(), "");
         }
         @Bean Fixtures fixtures() {
             return new Fixtures(mock(ProcessEngineComponent.class), mock(InstanceBpmnReader.class));

@@ -114,7 +114,10 @@
           <el-icon><User /></el-icon>
           {{ t('profile.title') }}
         </el-dropdown-item>
-        <el-dropdown-item command="settings">
+        <el-dropdown-item
+          v-if="canRead('systemConfig')"
+          command="settings"
+        >
           <el-icon><Setting /></el-icon>
           {{ t('menu.config') }}
         </el-dropdown-item>
@@ -139,6 +142,7 @@ import { ArrowDown, Connection, Key, User, Setting, SwitchButton, Loading } from
 import { logout as authLogout, clearAuth, getUser, AUTH_BASE_URL } from '@/api/auth'
 import { userApi } from '@/api/user'
 import { redirectToUnifiedLogin } from '@/utils/sso'
+import { canRead } from '@/utils/permission'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -154,7 +158,6 @@ const avatarSrc = computed(() => currentUser.value?.hasAvatar ? `${AUTH_BASE_URL
 
 const getRoleTagType = (type?: string) => {
   if (type === 'BU_BOUNDED') return 'warning'
-  if (type === 'BU_UNBOUNDED') return 'success'
   if (type === 'ADMIN') return 'danger'
   if (type === 'AUDITOR') return 'info'
   return 'primary'

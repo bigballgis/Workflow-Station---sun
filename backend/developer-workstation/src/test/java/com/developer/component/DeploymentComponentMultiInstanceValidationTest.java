@@ -84,6 +84,8 @@ class DeploymentComponentMultiInstanceValidationTest {
             new com.platform.security.config.JwtProperties(),
             emailMonitorRuleComponent
         );
+        // Spring injects admin-center.url; deployments may only target it.
+        org.springframework.test.util.ReflectionTestUtils.setField(deploymentComponent, "defaultAdminCenterUrl", "http://admin-center:8080");
         
         // Setup default i18n messages
         when(i18nService.getMessage(anyString())).thenReturn("Test Message");

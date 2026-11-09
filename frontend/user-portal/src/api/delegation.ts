@@ -6,6 +6,8 @@ export interface DelegationRule {
   id: number
   delegatorId: string
   delegateId: string
+  /** The delegate's display name (read with the list); absent when unknown. */
+  delegateName?: string | null
   delegationType: string
   processTypes?: string[]
   priorityFilter?: string[]
@@ -13,9 +15,13 @@ export interface DelegationRule {
   endTime?: string
   status: string
   reason?: string
+  /** Set while the rule cannot take effect because a party lost Portal entry; `status` is unchanged. */
+  inactiveReason?: DelegationInactiveReason | null
   createdAt: string
   updatedAt: string
 }
+
+export type DelegationInactiveReason = 'DELEGATOR_LOST_PORTAL_ENTRY' | 'DELEGATE_LOST_PORTAL_ENTRY'
 
 export interface DelegationRuleRequest {
   delegateId: string
@@ -31,6 +37,9 @@ export interface DelegationAudit {
   id: number
   delegatorId: string
   delegateId: string
+  /** Display names of both parties (read with the list); absent when unknown or not a person (BU + Role). */
+  delegatorName?: string | null
+  delegateName?: string | null
   taskId?: string
   operationType: string
   operationResult?: string

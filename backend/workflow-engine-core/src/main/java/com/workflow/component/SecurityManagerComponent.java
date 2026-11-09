@@ -91,8 +91,8 @@ public class SecurityManagerComponent {
             ObjectMapper objectMapper,
             AuditManagerComponent auditManagerComponent,
             @Value("${jwt.secret}") String jwtSecretKey,
-            @Value("${jwt.expiration:86400000}") long jwtExpirationMs,
-            @Value("${jwt.refresh-expiration:604800000}") long refreshTokenExpirationMs,
+            @Value("${jwt.expiration}") long jwtExpirationMs,
+            @Value("${jwt.refresh-expiration}") long refreshTokenExpirationMs,
             @Value("${platform.encryption.secret-key}") String encryptionKey) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.jwtSecretKey = jwtSecretKey;

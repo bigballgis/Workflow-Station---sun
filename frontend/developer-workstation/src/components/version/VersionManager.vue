@@ -70,7 +70,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import type { Version } from '@/api/functionUnit'
+import { functionUnitApi, type Version } from '@/api/functionUnit'
 import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
 import VersionCompareDialog from '@/components/version/VersionCompareDialog.vue'
 import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
@@ -129,8 +129,19 @@ async function handleRollback(row: Version): Promise<void> {
   }
 }
 
-function handleExport(row: Version): void {
-  window.open(`/api/v1/function-units/${props.functionUnitId}/versions/${row.id}/export`)
+// Downloaded through the API client (not window.open) so an expired access token is renewed first.
+async function handleExport(row: Version): Promise<void> {
+  try {
+    const data = await functionUnitApi.exportVersion(props.functionUnitId, row.id)
+    const url = URL.createObjectURL(new Blob([data as unknown as BlobPart], { type: 'application/json' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `function-unit-${props.functionUnitId}-version-${row.id}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (error: unknown) {
+    ElMessage.error(resolveUserFacingHttpMessage(error, t) || t('common.error'))
+  }
 }
 
 onMounted(loadVersions)

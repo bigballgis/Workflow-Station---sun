@@ -23,8 +23,8 @@ public class UserDirectoryComponentImpl implements UserDirectoryComponent {
         if (SecurityContextUtils.getCurrentUserId().isEmpty()) {
             throw new AuthenticationCredentialsNotFoundException("Portal authentication required");
         }
+        // Labels for ids already on record (assignees, history): a since-deleted user keeps showing their name.
         return userRepository.findAllById(new LinkedHashSet<>(userIds)).stream()
-                .filter(user -> !Boolean.TRUE.equals(user.getDeleted()))
                 .map(user -> new UserSummaryResponse(user.getId(), user.getUsername(), displayName(user)))
                 .toList();
     }

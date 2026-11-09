@@ -69,7 +69,7 @@ class RelationTableDataPropertyTest {
                 tableDefinitionRepository, versionRepository, relationTableFunctionUnitResolver, auditService,
                 mock(com.admin.service.RelationTableAccessService.class),
                 mock(com.admin.service.RelationTablePrimaryKeyAllocationService.class),
-                jdbcTemplate, objectMapper);
+                jdbcTemplate, objectMapper, com.admin.security.TestTeamScopes.everything());
     }
 
     // ==================== Arbitraries ====================

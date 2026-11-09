@@ -4,7 +4,7 @@ import type { DialogColumn } from './types'
 import { getUser, type UserInfo } from '@/api/auth'
 import { applyCreatorPrefill } from '@/composables/owner/useOwnerFieldModel'
 
-/** Format the current instant as {@code YYYY-MM-DD HH:mm:ss} in UTC+8 (Asia/Shanghai). */
+/** Format the current instant as {@code YYYY-MM-DD HH:mm:ss} in UTC+8 (Asia/Hong_Kong). */
 function formatTimestampLocal(): string {
   const d = new Date()
   const utc8 = new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000)

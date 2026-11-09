@@ -160,8 +160,8 @@ Good: 选项全部摊在表单上，一次只能选一项。Field 存 Options �
 Bad: 真正重要的不是把公式写得很长，而是先勾选 Computed，再打开 Formula。
 Good: Tick **Computed**, open **Formula**, then save the table.
 
-Bad: 值得注意的是，BU 和 Role 都空时，只有系统管理员看得到该视图。
-Good: If BU and Role are both empty, only System Administrator sees the view.
+Bad: 值得注意的是，BU 和 Role 都空时，发布后没有任何人看得到该视图。
+Good: If BU and Role are both empty, no one can see the view after it is published.
 
 Bad: 接下来我们来看失败情况。你现在卡在哪一步？
 Good: (failures `failKeys` only) Save is blocked until both BU and Role are set.

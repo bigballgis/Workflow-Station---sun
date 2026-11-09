@@ -1,9 +1,9 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from "vue-router";
-import { canAccessRoute, PERMISSIONS } from "@/utils/permission";
+import { canAccessRoute } from "@/utils/permission";
 import { ElMessage } from "element-plus";
 import i18n from "@/i18n";
 import { redirectToUnifiedLogin, setSsoReturnPath } from "@/utils/sso";
-import { getUser, getCurrentUser, clearAuth } from "@/api/auth";
+import { getUser, getCurrentUser, clearAuth, type AdminFeature } from "@/api/auth";
 
 // Extend route meta type
 declare module "vue-router" {
@@ -13,7 +13,10 @@ declare module "vue-router" {
     icon?: string;
     hidden?: boolean;
     requiresAuth?: boolean;
-    permissions?: string[];
+    /** Admin page the route belongs to; the user's capability for it decides access (utils/permission). */
+    feature?: AdminFeature;
+    /** The route is a write entry (import, create): needs write access to the feature. */
+    write?: boolean;
   }
 }
 
@@ -40,7 +43,7 @@ const routes: RouteRecordRaw[] = [
         path: "dashboard",
         name: "Dashboard",
         component: () => import("@/views/dashboard/index.vue"),
-        meta: { titleKey: "menu.dashboard", icon: "Odometer", permissions: [] },
+        meta: { titleKey: "menu.dashboard", icon: "Odometer" },
       },
       {
         path: "user/list",
@@ -49,7 +52,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.userManagement",
           icon: "User",
-          permissions: [PERMISSIONS.USER_READ],
+          feature: "users",
         },
       },
       {
@@ -59,7 +62,8 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.userImport",
           hidden: true,
-          permissions: [PERMISSIONS.USER_WRITE],
+          feature: "users",
+          write: true,
         },
       },
       {
@@ -69,7 +73,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.organization",
           icon: "OfficeBuilding",
-          permissions: [PERMISSIONS.USER_READ],
+          feature: "organization",
         },
       },
       {
@@ -83,7 +87,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.virtualGroup",
           icon: "Connection",
-          permissions: [PERMISSIONS.USER_READ],
+          feature: "virtualGroups",
         },
       },
       {
@@ -93,7 +97,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.roleManagement",
           icon: "Key",
-          permissions: [PERMISSIONS.ROLE_READ],
+          feature: "roles",
         },
       },
       {
@@ -107,7 +111,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.functionUnit",
           icon: "Box",
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "functionUnits",
         },
       },
       {
@@ -117,7 +121,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.automationPieces",
           icon: "Cpu",
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "automationPieces",
         },
       },
       {
@@ -127,7 +131,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.automationFlows",
           icon: "Share",
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "automationFlows",
         },
       },
       {
@@ -137,7 +141,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.automationRuns",
           icon: "Tickets",
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "automationRuns",
         },
       },
       {
@@ -152,7 +156,7 @@ const routes: RouteRecordRaw[] = [
             meta: {
               titleKey: "menu.auditAdminCenter",
               icon: "Document",
-              permissions: [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
+              feature: "auditAdminCenter",
             },
           },
           {
@@ -162,7 +166,17 @@ const routes: RouteRecordRaw[] = [
             meta: {
               titleKey: "menu.auditUserPortal",
               icon: "Document",
-              permissions: [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
+              feature: "auditUserPortal",
+            },
+          },
+          {
+            path: "ldap-sync",
+            name: "AuditLdapSync",
+            component: () => import("@/views/ldap-sync/index.vue"),
+            meta: {
+              titleKey: "menu.ldapSync",
+              icon: "Document",
+              feature: "ldapSync",
             },
           },
         ],
@@ -174,7 +188,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.config",
           icon: "Setting",
-          permissions: [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],
+          feature: "systemConfig",
         },
       },
       {
@@ -185,7 +199,6 @@ const routes: RouteRecordRaw[] = [
           titleKey: "profile.title",
           icon: "User",
           hidden: true,
-          permissions: [],
         },
       },
       {
@@ -196,7 +209,7 @@ const routes: RouteRecordRaw[] = [
           titleKey: "menu.biDashboardRegistry",
           icon: "DataAnalysis",
           requiresAuth: true,
-          permissions: [],
+          feature: "biDashboardRegistry",
         },
       },
       {
@@ -209,7 +222,7 @@ const routes: RouteRecordRaw[] = [
           titleKey: "menu.biAudienceAssignment",
           icon: "Share",
           requiresAuth: true,
-          permissions: [],
+          feature: "biAudienceAssignment",
         },
       },
       {
@@ -221,7 +234,7 @@ const routes: RouteRecordRaw[] = [
           titleKey: "menu.biDataViewAssignment",
           icon: "View",
           requiresAuth: true,
-          permissions: [],
+          feature: "biDataViewAssignment",
         },
       },
       {
@@ -232,7 +245,7 @@ const routes: RouteRecordRaw[] = [
           titleKey: "menu.biRbacMapping",
           icon: "Connection",
           requiresAuth: true,
-          permissions: [],
+          feature: "biRbacMapping",
         },
       },
       // ==================== Relation Tables ====================
@@ -243,7 +256,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.relationTables",
           icon: "Grid",
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "relationTables",
         },
       },
       {
@@ -253,7 +266,8 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.tableStructure",
           hidden: true,
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "relationTables",
+          write: true,
         },
       },
       {
@@ -263,7 +277,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.tableStructure",
           hidden: true,
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "relationTables",
         },
       },
       {
@@ -273,7 +287,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "erDiagram.title",
           hidden: true,
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "relationTables",
         },
       },
       {
@@ -283,7 +297,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "erDiagram.title",
           hidden: true,
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "relationTables",
         },
       },
       {
@@ -293,7 +307,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.environmentVariables",
           icon: "Key",
-          permissions: [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],
+          feature: "environmentVariables",
         },
       },
       {
@@ -307,7 +321,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.slaPolicies",
           icon: "Timer",
-          permissions: [PERMISSIONS.SLA_POLICY_VIEW, PERMISSIONS.SLA_POLICY_EDIT],
+          feature: "slaPolicies",
         },
       },
       {
@@ -317,7 +331,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           titleKey: "menu.tableData",
           icon: "Coin",
-          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+          feature: "relationTables",
         },
       },
     ],
@@ -367,8 +381,8 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Check route permissions
-  if (!canAccessRoute(to.path)) {
+  // The capability table decides which pages the user may open
+  if (!canAccessRoute(to)) {
     ElMessage.warning(t("error.noPermission"));
     next("/403");
     return;

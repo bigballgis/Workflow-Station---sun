@@ -5,7 +5,6 @@ import {
   clearActiveGroup,
   getActiveGroupHeaderValue,
   getActiveGroupRaw,
-  isPublicGroupSelected,
   setActiveGroup,
 } from '../devGroupContext'
 describe('devGroupContext', () => {
@@ -30,11 +29,5 @@ describe('devGroupContext', () => {
   it('sends the Public group as a concrete scope header', () => {
     setActiveGroup(PUBLIC_GROUP_ID)
     expect(getActiveGroupHeaderValue()).toBe(PUBLIC_GROUP_ID)
-    expect(isPublicGroupSelected()).toBe(true)
-  })
-
-  it('does not treat all-groups as Public', () => {
-    setActiveGroup(ALL_GROUPS)
-    expect(isPublicGroupSelected()).toBe(false)
   })
 })

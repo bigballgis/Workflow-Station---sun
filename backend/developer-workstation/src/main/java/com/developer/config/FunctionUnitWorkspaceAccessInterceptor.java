@@ -3,8 +3,8 @@ package com.developer.config;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
-import com.developer.security.FormBindingWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.security.WorkspaceRouteOwnership;
 import com.platform.common.i18n.I18nService;
 import com.platform.security.util.SecurityContextUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,8 +19,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 按 URL 解析 functionUnitId，对工作区（创建者 + 虚拟组）做统一鉴权。
- * 不含 {@code /api/function-units/{name}} 等按名称路由的旧版接口。
+ * 按 URL 解析请求触及的功能单元，按团队规则统一鉴权（平台访问模型 §6.1、§6.2）。
+ *
+ * <p>路径里的子资源 id（表单、表、动作……）先由 {@link WorkspaceRouteOwnership} 从库里查出归属：
+ * 不属于路径里的功能单元 / 表单时按不存在处理（404），没有功能单元 id 的路由按查出的归属鉴权。
+ * 不含 {@code /api/function-units/{name}} 等按名称路由的旧版接口。</p>
  */
 @Slf4j
 @Component
@@ -32,12 +35,19 @@ public class FunctionUnitWorkspaceAccessInterceptor implements HandlerIntercepto
     private static final Pattern AI_LOCK = Pattern.compile("/ai-generation/lock/(\\d+)");
     private static final Pattern AI_EVENTS = Pattern.compile("/ai-generation/events/(\\d+)");
     private static final Pattern AI_APPLY_UNDO = Pattern.compile("/ai-generation/(\\d+)/(apply|undo)");
-    private static final Pattern FORM_BINDING_VIEW = Pattern.compile(
-            "/api/forms/(\\d+)/(?:sub-table-views|relation-views)/(\\d+)(?:/(or-create|default|fields))?/?");
+    private static final Pattern AI_STUDIO_THREAD = Pattern.compile("/ai-generation/studio-thread/(\\d+)");
+    /**
+     * POSTs that only read the design: a clone reads its source (D-35) and simulate reads table definitions. The
+     * lookup probe stays a modify: it reads live relation-table rows, which is more than seeing the design.
+     */
+    private static final Pattern READ_SHAPED_POST = Pattern.compile(
+            "/function-units/\\d+/(clone|process/simulate)");
+    private static final Pattern UNIT = Pattern.compile("/function-units/\\d+");
+    private static final Pattern DEV_GROUPS = Pattern.compile("/function-units/\\d+/dev-groups");
 
     private final FunctionUnitWorkspaceAccessService workspaceAccessService;
     private final I18nService i18nService;
-    private final FormBindingWorkspaceAccessService formBindingAccessService;
+    private final WorkspaceRouteOwnership routeOwnership;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
@@ -46,45 +56,27 @@ public class FunctionUnitWorkspaceAccessInterceptor implements HandlerIntercepto
             return true;
         }
         if (SecurityContextUtils.getCurrentUserId().isEmpty()) {
+            // Anonymous requests are already refused by the security chain (401); nothing to scope here.
             return true;
         }
 
         String path = request.getServletPath();
         try {
-            Matcher bindingMatch = FORM_BINDING_VIEW.matcher(path);
-            if (bindingMatch.matches()) {
-                boolean read = ("GET".equalsIgnoreCase(request.getMethod())
-                        || "HEAD".equalsIgnoreCase(request.getMethod()))
-                        && !"or-create".equals(bindingMatch.group(3));
-                formBindingAccessService.assertCanAccess(Long.valueOf(bindingMatch.group(1)),
-                        Long.valueOf(bindingMatch.group(2)),
-                        read ? WorkspaceAccessAction.VIEW : WorkspaceAccessAction.MODIFY);
-                return true;
-            }
-            Long functionUnitId = extractFunctionUnitId(path, request);
+            Long functionUnitId = routeOwnership.functionUnitOf(path)
+                    .orElseGet(() -> extractFunctionUnitId(path, request.getParameter("functionUnitId")));
             if (functionUnitId == null) {
                 return true;
             }
-            if (path.matches("/function-units/\\d+/dev-groups")) {
-                if ("PUT".equalsIgnoreCase(request.getMethod())) {
-                    workspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.ASSIGN_DEV_GROUPS);
-                } else {
-                    workspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
-                }
-                return true;
-            }
-            if ("DELETE".equalsIgnoreCase(request.getMethod()) && path.matches("/function-units/\\d+")) {
-                workspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.DELETE);
-                return true;
-            }
-            if ("GET".equalsIgnoreCase(request.getMethod()) || "HEAD".equalsIgnoreCase(request.getMethod())) {
-                workspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
-            } else {
-                workspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
-            }
+            workspaceAccessService.assertCanAccess(functionUnitId, actionFor(path, request.getMethod()));
             return true;
+        } catch (NumberFormatException ex) {
+            log.warn("Workspace interceptor refused a malformed unit id: {} {}", request.getMethod(), path);
+            response.setStatus(HttpStatus.BAD_REQUEST.value());
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"error\":\"VAL_INVALID_INPUT\",\"message\":\"functionUnitId must be a number\"}");
+            return false;
         } catch (ResourceNotFoundException ex) {
-            log.warn("Workspace interceptor missing FU: {} {}", request.getMethod(), path);
+            log.warn("Workspace interceptor missing resource: {} {}", request.getMethod(), path);
             response.setStatus(HttpStatus.NOT_FOUND.value());
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write(
@@ -101,21 +93,40 @@ public class FunctionUnitWorkspaceAccessInterceptor implements HandlerIntercepto
         }
     }
 
+    /** Reads are VIEW; a get-or-create read writes a default config, so it is MODIFY like every other write. */
+    static WorkspaceAccessAction actionFor(String path, String method) {
+        if (DEV_GROUPS.matcher(path).matches()) {
+            return "PUT".equalsIgnoreCase(method) ? WorkspaceAccessAction.ASSIGN_DEV_GROUPS : WorkspaceAccessAction.VIEW;
+        }
+        if ("DELETE".equalsIgnoreCase(method) && UNIT.matcher(path).matches()) {
+            return WorkspaceAccessAction.DELETE;
+        }
+        if ("POST".equalsIgnoreCase(method) && READ_SHAPED_POST.matcher(path).matches()) {
+            return WorkspaceAccessAction.VIEW;
+        }
+        boolean read = "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
+        return read && !path.endsWith("/or-create") ? WorkspaceAccessAction.VIEW : WorkspaceAccessAction.MODIFY;
+    }
+
     private static String escapeJson(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private Long extractFunctionUnitId(String path, HttpServletRequest request) {
-        if (path.startsWith("/ai-generation")) {
-            String q = request.getParameter("functionUnitId");
-            if (q != null && !q.isBlank()) {
-                try {
-                    return Long.parseLong(q.trim());
-                } catch (NumberFormatException ignored) {
-                    return null;
-                }
-            }
+    /**
+     * The unit a request works in: the one in the path; on {@code /ai-generation} routes without one, the
+     * {@code functionUnitId} query parameter. A query id that is not a number is refused, never ignored.
+     */
+    static Long extractFunctionUnitId(String path, String functionUnitIdParam) {
+        Long fromPath = unitIdInPath(path);
+        if (fromPath != null || !path.startsWith("/ai-generation")
+                || functionUnitIdParam == null || functionUnitIdParam.isBlank()) {
+            return fromPath;
         }
+        return Long.parseLong(functionUnitIdParam.trim());
+    }
+
+    /** The function unit id the path itself names; null when it names none. */
+    public static Long unitIdInPath(String path) {
         Long fromPatterns = firstMatch(path, FUNCTION_UNITS_ID);
         if (fromPatterns != null) {
             return fromPatterns;
@@ -129,6 +140,10 @@ public class FunctionUnitWorkspaceAccessInterceptor implements HandlerIntercepto
             return fromPatterns;
         }
         fromPatterns = firstMatch(path, AI_EVENTS);
+        if (fromPatterns != null) {
+            return fromPatterns;
+        }
+        fromPatterns = firstMatch(path, AI_STUDIO_THREAD);
         if (fromPatterns != null) {
             return fromPatterns;
         }

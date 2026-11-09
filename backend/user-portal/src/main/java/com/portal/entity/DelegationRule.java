@@ -36,6 +36,17 @@ public class DelegationRule {
     @Column(name = "delegate_id", nullable = false, length = 64)
     private String delegateId;
 
+    /**
+     * Why the rule is not in force although active (platform access model D-18), set when read, never stored:
+     * {@code DELEGATOR_LOST_PORTAL_ENTRY} / {@code DELEGATE_LOST_PORTAL_ENTRY}; null when in force.
+     */
+    @Transient
+    private String inactiveReason;
+
+    /** The delegate's display name for the Delegations page, read with the list, never stored; null when unknown. */
+    @Transient
+    private String delegateName;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "delegation_type", nullable = false, length = 20)
     private DelegationType delegationType;

@@ -2,10 +2,7 @@ package com.platform.security.service.impl;
 
 import com.platform.security.dto.RoleSource;
 import com.platform.security.dto.UserEffectiveRole;
-import com.platform.security.entity.RoleAssignment;
 import com.platform.security.enums.AssignmentTargetType;
-import com.platform.security.repository.RoleAssignmentRepository;
-import com.platform.security.resolver.TargetResolverFactory;
 import com.platform.security.service.UserRoleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,55 +13,79 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 用户角色服务实现
- * 统一计算用户的有效角色，供三个前端后端使用
- * 
- * Note: Department-based role assignment has been removed.
- * Roles are now assigned through:
- * 1. Direct user assignment (USER type)
- * 2. Virtual group membership (VIRTUAL_GROUP type)
- * 
- * For workflow task assignment, use the AssigneeType enum in workflow-engine-core
- * which supports BusinessUnit-based role resolution.
+ * 用户角色服务实现：三端（Admin、Portal、DW）共用的平台角色解析。
+ *
+ * <p>Platform access model §4.1: each of the four platform roles has exactly one source, and only an
+ * active, not deleted user in an ACTIVE group gets it.
+ * <ul>
+ *   <li>SYS_ADMIN, AUDITOR: the fixed binding ({@code sys_role_assignments}) of the SYSTEM group the
+ *       user is a member of.</li>
+ *   <li>TECH_LEAD, DEVELOPER: being on the Technical Lead / Developer list of a team (DEVELOPER group).
+ *       The role says only that the user is on such a list somewhere; which team it applies to is
+ *       decided where the team matters.</li>
+ * </ul>
+ * Direct user assignments, {@code sys_user_roles} and the bindings of any other group grant nothing.
+ * Business roles come from the user's BU + Role (UBR), not from here.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserRoleServiceImpl implements UserRoleService {
-    
-    private final RoleAssignmentRepository roleAssignmentRepository;
-    private final TargetResolverFactory targetResolverFactory;
+
+    private static final String ACTIVE_ROLE =
+            "(r.status = 'ACTIVE' OR r.status IS NULL OR TRIM(COALESCE(r.status, '')) = '') ";
+    private static final String ACTIVE_USER =
+            "u.id = ? AND u.status = 'ACTIVE' AND COALESCE(u.deleted, false) = false ";
+
+    private static final String EFFECTIVE_ROLES_SQL =
+            "SELECT r.id AS role_id, r.code, r.name, r.type, vg.id AS group_id, vg.name AS group_name, "
+            + "ra.id AS assignment_id "
+            + "FROM sys_users u "
+            + "JOIN sys_virtual_group_members m ON m.user_id = u.id AND m.list_type = 'MEMBER' "
+            + "JOIN sys_virtual_groups vg ON vg.id = m.group_id AND vg.type = 'SYSTEM' AND vg.status = 'ACTIVE' "
+            + "JOIN sys_role_assignments ra ON ra.target_type = 'VIRTUAL_GROUP' AND ra.target_id = vg.id "
+            + "AND (ra.valid_from IS NULL OR ra.valid_from <= CURRENT_TIMESTAMP) "
+            + "AND (ra.valid_to IS NULL OR ra.valid_to >= CURRENT_TIMESTAMP) "
+            + "JOIN sys_roles r ON r.id = ra.role_id AND r.code IN ('SYS_ADMIN', 'AUDITOR') AND " + ACTIVE_ROLE
+            + "WHERE " + ACTIVE_USER
+            + "UNION "
+            + "SELECT r.id, r.code, r.name, r.type, vg.id, vg.name, NULL "
+            + "FROM sys_users u "
+            + "JOIN sys_virtual_group_members m ON m.user_id = u.id AND m.list_type IN ('TECH_LEAD', 'DEVELOPER') "
+            + "JOIN sys_virtual_groups vg ON vg.id = m.group_id AND vg.type = 'DEVELOPER' AND vg.status = 'ACTIVE' "
+            + "JOIN sys_roles r ON r.code = m.list_type AND " + ACTIVE_ROLE
+            + "WHERE " + ACTIVE_USER
+            + "ORDER BY 2, 6";
+
     private final JdbcTemplate jdbcTemplate;
-    
+
     @Override
     public List<UserEffectiveRole> getEffectiveRolesForUser(String userId) {
-        log.debug("Calculating effective roles for user: {}", userId);
-        
-        // 用于存储角色ID到UserEffectiveRole的映射（用于合并来源）
         Map<String, UserEffectiveRole> roleMap = new LinkedHashMap<>();
-        
-        // 1. 查询直接分配给用户的角色 (USER类型)
-        List<RoleAssignment> userAssignments = roleAssignmentRepository.findValidUserAssignments(userId);
-        for (RoleAssignment assignment : userAssignments) {
-            addRoleFromAssignment(roleMap, assignment, AssignmentTargetType.USER, userId, "Direct Assignment");
-        }
-        
-        // 2. 查询用户所属虚拟组被分配的角色 (VIRTUAL_GROUP类型)
-        List<String> groupIds = getUserVirtualGroupIds(userId);
-        if (!groupIds.isEmpty()) {
-            List<RoleAssignment> groupAssignments = roleAssignmentRepository.findValidVirtualGroupAssignments(groupIds);
-            for (RoleAssignment assignment : groupAssignments) {
-                String groupName = getVirtualGroupName(assignment.getTargetId());
-                addRoleFromAssignment(roleMap, assignment, AssignmentTargetType.VIRTUAL_GROUP, 
-                        assignment.getTargetId(), groupName);
+        jdbcTemplate.query(EFFECTIVE_ROLES_SQL, rs -> {
+            RoleSource source = RoleSource.builder()
+                    .sourceType(AssignmentTargetType.VIRTUAL_GROUP)
+                    .sourceId(rs.getString("group_id"))
+                    .sourceName(rs.getString("group_name"))
+                    .assignmentId(rs.getString("assignment_id"))
+                    .build();
+            String roleId = rs.getString("role_id");
+            UserEffectiveRole role = roleMap.get(roleId);
+            if (role == null) {
+                role = UserEffectiveRole.builder()
+                        .roleId(roleId)
+                        .roleCode(rs.getString("code"))
+                        .roleName(rs.getString("name"))
+                        .roleType(rs.getString("type"))
+                        .build();
+                roleMap.put(roleId, role);
             }
-        }
-        
-        List<UserEffectiveRole> result = new ArrayList<>(roleMap.values());
-        log.debug("User {} has {} effective roles", userId, result.size());
-        return result;
+            role.addSource(source);
+        }, userId, userId);
+        log.debug("User {} has {} effective roles", userId, roleMap.size());
+        return new ArrayList<>(roleMap.values());
     }
-    
+
     @Override
     public List<String> getEffectiveRoleCodesForUser(String userId) {
         return getEffectiveRolesForUser(userId).stream()
@@ -115,102 +136,6 @@ public class UserRoleServiceImpl implements UserRoleService {
         }
         
         return new ArrayList<>(permissions);
-    }
-    
-    /**
-     * 从分配记录添加角色到映射
-     */
-    private void addRoleFromAssignment(Map<String, UserEffectiveRole> roleMap, 
-                                       RoleAssignment assignment,
-                                       AssignmentTargetType sourceType,
-                                       String sourceId,
-                                       String sourceName) {
-        String roleId = assignment.getRoleId();
-        
-        // 获取角色信息
-        Map<String, Object> roleInfo = getRoleInfo(roleId);
-        if (roleInfo == null) {
-            return;
-        }
-        
-        String roleCode = (String) roleInfo.get("code");
-        String roleName = (String) roleInfo.get("name");
-        String roleType = (String) roleInfo.get("type");
-
-        if (AssignmentTargetType.USER.equals(sourceType) && "BU_UNBOUNDED".equals(roleType)) {
-            log.debug("Skipping USER direct assignment for BU_UNBOUNDED role {} — use virtual group", roleId);
-            return;
-        }
-
-        // 创建来源信息
-        RoleSource source = RoleSource.builder()
-                .sourceType(sourceType)
-                .sourceId(sourceId)
-                .sourceName(sourceName)
-                .assignmentId(assignment.getId())
-                .build();
-        
-        // 如果角色已存在，添加来源；否则创建新的角色记录
-        if (roleMap.containsKey(roleId)) {
-            roleMap.get(roleId).addSource(source);
-        } else {
-            UserEffectiveRole effectiveRole = UserEffectiveRole.builder()
-                    .roleId(roleId)
-                    .roleCode(roleCode)
-                    .roleName(roleName)
-                    .roleType(roleType)
-                    .sources(new ArrayList<>(List.of(source)))
-                    .build();
-            roleMap.put(roleId, effectiveRole);
-        }
-    }
-    
-    /**
-     * 获取角色信息
-     */
-    private Map<String, Object> getRoleInfo(String roleId) {
-        try {
-            return jdbcTemplate.queryForMap(
-                "SELECT id, code, name, type FROM sys_roles WHERE id = ? "
-                    + "AND (status = 'ACTIVE' OR status IS NULL OR TRIM(COALESCE(status, '')) = '')",
-                roleId
-            );
-        } catch (Exception e) {
-            log.warn("Failed to get role info: {}", roleId, e);
-            return null;
-        }
-    }
-    
-    /**
-     * 获取用户所属的虚拟组ID列表
-     */
-    private List<String> getUserVirtualGroupIds(String userId) {
-        try {
-            return jdbcTemplate.queryForList(
-                "SELECT group_id FROM sys_virtual_group_members " +
-                "WHERE user_id = ?",
-                String.class,
-                userId
-            );
-        } catch (Exception e) {
-            log.warn("Failed to get virtual group IDs for user: {}", userId, e);
-            return Collections.emptyList();
-        }
-    }
-    
-    /**
-     * 获取虚拟组名称
-     */
-    private String getVirtualGroupName(String groupId) {
-        try {
-            return jdbcTemplate.queryForObject(
-                "SELECT name FROM sys_virtual_groups WHERE id = ?",
-                String.class,
-                groupId
-            );
-        } catch (Exception e) {
-            return groupId;
-        }
     }
     
     /**

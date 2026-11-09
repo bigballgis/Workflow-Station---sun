@@ -1,6 +1,5 @@
 package com.workflow.component;
 
-import com.workflow.dto.request.TaskAssignmentRequest;
 import com.workflow.dto.request.TaskClaimRequest;
 import com.workflow.dto.request.TaskDelegationRequest;
 import com.workflow.dto.response.TaskAssignmentResult;
@@ -24,14 +23,13 @@ import org.springframework.util.StringUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * Task action operations: assign, delegate, claim, unclaim, transfer.
+ * Task action operations: delegate, claim, unclaim, transfer.
  * Extracted from TaskManagerComponent.
  */
 @Slf4j
@@ -59,46 +57,6 @@ public class TaskActionService {
 
     // ==================== Public Action Methods ====================
 
-    public TaskAssignmentResult assignTask(String taskId, TaskAssignmentRequest request) {
-        try {
-            validateTaskAssignmentRequest(request);
-
-            Task flowableTask = taskService.createTaskQuery()
-                .taskId(taskId)
-                .singleResult();
-
-            if (flowableTask == null) {
-                throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "Task not found", taskId)));
-            }
-
-            ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
-                .findByTaskIdAndIsDeletedFalse(taskId)
-                .orElse(createExtendedTaskInfo(flowableTask, request));
-
-            updateTaskAssignment(extendedTaskInfo, request);
-            updateFlowableTaskAssignment(flowableTask, request);
-
-            extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
-
-            publishTaskAssignmentEvent(extendedTaskInfo, request);
-
-            return TaskAssignmentResult.success(
-                taskId,
-                request.getAssignmentType(),
-                request.getAssignmentTarget(),
-                request.getOperatorUserId(),
-                "Task assigned successfully");
-
-        } catch (WorkflowValidationException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new WorkflowBusinessException("TASK_ASSIGN_ERROR",
-                "Task assignment failed: " + e.getMessage(), e);
-        }
-    }
-
     public TaskAssignmentResult delegateTask(String taskId, TaskDelegationRequest request) {
         try {
             validateTaskDelegationRequest(request);
@@ -121,9 +79,9 @@ public class TaskActionService {
                 .findByTaskIdAndIsDeletedFalse(taskId)
                 .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "Task not found", taskId))));
+                        "taskId", "This task cannot be delegated", taskId))));
 
-            validateDelegationPermission(extendedTaskInfo, request.getDelegatedBy());
+            requireHolder(flowableTask, request.getDelegatedBy(), "delegate");
 
             if (extendedTaskInfo.isCompleted()) {
                 throw new WorkflowValidationException(Collections.singletonList(
@@ -200,6 +158,11 @@ public class TaskActionService {
                         "taskId", "Task not found", taskId)));
             }
 
+            boolean held = StringUtils.hasText(flowableTask.getAssignee());
+            if (held) {
+                requireHolder(flowableTask, fromUserId, "transfer");
+            }
+
             Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId);
 
@@ -212,7 +175,9 @@ public class TaskActionService {
                             "taskId", "Task already completed, cannot transfer", taskId)));
                 }
 
-                validateCompletePermission(extendedTaskInfo, fromUserId);
+                if (!held) {
+                    validateCompletePermission(extendedTaskInfo, fromUserId);
+                }
 
                 extendedTaskInfo.setAssignmentType(AssignmentType.USER);
                 extendedTaskInfo.setAssignmentTarget(toUserId);
@@ -264,69 +229,15 @@ public class TaskActionService {
 
     // ==================== Private Helper Methods ====================
 
-    private ExtendedTaskInfo createExtendedTaskInfo(Task flowableTask, TaskAssignmentRequest request) {
-        return ExtendedTaskInfo.builder()
-            .taskId(flowableTask.getId())
-            .processInstanceId(flowableTask.getProcessInstanceId())
-            .processDefinitionId(flowableTask.getProcessDefinitionId())
-            .taskDefinitionKey(flowableTask.getTaskDefinitionKey())
-            .taskName(flowableTask.getName())
-            .taskDescription(flowableTask.getDescription())
-            .assignmentType(request.getAssignmentType())
-            .assignmentTarget(request.getAssignmentTarget())
-            .priority(request.getEffectivePriority())
-            .dueDate(request.getDueDate())
-            .formKey(flowableTask.getFormKey())
-            .status("ASSIGNED")
-            .createdTime(LocalDateTime.now())
-            .createdBy(request.getOperatorUserId())
-            .tenantId(request.getTenantId())
-            .isDeleted(false)
-            .version(0L)
-            .build();
-    }
-
-    private void updateTaskAssignment(ExtendedTaskInfo extendedTaskInfo, TaskAssignmentRequest request) {
-        extendedTaskInfo.setAssignmentType(request.getAssignmentType());
-        extendedTaskInfo.setAssignmentTarget(request.getAssignmentTarget());
-        extendedTaskInfo.setPriority(request.getEffectivePriority());
-        extendedTaskInfo.setDueDate(request.getDueDate());
-        extendedTaskInfo.updateStatus("ASSIGNED", request.getOperatorUserId());
-        extendedTaskInfo.clearDelegation();
-        extendedTaskInfo.setClaimedBy(null);
-        extendedTaskInfo.setClaimedTime(null);
-    }
-
-    private void updateFlowableTaskAssignment(Task flowableTask, TaskAssignmentRequest request) {
-        switch (request.getAssignmentType()) {
-            case USER:
-                taskService.setAssignee(flowableTask.getId(), request.getAssignmentTarget());
-                break;
-            case VIRTUAL_GROUP:
-            case CANDIDATE_USERS:
-                taskService.setAssignee(flowableTask.getId(), null);
-                break;
-        }
-
-        if (request.getPriority() != null) {
-            taskService.setPriority(flowableTask.getId(), request.getPriority());
-        }
-        if (request.getDueDate() != null) {
-            taskService.setDueDate(flowableTask.getId(),
-                java.sql.Timestamp.valueOf(request.getDueDate()));
-        }
-    }
-
-    private void validateDelegationPermission(ExtendedTaskInfo task, String delegatedBy) {
-        boolean hasPermission = userPermissionService.hasTaskPermission(
-                delegatedBy,
-                task.getAssignmentType(),
-                task.getAssignmentTarget());
-
-        if (!hasPermission) {
+    /**
+     * Platform access model D-60: a task someone holds is handed on or delegated by its holder only (completing it is
+     * also open to a delegate in effect, see {@code TaskCompletionService}); candidates and pool members have no say.
+     */
+    private void requireHolder(Task task, String userId, String action) {
+        if (!engineActorMatchesPortalUser(task.getAssignee(), userId)) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "delegatedBy", "User does not have permission to delegate this task", delegatedBy)));
+                    "userId", "This task is held by another user: only its holder can " + action + " it", userId)));
         }
     }
 
@@ -356,19 +267,6 @@ public class TaskActionService {
 
     boolean engineActorMatchesPortalUser(String engineSideActor, String portalUserId) {
         return taskClaimSupport.engineActorMatchesPortalUser(engineSideActor, portalUserId);
-    }
-
-    private void validateTaskAssignmentRequest(TaskAssignmentRequest request) {
-        if (request == null) {
-            throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError(
-                    "request", "Request parameters cannot be empty", null)));
-        }
-        if (!request.isValid()) {
-            throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError(
-                    "request", request.getValidationError(), null)));
-        }
     }
 
     private void validateTaskDelegationRequest(TaskDelegationRequest request) {
@@ -406,29 +304,6 @@ public class TaskActionService {
     }
 
     // ==================== Event Publishing ====================
-
-    private void publishTaskAssignmentEvent(ExtendedTaskInfo task, TaskAssignmentRequest request) {
-        log.info("Task assignment event: taskId={}, assignmentTarget={}, assignmentType={}",
-                task.getTaskId(), request.getAssignmentTarget(), request.getAssignmentType());
-        if (!request.shouldSendNotification()) {
-            return;
-        }
-        if (request.getAssignmentType() != AssignmentType.USER) {
-            return;
-        }
-        String targetUser = request.getAssignmentTarget();
-        if (!StringUtils.hasText(targetUser)) {
-            return;
-        }
-        String label = task.getTaskName() != null ? task.getTaskName() : task.getTaskId();
-        notificationDispatchHelper.publishToUserAfterCommit(
-                targetUser.trim(),
-                "TASK",
-                i18nService.getMessage("workflow.notification.assigned_title"),
-                i18nService.getMessage("workflow.notification.assigned_body", label, request.getOperatorUserId()),
-                taskLink(task.getTaskId()),
-                "workflow-engine");
-    }
 
     private void publishTaskDelegationEvent(ExtendedTaskInfo task, TaskDelegationRequest request) {
         log.info("Task delegation event: taskId={}, delegatedTo={}, delegatedBy={}",

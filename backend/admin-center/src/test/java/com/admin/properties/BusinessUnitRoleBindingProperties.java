@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 /**
  * Property 1: Role Type Validation for Binding
  * *For any* role binding operation (to Virtual_Group or Business_Unit), 
- * the system shall accept only roles with type BU_BOUNDED or BU_UNBOUNDED,
+ * the system shall accept only roles with type BU_BOUNDED,
  * and reject any role with type ADMIN, AUDITOR or DEVELOPER.
  * 
  * **Validates: Requirements 5.5**
@@ -75,41 +75,6 @@ public class BusinessUnitRoleBindingProperties {
         
         // Given: Role exists and is BU_BOUNDED type
         Role businessRole = createRole(roleId, RoleType.BU_BOUNDED);
-        when(roleRepository.findById(roleId)).thenReturn(Optional.of(businessRole));
-        
-        // Given: RoleHelper recognizes it as a business role
-        when(roleHelper.isBusinessRole(businessRole)).thenReturn(true);
-        
-        // Given: Role is not already bound
-        when(businessUnitRoleRepository.existsByBusinessUnitIdAndRoleId(businessUnitId, roleId))
-                .thenReturn(false);
-        
-        // Given: Save succeeds
-        when(businessUnitRoleRepository.save(any(BusinessUnitRole.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        
-        // When: Bind role
-        businessUnitRoleService.bindRole(businessUnitId, roleId);
-        
-        // Then: Role should be saved
-        verify(businessUnitRoleRepository).save(any(BusinessUnitRole.class));
-    }
-    
-    /**
-     * Feature: permission-request-approval, Property 1: Role Type Validation for Binding
-     * BU_UNBOUNDED type roles should be accepted for binding to business unit
-     */
-    @Property(tries = 100)
-    @Label("Feature: permission-request-approval, Property 1: BU_UNBOUNDED roles should be accepted for business unit binding")
-    void buUnboundedRolesShouldBeAcceptedForBinding(
-            @ForAll("validBusinessUnitIds") String businessUnitId,
-            @ForAll("validRoleIds") String roleId) {
-        
-        // Given: Business unit exists
-        when(businessUnitRepository.existsById(businessUnitId)).thenReturn(true);
-        
-        // Given: Role exists and is BU_UNBOUNDED type
-        Role businessRole = createRole(roleId, RoleType.BU_UNBOUNDED);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(businessRole));
         
         // Given: RoleHelper recognizes it as a business role
@@ -190,7 +155,7 @@ public class BusinessUnitRoleBindingProperties {
     
     /**
      * Feature: permission-request-approval, Property 1: Role Type Validation for Binding
-     * For any role type, only BU_BOUNDED and BU_UNBOUNDED should pass validation
+     * For any role type, only BU_BOUNDED should pass validation
      */
     @Property(tries = 100)
     @Label("Feature: permission-request-approval, Property 1: Only business types pass validation for business unit")

@@ -95,8 +95,12 @@ class FunctionUnitCloner {
     private final FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
 
     @Transactional
-    FunctionUnit clone(Long id, String newName) {
-        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.CLONE);
+    FunctionUnit clone(Long id, String newName, String targetGroupId) {
+        // D-35: any unit the user can see may be cloned; the clone lands only where they may create.
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.VIEW);
+        // The copy lands in one workspace the caller may create in; it does not take the source's (§6.3).
+        String workspaceId = functionUnitWorkspaceAccessService.resolveTargetWorkspace(
+                targetGroupId == null ? List.of() : List.of(targetGroupId));
         sequenceSynchronizer.synchronizeAll();
         if (functionUnitRepository.existsByName(newName)) {
             throw new DeveloperBusinessException("CONFLICT_NAME_EXISTS",
@@ -127,7 +131,7 @@ class FunctionUnitCloner {
                         : FunctionUnitStartupMode.STANDALONE)
                 .build();
         cloned = functionUnitRepository.save(cloned);
-        inheritDevGroups(id, cloned.getId());
+        assignWorkspace(cloned.getId(), workspaceId);
 
         // Clone order: clone all ProcessDefinition dependencies (tables/forms/actions) first,
         // collect old→new ID map, then write process definition and rewrite BPMN ID references.
@@ -294,21 +298,13 @@ class FunctionUnitCloner {
         return cloned;
     }
 
-    /**
-     * The copy joins the source's teams (Public included). Workspace access is decided by team
-     * membership alone, so a clone in no team is outside everyone's scope: nobody — SYS_ADMIN
-     * included — could edit it or even assign it a team afterwards.
-     */
-    private void inheritDevGroups(Long sourceId, Long clonedId) {
-        String operator = SecurityContextUtils.getCurrentUsername().orElse("system");
-        for (FunctionUnitDevGroupAssignment assignment : devGroupAssignmentRepository.findByFunctionUnitId(sourceId)) {
-            devGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
-                    .functionUnitId(clonedId)
-                    .virtualGroupId(assignment.getVirtualGroupId())
-                    .createdAt(Instant.now())
-                    .createdBy(operator)
-                    .build());
-        }
+    private void assignWorkspace(Long clonedId, String workspaceId) {
+        devGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
+                .functionUnitId(clonedId)
+                .virtualGroupId(workspaceId)
+                .createdAt(Instant.now())
+                .createdBy(SecurityContextUtils.getCurrentUsername().orElse("system"))
+                .build());
     }
 
     /**

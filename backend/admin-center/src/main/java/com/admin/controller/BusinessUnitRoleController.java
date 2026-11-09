@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Business unit role binding controller
@@ -18,6 +20,7 @@ import java.util.Map;
 @RequestMapping("/business-units/{unitId}/roles")
 @RequiredArgsConstructor
 @Tag(name = "Business Unit Role Binding", description = "Binding management between business units and business roles")
+@AdminAccess(value = AdminAudience.WORKSTATION, services = true)
 public class BusinessUnitRoleController {
     
     private final BusinessUnitRoleService businessUnitRoleService;
@@ -29,6 +32,7 @@ public class BusinessUnitRoleController {
         return ResponseEntity.ok(roles);
     }
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PostMapping
     @Operation(summary = "Bind role to business unit")
     public ResponseEntity<Void> bindRole(
@@ -42,6 +46,7 @@ public class BusinessUnitRoleController {
         return ResponseEntity.ok().build();
     }
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @DeleteMapping("/{roleId}")
     @Operation(summary = "Unbind role from business unit")
     public ResponseEntity<Void> unbindRole(

@@ -41,7 +41,8 @@ class RelationTableStructureListQuerySqlTest {
     @BeforeEach
     void setUp() throws Exception {
         component = new RelationTableStructureListQueryComponent(
-                jdbcTemplate, tableDefinitionRepository, relationTableFunctionUnitResolver);
+                jdbcTemplate, tableDefinitionRepository, relationTableFunctionUnitResolver,
+                com.admin.security.TestTeamScopes.everything());
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {

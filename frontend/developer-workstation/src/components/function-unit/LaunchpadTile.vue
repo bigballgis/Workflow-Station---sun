@@ -16,6 +16,12 @@
       >
         {{ item.description || t('functionUnit.noDescription') }}
       </div>
+      <div
+        v-if="workspaceWarning"
+        class="tip-warning"
+      >
+        {{ workspaceWarning }}
+      </div>
     </template>
     <div
       class="launchpad-tile"
@@ -49,19 +55,19 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item
-                v-if="!itemReadOnly && permissions.canEdit()"
+                v-if="!itemReadOnly"
                 command="settings"
               >
                 <el-icon><Setting /></el-icon>{{ t('functionUnit.setting') }}
               </el-dropdown-item>
               <el-dropdown-item
-                v-if="!itemReadOnly && permissions.canClone()"
+                v-if="canClone"
                 command="clone"
               >
                 <el-icon><CopyDocument /></el-icon>{{ t('functionUnit.clone') }}
               </el-dropdown-item>
               <el-dropdown-item
-                v-if="!itemReadOnly && item.status === 'ARCHIVED' && permissions.canEdit()"
+                v-if="item.status === 'ARCHIVED' && canManage"
                 command="restore"
               >
                 <el-icon><RefreshLeft /></el-icon>{{ t('functionUnit.restore') }}
@@ -73,7 +79,7 @@
                 <el-icon><Remove /></el-icon>{{ t('functionUnit.removeFromGroup') }}
               </el-dropdown-item>
               <el-dropdown-item
-                v-if="!itemReadOnly && permissions.canDelete()"
+                v-if="canManage"
                 command="delete"
                 divided
               >
@@ -84,6 +90,11 @@
         </el-dropdown>
       </div>
       <span class="tile-label">{{ item.name }}</span>
+      <span
+        v-if="workspaceWarning"
+        class="tile-warning"
+        :title="workspaceWarning"
+      >{{ workspaceWarning }}</span>
     </div>
   </el-tooltip>
 </template>
@@ -94,7 +105,7 @@ import { useI18n } from 'vue-i18n'
 import { Setting, CopyDocument, Delete, Box, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
-import { permissions, isFunctionUnitReadOnly } from '@/utils/permission'
+import { canCloneFunctionUnits, canManageFunctionUnit, isFunctionUnitReadOnly } from '@/utils/permission'
 
 const { t } = useI18n()
 
@@ -120,6 +131,17 @@ const emit = defineEmits<{
 // 描述气泡也挂在磁贴上，菜单打开时两者会重叠并盖住菜单项，故开菜单即禁用气泡
 const menuOpen = ref(false)
 const itemReadOnly = computed(() => isFunctionUnitReadOnly(props.item))
+const canManage = computed(() => canManageFunctionUnit(props.item))
+const canClone = computed(() => canCloneFunctionUnits())
+// Platform access model D-09 / D-33: a unit whose team is disabled or deleted is shown to System Administrators and
+// Auditors, marked, so it can be moved to another team.
+const workspaceWarning = computed(() => {
+  if (props.item.workspaceStatus === 'INACTIVE') {
+    return t('devGroup.workspaceDisabled', { name: props.item.workspaceName ?? '' })
+  }
+  return props.item.workspaceStatus === 'MISSING' ? t('devGroup.workspaceMissing') : ''
+})
+
 const showMenu = computed(() => {
   if (!itemReadOnly.value) return true
   return props.inFolder && props.canModifyLayout
@@ -246,6 +268,18 @@ function handleCommand(cmd: string) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+// The team of this unit is disabled or deleted (D-09 / D-33): marked on the tile, not only in the hover tip.
+.tile-warning {
+  max-width: 104px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--el-color-warning);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 </style>
 
 <style lang="scss">
@@ -265,6 +299,11 @@ function handleCommand(cmd: string) {
 
   .tip-desc--empty {
     opacity: 0.65;
+  }
+
+  .tip-warning {
+    margin-top: 3px;
+    color: var(--el-color-warning-light-5);
   }
 }
 </style>

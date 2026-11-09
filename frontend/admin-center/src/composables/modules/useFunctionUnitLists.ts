@@ -5,7 +5,7 @@
 
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { notifyError } from '@/utils/notify'
+import { notifyUnreportedError } from '@/utils/notifyUnreportedError'
 import {
   functionUnitApi,
   type Deployment,
@@ -62,9 +62,7 @@ export function useFunctionUnitLists() {
       }, 'function-units/query response is missing its column declaration')
     } catch (error: unknown) {
       if (!listGrid.isCurrentQuery(seq)) return
-      if (!(error as { response?: unknown })?.response) {
-        notifyError(error instanceof Error ? error.message : t('functionUnit.loadFailed'))
-      }
+      notifyUnreportedError(error, error instanceof Error ? error.message : t('functionUnit.loadFailed'))
     } finally {
       if (listGrid.isCurrentQuery(seq)) listLoading.value = false
     }
@@ -82,9 +80,7 @@ export function useFunctionUnitLists() {
       archiveGrid.applyPage(page, 'function-units/archived/query response is missing its column declaration')
     } catch (error: unknown) {
       if (!archiveGrid.isCurrentQuery(seq)) return
-      if (!(error as { response?: unknown })?.response) {
-        notifyError(error instanceof Error ? error.message : t('functionUnit.loadFailed'))
-      }
+      notifyUnreportedError(error, error instanceof Error ? error.message : t('functionUnit.loadFailed'))
     } finally {
       if (archiveGrid.isCurrentQuery(seq)) archivedLoading.value = false
     }
@@ -102,9 +98,7 @@ export function useFunctionUnitLists() {
       deployGrid.applyPage(page, 'function-units/deployments/query response is missing its column declaration')
     } catch (error: unknown) {
       if (!deployGrid.isCurrentQuery(seq)) return
-      if (!(error as { response?: unknown })?.response) {
-        notifyError(error instanceof Error ? error.message : t('functionUnit.loadFailed'))
-      }
+      notifyUnreportedError(error, error instanceof Error ? error.message : t('functionUnit.loadFailed'))
     } finally {
       if (deployGrid.isCurrentQuery(seq)) deploymentsLoading.value = false
     }

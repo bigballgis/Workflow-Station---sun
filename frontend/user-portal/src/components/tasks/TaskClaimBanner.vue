@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="task.claimPoolTask"
+    v-if="visible"
     class="section claim-banner"
     data-test="task-claim-banner"
   >
@@ -11,6 +11,15 @@
     >
       <template #title>
         <span data-test="task-claim-banner-title">{{ title }}</span>
+        <el-tag
+          v-if="task.assigneeLostPortalEntry"
+          type="warning"
+          size="small"
+          class="claim-banner__lost-entry"
+          data-test="task-claim-banner-lost-entry"
+        >
+          {{ t('task.assigneeLostPortalEntry') }}
+        </el-tag>
       </template>
       <template #default>
         <div class="claim-banner__body">
@@ -45,6 +54,17 @@
             {{ t('task.forceUnclaim') }}
           </el-button>
           <el-button
+            v-if="task.canTakeOver"
+            type="warning"
+            plain
+            size="small"
+            :loading="submitting"
+            data-test="task-take-over-btn"
+            @click="emit('take-over')"
+          >
+            {{ t('task.takeOver') }}
+          </el-button>
+          <el-button
             v-if="task.canReassign"
             type="primary"
             plain
@@ -71,6 +91,8 @@ interface ClaimBannerTask {
   claimedByCurrentUser?: boolean
   canForceUnclaim?: boolean
   canReassign?: boolean
+  canTakeOver?: boolean
+  assigneeLostPortalEntry?: boolean
   assignee?: string
   assigneeName?: string
 }
@@ -84,10 +106,18 @@ const emit = defineEmits<{
   (e: 'claim'): void
   (e: 'unclaim'): void
   (e: 'force-unclaim'): void
+  (e: 'take-over'): void
   (e: 'reassign'): void
 }>()
 
 const { t } = useI18n()
+
+/**
+ * BU + Role pool tasks always; any other pool (a list of named people, a legacy virtual group: D-17) when the user
+ * may act on it — e.g. its holder lost Portal entry.
+ */
+const visible = computed(() => !!(props.task.claimPoolTask || props.task.canForceUnclaim
+  || props.task.canTakeOver || props.task.canReassign))
 
 const alertType = computed(() => {
   if (props.task.claimedByCurrentUser) return 'success'
@@ -103,6 +133,7 @@ const title = computed(() => {
 const hint = computed(() => {
   if (props.task.claimedByCurrentUser) return t('task.claimHeldByYouHint')
   if (props.task.claimable) return t('task.claimAvailableHint')
+  if (props.task.canTakeOver) return t('task.takeOverHint')
   if (props.task.canForceUnclaim) return t('task.forceUnclaimHint')
   if (props.task.canReassign) return t('task.reassignHint')
   return t('task.claimHeldByOtherHint')
@@ -123,6 +154,10 @@ const hint = computed(() => {
 
   &__hint {
     color: var(--text-secondary);
+  }
+
+  &__lost-entry {
+    margin-left: 8px;
   }
 }
 </style>

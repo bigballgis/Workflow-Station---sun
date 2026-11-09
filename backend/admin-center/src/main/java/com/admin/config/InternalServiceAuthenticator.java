@@ -33,7 +33,7 @@ public class InternalServiceAuthenticator {
         return userId.trim();
     }
 
-    boolean hasValidServiceToken(HttpServletRequest request) {
+    public boolean hasValidServiceToken(HttpServletRequest request) {
         if (expectedToken == null || expectedToken.isBlank()) {
             return false;
         }

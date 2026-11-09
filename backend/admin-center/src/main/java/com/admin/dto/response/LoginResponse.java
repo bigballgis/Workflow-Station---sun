@@ -1,5 +1,6 @@
 package com.admin.dto.response;
 
+import com.admin.security.AdminCapabilities;
 import com.platform.security.enums.AssignmentTargetType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 登录响应 DTO
@@ -38,6 +40,8 @@ public class LoginResponse {
         private String businessUnitId;
         private String language;
         private boolean hasAvatar;
+        /** Admin page → NONE / READ / TEAM / WRITE for these roles ({@link com.admin.security.AdminCapabilities}). */
+        private Map<String, AdminCapabilities.Level> adminAccess;
     }
     
     /**

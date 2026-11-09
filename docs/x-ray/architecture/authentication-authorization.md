@@ -60,7 +60,7 @@ Direct password login also exists per-app (`portal AuthController POST /auth/log
 ### Token mechanics (evidence)
 - JWT HS256 via jjwt. Signing key `Keys.hmacShaKeyFor(secret)`, **min 32 bytes enforced at startup** — `JwtTokenServiceImpl.java:44-54`.
 - Claims: `userId, username, email, displayName, roles, permissions, language, tokenType, activeBusinessUnitId, activeRoleId, portalAccessMode`, `jti=UUID`, issuer `platform` — `JwtTokenServiceImpl.java:63-96,166-170`.
-- Access TTL default 1h (`JWT_EXPIRATION` overrides; portal yml sets 86400000ms=24h), refresh 7 days — `JwtProperties.java:25-30`, `user-portal/application.yml:116-117`.
+- Access TTL `JWT_EXPIRATION`, refresh (= 8 h idle session) `JWT_REFRESH_EXPIRATION`: both required, no code defaults; every environment 900000 / 28800000 ms (platform access model WP1, PRD §7.1) — `JwtProperties` validates at startup.
 - Blacklist on logout/refresh-rotation: Redis key `auth:blacklist:<sha256(token)>` with TTL=remaining validity — `JwtTokenServiceImpl.java:218-246`. **Fail-closed**: Redis down => `isBlacklisted` returns true (token rejected) — line 242-244.
 - Token extraction order: `Authorization: Bearer` header first, then httpOnly cookie by per-service `cookieNames` list — `JwtAuthenticationFilter.java:84-106`.
 - Cookies issued httpOnly, `SameSite=Lax`, `secure=false` (dev), path `/` — `PortalSessionIssuerService.java:314-322`.
@@ -83,9 +83,9 @@ flowchart TD
     H -->|workflow-engine: anyRequest authenticated| I2[401 if no auth]
     I --> J{Per-domain enforcement}
     J --> J1[DW: RequireDeveloperPermission interceptor -> DeveloperPermissionChecker calls admin-center /developer-permissions]
-    J --> J2[DW: FunctionUnitWorkspaceAccessService.assertCanAccess team-scope + ADMIN/TECH_LEAD bypass]
+    J --> J2[DW: FunctionUnitWorkspaceAccessService.assertCanAccess per-team lists: SYS_ADMIN all, AUDITOR read-only, TL / Developer per team]
     J --> J3[Portal: PortalSelfServiceAccessFilter 403 if portalAccessMode=PERMISSION_SELF_SERVICE_ONLY off-whitelist]
-    J --> J4[Portal: MainTableViewAccessResolver BU+Role pair, SYS_ADMIN bypass]
+    J --> J4[Portal: MainTableViewAccessResolver current BU+Role pair, no bypass]
     J --> J5[admin LdapSyncController.isSystemAdmin SYS_ADMIN/SUPER_ADMIN/system:admin]
     J1 --> K[allow/deny]
     J2 --> K
@@ -96,7 +96,7 @@ flowchart TD
 
 ### RBAC model
 - Tables: `sys_users`, `sys_roles`, `sys_permissions`, `sys_role_permissions`, `sys_role_assignments`, `sys_virtual_groups` + `sys_virtual_group_members`, business-unit + `sys_business_unit_roles`, `dw_function_unit_dev_groups` (VG→FU), `dw_main_table_view_access` (view BU/Role), `up_permission_request`.
-- Effective roles = **direct USER assignments ∪ virtual-group assignments** — `UserRoleServiceImpl.java:40-77` (`getEffectiveRolesForUser` unions `findValidUserAssignments` + `findValidVirtualGroupAssignments`). Note: BU_UNBOUNDED roles skip USER direct assignment (line 141).
+- Effective platform roles (`UserRoleServiceImpl`, shared by the three backends): SYS_ADMIN / AUDITOR from the fixed binding of an ACTIVE SYSTEM group (System Administrators, Auditors); TECH_LEAD / DEVELOPER from the Technical Lead / Developer list of an ACTIVE team; the account must be ACTIVE and not deleted. Direct user assignments give no platform role (PRD §4.1); business roles are BU + Role (UBR) only, no BU_UNBOUNDED roles (§5.3).
 - Permissions resolved `sys_roles -> sys_role_permissions -> sys_permissions` — `UserRoleServiceImpl.java:222-228`; also baked into JWT at login (`AuthenticationServiceImpl.login` roles+permissions).
 - Engine has its own in-memory RBAC with wildcard support (`resource:*`, `*:*`) — `SecurityRbacService.checkPermission` (workflow-engine-core).
 
@@ -111,24 +111,24 @@ flowchart TD
 | 3 | Spring authz | admin/DW/portal `anyRequest().permitAll()` — authz delegated to filters/services, NOT Spring | `admin/config/SecurityConfig.java:69`; `portal:46`; `developer/config/SecurityConfig.java:61` | Confirmed |
 | 4 | Spring authz | workflow-engine `anyRequest().authenticated()` (only module that enforces at Spring layer) | `workflow/config/SecurityConfig.java:63` | Confirmed |
 | 5 | DW method | `@RequireDeveloperPermission` -> `DeveloperPermissionInterceptor.preHandle` -> `DeveloperPermissionChecker` (calls admin-center `/developer-permissions/user/{id}`, 5-min cache) | `developer/security/DeveloperPermissionInterceptor.java:30-52`, `DeveloperPermissionChecker.java:45-88` | Confirmed |
-| 6 | DW data | `FunctionUnitWorkspaceAccessService.assertCanAccess` — team VG-scope per FU; ADMIN/TECH_LEAD global bypass; VIEW/MODIFY/DELETE matrix | `developer/security/FunctionUnitWorkspaceAccessService.java:50-92` | Confirmed |
+| 6 | DW data | `FunctionUnitWorkspaceAccessService.assertCanAccess` — FU's one workspace (team or Public); SYS_ADMIN everything, AUDITOR view-only, team Technical Lead everything / Developer view + modify within that team only (PRD §6.2) | `developer/security/FunctionUnitWorkspaceAccessService.java` | Updated 2026-11 |
 | 7 | Portal filter | `PortalSelfServiceAccessFilter` — `portalAccessMode=PERMISSION_SELF_SERVICE_ONLY` locked to whitelist, else 403 `PORTAL_ACCESS_DENIED` | `portal/config/PortalSelfServiceAccessFilter.java:38-75` | Confirmed |
-| 8 | Portal view | `MainTableViewAccessResolver.canUserSeeView` — requires BU+Role **pair**; empty config = SYS_ADMIN only; SYS_ADMIN bypass | `portal/component/MainTableViewAccessResolver.java:38-59` | Confirmed |
+| 8 | Portal view | `MainTableViewAccessResolver.canUserSeeView` — the signed-in user's current BU + Role must match a BU **and** a Role rule; empty or unpaired config = nobody; no SYS_ADMIN bypass (PRD §7.2, D-05) | `portal/component/MainTableViewAccessResolver.java` | Updated 2026-11 |
 | 9 | admin LDAP sync | `LdapSyncController.isSystemAdmin` (SYS_ADMIN / SUPER_ADMIN / `system:admin`) | `admin/controller/LdapSyncController.java:105-111` | Confirmed |
 | 10 | Identity resolve | `@CurrentUserId` prefers SecurityContext, falls back to `X-User-Id` header | `portal/security/CurrentUserIdArgumentResolver.java:28-29` | Confirmed (risk, see G4) |
 | 11 | Service-to-service | admin `ServiceCallAuthenticationFilter` trusts `X-Username`/`X-User-Id` when no auth (empty roles) | `admin/config/SecurityConfig.java:158-185` | Confirmed (risk, see G4) |
 | 12 | Superset author | `BiSupersetAuthController.authorize` — 401 no JWT, 403 no BI role mapping; nginx auth_request injects X-Remote-* | `admin/bi/controller/BiSupersetAuthController.java:58-83` | Confirmed |
 | 13 | SSO redeem | `SsoInternalController.redeem` — constant-time compare of `X-Platform-Sso-Internal` vs `SSO_INTERNAL_TOKEN`, 503 if unset, 401 mismatch | `admin/controller/SsoInternalController.java:38-54` | Confirmed |
 
-Only **4** `@PreAuthorize`-style annotations exist repo-wide; DW is the only module with `@EnableMethodSecurity` + `DatabasePermissionEvaluator`. Authorization is overwhelmingly **imperative service/filter checks**, not annotations.
+Only **4** `@PreAuthorize`-style annotations exist repo-wide; DW is the only module with `@EnableMethodSecurity` (`DatabasePermissionEvaluator` was removed in 2026-10). Authorization is overwhelmingly **imperative service/filter checks**, not annotations.
 
 ---
 
 ## Login flow end-to-end (per app)
 
 - **3 SPAs** (`admin-center`, `developer-workstation`, `user-portal`) each: axios `withCredentials:true`, no bearer token stored client-side (real session = httpOnly cookie). Request interceptor adds `X-User-Id` (portal) — `frontend/user-portal/src/api/request.ts:26,33-52`.
-- **401 handling**: interceptor attempts one `/refresh` (cookie-based, single-flight `isRefreshing` queue); on refresh failure -> `clearAuth()` + `setSsoReturnPath` + `redirectToUnifiedLogin(...,{autoSso:true})` — `request.ts:77-104`; DW `api/index.ts:47-95`; admin `api/request.ts:45-70`.
-- **Router guards**: `beforeEach` forces `/login` to unified login in PROD; protected routes verify via `/me` (portal) or stored user (DW/admin); `requiredRoles`/`portalAccessMode` gating; DW consults backend `getWorkspaceAccess()` for team members — `user-portal/router/index.ts:185-241`, `developer-workstation/router/index.ts:82-140`.
+- **401 handling**: every platform-session axios instance of the three frontends goes through one shared refresh (`frontend/shared/src/auth/sessionRefresh.ts`, single-flight, Web Locks across tabs) and retries; on refresh failure -> `clearAuth()` + `setSsoReturnPath` + `redirectToUnifiedLogin(...,{autoSso:true})` (platform access model WP1).
+- **Router guards**: `beforeEach` forces `/login` to unified login in PROD; protected routes verify via `/me` (portal) or stored user (DW/admin); `requiredRoles`/`portalAccessMode` gating; DW admits SYS_ADMIN, AUDITOR, TECH_LEAD and DEVELOPER (`DW_ENTRY_ROLES`; the backend checks the same set at sign-in, SSO exchange and refresh) — `user-portal/router/index.ts:185-241`, `developer-workstation/router/index.ts:82-140`.
 - `JwtAuthenticationFilter.shouldNotFilter` skips `/auth/`, `/sso/`, `/internal/sso/`, `/actuator/`, swagger — `JwtAuthenticationFilter.java:109-118`.
 
 ---
@@ -144,7 +144,7 @@ Only **4** `@PreAuthorize`-style annotations exist repo-wide; DW is the only mod
 - **Login: REAL** when `ldap.enabled=true`. `LdapAuthenticator.authenticate` = findUserDn -> bind -> JIT upsert; injected `@ConditionalOnProperty(ldap.enabled=true)` optionally via `ObjectProvider` — `LdapAuthenticator.java:22-71`, `PlatformSsoService.java:87-105`. Fallback semantics: BAD_CREDENTIALS from LDAP = authoritative reject (no local fallback unless user is local-managed / not created by LDAP sync actor); NOT_IN_LDAP/UNAVAILABLE = local fallback.
 - **Sync: REAL & scheduled** — `LdapSyncService.runHermesAdGroupSync` / incremental, audited to `ac_ldap_sync_audit` (schema `39-/44-ac-ldap-sync-audit.sql`).
 - **TLS enforced**: startup fails on `ldap://` + `ldap.tls=false` (cleartext guard) — `LdapClient.java:58-67`. Uses `SECURITY_AUTHENTICATION=simple` over SSL when configured.
-- **Status label: Confirmed (both login + sync real; gated by `ldap.enabled`, default off in dev).**
+- **Status label: Confirmed (both login + sync real; login gated by `ldap.enabled`, sync by `ldap.enabled` + `ldap.sync-enabled`; both on in the dev compose).**
 
 ---
 
@@ -159,7 +159,7 @@ Only **4** `@PreAuthorize`-style annotations exist repo-wide; DW is the only mod
 | G5 | **`data-api/**` permitAll in admin-center** and portal `ApiDataController` at `/data-api/fu-contents` — FU content API intentionally unauthenticated at Spring layer to dodge ResourceHttpRequestHandler; depends on Kong. | `admin/config/SecurityConfig.java:64`, `portal/controller/ApiDataController.java:17` | Confirmed |
 | G6 | **Weak/committed secrets**: dev `JWT_SECRET`, `ENCRYPTION_SECRET_KEY=dev-32-byte-aes-256-secret-key!!`, `SSO_INTERNAL_TOKEN=dev-sso-internal-token-change-me` in `deploy/environments/dev/.env`. **`deploy/k8s/secret/preprod/secret-workflow-paltform.yml` ships the DEV secrets as preprod values** (real JWT/encryption/AP secrets = dev strings). Superset `admin123`, AP shared `Hermes-Svc-Pass-123` also committed. UAT/SIT use `CHANGE_ME_*` placeholders (fail if not replaced). | `deploy/environments/dev/.env:26,31,49`; `deploy/k8s/secret/preprod/secret-workflow-paltform.yml:8-21` | Confirmed (high) |
 | G7 | **Insecure yml defaults**: `platform.security.jwt.secret` default `your-256-bit-secret-key-for-development-only` (portal yml) and admin `jwt-secret-key:${JWT_SECRET:default-jwt-secret-key}`. If env unset, app boots with a known key (JwtTokenServiceImpl only enforces >=32 bytes, not non-default). | `user-portal/application.yml:116`, `admin-center/application.yml:22` | Confirmed |
-| G8 | **Permission deadlock mitigations present**: DW `DeveloperPermissionChecker` returns expired cache / team-view fallback when admin-center down (avoids lockout); portal SSO exchange clears role cache at login (freshly granted role visible). Blacklist fail-closed could lock everyone out if Redis down (availability vs security tradeoff). | `DeveloperPermissionChecker.java:76-88`, `AuthSsoExchangeController.java:84-87`, `JwtTokenServiceImpl.java:242-244` | Confirmed (by design) |
+| G8 | **Permission deadlock mitigations present**: DW `DeveloperPermissionChecker` returns the expired cache when admin-center is down (avoids lockout; the team-membership read-only fallback was removed in 2026-10); portal SSO exchange clears role cache at login (freshly granted role visible). Blacklist fail-closed could lock everyone out if Redis down (availability vs security tradeoff). | `DeveloperPermissionChecker.java:76-88`, `AuthSsoExchangeController.java:84-87`, `JwtTokenServiceImpl.java:242-244` | Confirmed (by design) |
 | G9 | **secure=false cookies hardcoded** in `PortalSessionIssuerService.setAuthCookie` (comment "false for dev HTTP"). Must be flipped for prod HTTPS or session cookie sent over cleartext. HSTS also gated behind `hsts.enabled` (default false). | `PortalSessionIssuerService.java:317` | Confirmed |
 | G10 | **Refresh token rotation**: refresh blacklists old refresh token and issues new pair (good). But `JwtTokenServiceImpl.refreshToken` (unused generic path) regenerates access token with **null roles/permissions** — the real per-app refresh in controllers reloads fresh roles, so acceptable; generic method is a footgun if ever called. | `JwtTokenServiceImpl.java:181-197` | Partially Implemented |
 

@@ -35,6 +35,7 @@ import static org.mockito.Mockito.*;
 public class ExitProcessProperties {
     
     private VirtualGroupMemberRepository virtualGroupMemberRepository;
+    private VirtualGroupRepository virtualGroupRepository;
     private UserBusinessUnitRepository userBusinessUnitRepository;
     private UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private MemberChangeLogRepository memberChangeLogRepository;
@@ -45,7 +46,11 @@ public class ExitProcessProperties {
     @BeforeTry
     void setUp() {
         virtualGroupMemberRepository = mock(VirtualGroupMemberRepository.class);
-        userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
+        // Exit applies to CUSTOM groups (Portal access groups)
+        virtualGroupRepository = mock(VirtualGroupRepository.class);
+        when(virtualGroupRepository.findById(any())).thenAnswer(inv -> Optional.of(
+                VirtualGroup.builder().id(inv.getArgument(0)).name("Group").type("CUSTOM").status("ACTIVE").build()));
+userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         userBusinessUnitRoleRepository = mock(UserBusinessUnitRoleRepository.class);
         memberChangeLogRepository = mock(MemberChangeLogRepository.class);
         approverService = mock(ApproverService.class);
@@ -64,18 +69,50 @@ public class ExitProcessProperties {
         
         memberManagementService = new MemberManagementService(
                 virtualGroupMemberRepository,
-                mock(VirtualGroupRepository.class),
+                virtualGroupRepository,
                 mock(UserRepository.class),
                 userBusinessUnitRoleRepository,
                 userBusinessUnitRepository,
                 mock(VirtualGroupRoleRepository.class),
                 memberChangeLogRepository,
                 approverService,
-                objectMapper);
+                objectMapper,
+                mock(com.platform.common.i18n.I18nService.class),
+                mock(com.admin.service.ClaimPoolResyncService.class));
     }
     
+    private static VirtualGroupMember manualMember(String groupId, String userId) {
+        return VirtualGroupMember.builder().id(UUID.randomUUID().toString()).groupId(groupId).userId(userId)
+                .source(VirtualGroupMember.SOURCE_MANUAL).build();
+    }
+
     // ==================== Property 7: Exit Process Cleanup ====================
-    
+
+    /**
+     * Platform access model 5.2 / 5.5: SYSTEM groups and team lists are kept on the Virtual Group page, which guards the
+     * last administrator; exit does not remove anyone from them.
+     */
+    @Property(tries = 20)
+    @Label("Exit is refused outside CUSTOM groups")
+    void exitIsRefusedOutsideCustomGroups(
+            @ForAll("validUserIds") String userId,
+            @ForAll("validGroupIds") String virtualGroupId,
+            @ForAll("nonCustomGroupTypes") String type) {
+        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(
+                VirtualGroup.builder().id(virtualGroupId).name("Group").type(type).status("ACTIVE").build()));
+
+        assertThatThrownBy(() -> memberManagementService.exitVirtualGroup(virtualGroupId, userId))
+                .isInstanceOf(AdminBusinessException.class)
+                .extracting("errorCode").isEqualTo("EXIT_CUSTOM_GROUP_ONLY");
+        verify(virtualGroupMemberRepository, never()).deleteAll(any());
+        verify(memberChangeLogRepository, never()).save(any(MemberChangeLog.class));
+    }
+
+    @Provide
+    Arbitrary<String> nonCustomGroupTypes() {
+        return Arbitraries.of("SYSTEM", "DEVELOPER");
+    }
+
     /**
      * Feature: technical-debt-remediation, Property 7: Exit Process Cleanup
      * Exiting virtual group should immediately revoke inherited roles and clean up membership
@@ -86,11 +123,17 @@ public class ExitProcessProperties {
             @ForAll("validUserIds") String userId,
             @ForAll("validGroupIds") String virtualGroupId) {
         
+        // Given: the user's manual membership, next to another user's
+        VirtualGroupMember manual = manualMember(virtualGroupId, userId);
+        when(virtualGroupMemberRepository.findByGroupIdAndSource(virtualGroupId, VirtualGroupMember.SOURCE_MANUAL))
+                .thenReturn(List.of(manual, manualMember(virtualGroupId, "other-user")));
+
         // When: Exit virtual group
         memberManagementService.exitVirtualGroup(virtualGroupId, userId);
-        
-        // Then: Membership should be deleted (which revokes inherited roles)
-        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
+
+        // Then: Only the user's manual membership is deleted; AD membership follows the AD sync (5.5)
+        verify(virtualGroupMemberRepository).deleteAll(List.of(manual));
+        verify(virtualGroupMemberRepository, never()).deleteByGroupIdAndUserId(any(), any());
         
         // Then: Exit should be logged with proper cleanup context
         ArgumentCaptor<MemberChangeLog> logCaptor = ArgumentCaptor.forClass(MemberChangeLog.class);
@@ -193,27 +236,22 @@ public class ExitProcessProperties {
     }
     
     /**
-     * Feature: technical-debt-remediation, Property 7: Exit Process Cleanup
-     * Exit operations should be idempotent - multiple exits should not cause errors
+     * Platform access model 5.5: exit removes the user's manual membership only. Without one there is nothing this
+     * path may remove (an AD membership follows the AD sync), so it is refused and no exit is recorded.
      */
     @Property(tries = 100)
-    @Label("Feature: technical-debt-remediation, Property 7: Exit operations are idempotent")
-    void exitOperationsAreIdempotent(
+    @Label("Feature: technical-debt-remediation, Property 7: Exit without a manual membership is refused")
+    void exitWithoutAManualMembershipIsRefused(
             @ForAll("validUserIds") String userId,
             @ForAll("validGroupIds") String virtualGroupId) {
-        
-        // Given: User is not a member (already exited or never joined)
-        // Note: deleteByGroupIdAndUserId returns void, so we just verify it's called
-        doNothing().when(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
-        
-        // When: Exit virtual group (should not fail even if not a member)
-        memberManagementService.exitVirtualGroup(virtualGroupId, userId);
-        
-        // Then: Delete operation should still be attempted
-        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
-        
-        // Then: Exit should still be logged (for audit purposes)
-        verify(memberChangeLogRepository).save(any(MemberChangeLog.class));
+        // Given: User has no manual membership (already exited, never joined, or AD only): the mock returns no rows
+
+        assertThatThrownBy(() -> memberManagementService.exitVirtualGroup(virtualGroupId, userId))
+                .isInstanceOf(AdminBusinessException.class)
+                .extracting("errorCode").isEqualTo("MANUAL_MEMBER_NOT_FOUND");
+
+        verify(virtualGroupMemberRepository, never()).deleteAll(any());
+        verify(memberChangeLogRepository, never()).save(any(MemberChangeLog.class));
     }
     
     /**
@@ -263,6 +301,10 @@ public class ExitProcessProperties {
             @ForAll("validGroupIds") String virtualGroupId) {
         
         // When: Exit virtual group
+        // Given: the user's manual membership
+        when(virtualGroupMemberRepository.findByGroupIdAndSource(virtualGroupId, VirtualGroupMember.SOURCE_MANUAL))
+                .thenReturn(List.of(manualMember(virtualGroupId, userId)));
+
         memberManagementService.exitVirtualGroup(virtualGroupId, userId);
         
         // Then: Audit log should have consistent information

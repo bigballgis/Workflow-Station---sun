@@ -1,7 +1,5 @@
 package com.portal.component;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portal.dto.PermissionRequestDto;
 import com.portal.dto.PermissionRequestListItem;
 import com.portal.entity.PermissionRequest;
 import com.portal.enums.PermissionRequestStatus;
@@ -22,7 +20,6 @@ import org.springframework.stereotype.Component;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -49,7 +46,6 @@ public class PermissionComponent {
     private final RoleAccessComponent roleAccessComponent;
     private final VirtualGroupAccessComponent virtualGroupAccessComponent;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
-    private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final I18nService i18nService;
 
@@ -115,13 +111,6 @@ public class PermissionComponent {
      */
     public List<Map<String, Object>> getBusinessUnitRoles(String businessUnitId) {
         return catalogComponent.getBusinessUnitRoles(businessUnitId);
-    }
-
-    /**
-     * 申请角色分配（自动批准）
-     */
-    public PermissionRequest requestRoleAssignment(String userId, String roleId, String organizationUnitId, String reason) {
-        return submissionComponent.requestRoleAssignment(userId, roleId, organizationUnitId, reason);
     }
 
     /**
@@ -255,76 +244,6 @@ public class PermissionComponent {
             fallback.put("username", applicantId);
             return fallback;
         }
-    }
-
-    /**
-     * 获取用户当前的虚拟组成员身份
-     */
-    public List<Map<String, Object>> getUserCurrentVirtualGroups(String userId) {
-        return catalogComponent.getUserCurrentVirtualGroups(userId);
-    }
-
-    // ==================== 旧的方法（保留兼容） ====================
-
-    /**
-     * 获取用户当前权限
-     * @deprecated 使用 getUserCurrentRoles 和 getUserCurrentVirtualGroups 替代
-     */
-    @Deprecated
-    public List<Map<String, Object>> getUserPermissions(String userId) {
-        List<Map<String, Object>> permissions = new ArrayList<>();
-
-        // 添加角色权限
-        List<Map<String, Object>> roles = getUserCurrentRoles(userId);
-        for (Map<String, Object> role : roles) {
-            Map<String, Object> perm = new HashMap<>();
-            perm.put("id", role.get("id"));
-            perm.put("name", role.get("name"));
-            perm.put("type", "ROLE");
-            permissions.add(perm);
-        }
-
-        // 添加虚拟组权限
-        List<Map<String, Object>> groups = getUserCurrentVirtualGroups(userId);
-        for (Map<String, Object> group : groups) {
-            Map<String, Object> perm = new HashMap<>();
-            perm.put("id", group.get("groupId"));
-            perm.put("name", group.get("groupName"));
-            perm.put("type", "VIRTUAL_GROUP");
-            permissions.add(perm);
-        }
-
-        return permissions;
-    }
-
-    /**
-     * 提交权限申请
-     * @deprecated 使用 requestRoleAssignment 或 requestVirtualGroupJoin 替代
-     */
-    @Deprecated
-    public PermissionRequest submitRequest(String userId, PermissionRequestDto dto) {
-        if (dto.getType() == null) {
-            throw new IllegalArgumentException("Permission type cannot be empty");
-        }
-        if (dto.getPermissions() == null || dto.getPermissions().isEmpty()) {
-            throw new IllegalArgumentException("Permission scope cannot be empty");
-        }
-        if (dto.getReason() == null || dto.getReason().isEmpty()) {
-            throw new IllegalArgumentException("Request reason cannot be empty");
-        }
-
-        PermissionRequest request = new PermissionRequest();
-        request.setApplicantId(userId);
-        request.setSubmittedByUserId(userId);
-        request.setRequestType(dto.getType());
-        request.setPermissions(objectMapper.valueToTree(dto.getPermissions()));
-        request.setReason(dto.getReason());
-        request.setValidFrom(dto.getValidFrom() != null ? dto.getValidFrom() : LocalDateTime.now());
-        request.setValidTo(dto.getValidTo());
-        request.setStatus(PermissionRequestStatus.PENDING);
-        request.setCreatedAt(LocalDateTime.now());
-
-        return permissionRequestRepository.save(request);
     }
 
     /**
@@ -465,32 +384,4 @@ public class PermissionComponent {
         return true;
     }
 
-    /**
-     * 续期申请
-     * @deprecated 新的权限模型不需要续期
-     */
-    @Deprecated
-    public PermissionRequest renewPermission(String userId, String permissionId, LocalDateTime newValidTo, String reason) {
-        PermissionRequest request = new PermissionRequest();
-        request.setApplicantId(userId);
-        request.setRequestType(PermissionRequestType.TEMPORARY);
-        request.setPermissions(objectMapper.valueToTree(Collections.singletonList(permissionId)));
-        request.setReason("续期申请: " + reason);
-        request.setValidFrom(LocalDateTime.now());
-        request.setValidTo(newValidTo);
-        request.setStatus(PermissionRequestStatus.PENDING);
-        request.setCreatedAt(LocalDateTime.now());
-
-        return permissionRequestRepository.save(request);
-    }
-
-    /**
-     * 检查权限是否即将过期
-     * @deprecated 新的权限模型不需要过期检查
-     */
-    @Deprecated
-    public List<Map<String, Object>> getExpiringPermissions(String userId, int daysBeforeExpiry) {
-        // 新的权限模型不需要过期检查，返回空列表
-        return Collections.emptyList();
-    }
 }

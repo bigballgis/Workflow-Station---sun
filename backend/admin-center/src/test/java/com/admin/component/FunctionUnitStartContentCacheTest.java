@@ -14,8 +14,7 @@ class FunctionUnitStartContentCacheTest {
         var repository = mock(FunctionUnitContentRepository.class);
         var lookup = mock(FunctionUnitLookup.class);
         var jdbc = mock(JdbcTemplate.class);
-        var component = new FunctionUnitContentComponent(repository, jdbc, lookup,
-                mock(FormTableBindingLoader.class), new ObjectMapper());
+        var component = new FunctionUnitContentComponent(repository, jdbc, lookup, new ObjectMapper());
         var original = FunctionUnit.builder().id("synthetic").name("Original").code("synthetic").version("1").build();
         var changed = FunctionUnit.builder().id("synthetic").name("Changed").code("synthetic").version("1").build();
         when(lookup.getById("synthetic")).thenReturn(original, changed);

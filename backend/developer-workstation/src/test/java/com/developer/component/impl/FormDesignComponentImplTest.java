@@ -71,6 +71,9 @@ class FormDesignComponentImplTest {
     @Mock
     private FormTableBindingUniquenessGuard formTableBindingUniquenessGuard;
 
+    @Mock
+    private com.developer.security.WorkspaceRouteOwnership routeOwnership;
+
     @InjectMocks
     private FormDesignComponentImpl formDesignComponent;
     

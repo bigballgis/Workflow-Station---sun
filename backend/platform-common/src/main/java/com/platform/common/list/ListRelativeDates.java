@@ -14,7 +14,7 @@ import java.util.Set;
  */
 public final class ListRelativeDates {
 
-    public static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    public static final ZoneId ZONE = ZoneId.of("Asia/Hong_Kong");
 
     private static final Set<String> RELATIVE = Set.of(
             "today", "yesterday", "last7days", "last30days",

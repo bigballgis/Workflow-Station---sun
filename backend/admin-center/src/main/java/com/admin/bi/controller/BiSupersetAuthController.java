@@ -1,7 +1,7 @@
 package com.admin.bi.controller;
 
 import com.admin.bi.service.BiRbacMappingService;
-import com.admin.repository.UserRoleRepository;
+import com.admin.service.UserRoleIdResolver;
 import com.platform.common.dto.UserPrincipal;
 import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Optional;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Superset 网关鉴权端点（供边缘网关 auth_request 调用）。
@@ -39,6 +41,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Superset Gateway Auth", description = "auth_request endpoint for Superset native-UI SSO")
+@AdminAccess(AdminAudience.SIGNED_IN)
 public class BiSupersetAuthController {
 
     static final String HDR_USER = "X-Remote-User";
@@ -48,7 +51,7 @@ public class BiSupersetAuthController {
     // which is unsafe in raw HTTP headers. The Superset SM URL-decodes it.
     static final String HDR_FIRSTNAME = "X-Remote-Firstname";
 
-    private final UserRoleRepository userRoleRepository;
+    private final UserRoleIdResolver userRoleIdResolver;
     private final BiRbacMappingService rbacMappingService;
     private final com.admin.repository.UserRepository userRepository;
 
@@ -70,7 +73,7 @@ public class BiSupersetAuthController {
                 ? user.getUsername()
                 : user.getUserId();
 
-        List<String> sysRoleIds = userRoleRepository.findAllRoleIdsByUserId(user.getUserId());
+        List<String> sysRoleIds = userRoleIdResolver.allRoleIds(user.getUserId());
         List<String> supersetRoles = rbacMappingService.getEffectiveSupersetRoleNames(sysRoleIds);
 
         if (supersetRoles.isEmpty()) {

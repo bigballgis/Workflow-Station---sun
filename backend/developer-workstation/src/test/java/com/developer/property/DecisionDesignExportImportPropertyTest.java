@@ -268,7 +268,7 @@ public class DecisionDesignExportImportPropertyTest extends DecisionDesignProper
                     new org.springframework.mock.web.MockMultipartFile(
                             "file", "test.zip", "application/zip", zipBytes);
 
-            Map<String, Object> result = newComponent.importFunctionUnit(mockFile, null);
+            Map<String, Object> result = newComponent.importFunctionUnit(mockFile, null, "vg-team-a");
 
             assertThat(result.get("status"))
                     .as("New import (name absent) should return SUCCESS")
@@ -328,7 +328,7 @@ public class DecisionDesignExportImportPropertyTest extends DecisionDesignProper
                     new org.springframework.mock.web.MockMultipartFile(
                             "file", "test.zip", "application/zip", zipBytes);
 
-            Map<String, Object> result = versionComponent.importFunctionUnit(mockFile, "my change log");
+            Map<String, Object> result = versionComponent.importFunctionUnit(mockFile, "my change log", "vg-team-a");
 
             assertThat(result.get("status"))
                     .as("Re-import onto existing name should return SUCCESS")

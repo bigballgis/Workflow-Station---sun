@@ -357,7 +357,8 @@ class FunctionPackageValidationProperties {
         });
         
         // When: 导入功能包
-        ImportResult result = component.importFunctionPackage(request, "importer-001");
+        ImportResult result = component.importFunctionPackage(request, "importer-001",
+                com.admin.service.FunctionUnitTeamService.ImportChannel.MANUAL);
         
         // Then: 导入成功且状态为DRAFT
         assertThat(result.isSuccess()).isTrue();

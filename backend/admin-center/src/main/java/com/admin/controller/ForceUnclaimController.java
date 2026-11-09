@@ -17,14 +17,18 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "Force Unclaim", description = "Claim Hold force-unclaim authorization and role leaders")
+@AdminAccess(value = AdminAudience.SHARED_READ, services = true)
 public class ForceUnclaimController {
 
     private final ForceUnclaimAuthorizationComponent forceUnclaimAuthorizationComponent;
 
+    @AdminAccess(value = AdminAudience.SYS_ADMIN, services = true)
     @PostMapping("/force-unclaim/evaluate")
     @Operation(summary = "Evaluate force-unclaim flags for claim-pool tasks")
     public ApiResponse<ForceUnclaimEvaluateResponse> evaluate(

@@ -228,6 +228,23 @@ class ExternalConfigurationLoadingPropertyTest {
         assertThat(violations).isEmpty();
     }
     
+    @Test
+    void legacyJwtExpirationSecondsKeyIsIgnored() {
+        // app.security.jwt-expiration-seconds was never read and has been removed; an old
+        // ConfigMap that still sets it (even below the old 300s minimum) must keep binding.
+        validator = Validation.buildDefaultValidatorFactory().getValidator();
+        Map<String, Object> source = new HashMap<>();
+        source.put("app.security.jwt-secret-key", "test-only-jwt-secret-key-with-enough-length-0123456789");
+        source.put("app.security.jwt-expiration-seconds", "10");
+
+        ApplicationConfiguration config = new Binder(new MapConfigurationPropertySource(source))
+                .bind("app", ApplicationConfiguration.class).get();
+
+        assertThat(validator.validate(config)).isEmpty();
+        assertThat(new org.springframework.beans.BeanWrapperImpl(config.getSecurity())
+                .isReadableProperty("jwtExpirationSeconds")).isFalse();
+    }
+
     // Generators for property-based tests
     
     @Provide

@@ -7,7 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Leader / Approver / SYS_ADMIN reassignment of a claim-pool hold to another pool member.
+ * Reassignment of a pool task to a member of its pool with Portal access (the actor themselves = take over): by the
+ * BU Approver or a Leader of the BU + Role, or by any pool member once the holder lost Portal access (§7.3).
  */
 @Data
 @Builder

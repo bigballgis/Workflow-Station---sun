@@ -119,7 +119,7 @@ public class VirtualGroupListQueryComponent {
 
     private Map<String, Integer> loadMemberCounts(List<String> ids) {
         String placeholders = String.join(",", ids.stream().map(n -> "?").toList());
-        String sql = "SELECT group_id, COUNT(*) AS member_count FROM sys_virtual_group_members"
+        String sql = "SELECT group_id, COUNT(DISTINCT user_id) AS member_count FROM sys_virtual_group_members"
                 + " WHERE group_id IN (" + placeholders + ") GROUP BY group_id";
         ResultSetExtractor<Map<String, Integer>> extractor = rs -> {
             Map<String, Integer> counts = new HashMap<>();

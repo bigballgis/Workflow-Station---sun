@@ -214,42 +214,6 @@ class AdminCenterClientTest {
     }
     
     @Nested
-    @DisplayName("getUsersByUnboundedRole Tests")
-    class GetUsersByUnboundedRoleTests {
-        
-        @Test
-        @DisplayName("Should return user IDs list")
-        void shouldReturnUserIdsList() {
-            List<String> userIds = Arrays.asList("user-004", "user-005");
-            
-            when(restTemplate.exchange(
-                    eq(ADMIN_CENTER_URL + "/api/v1/admin/task-assignment/roles/" + ROLE_ID + "/users"),
-                    eq(HttpMethod.GET),
-                    isNull(),
-                    any(ParameterizedTypeReference.class)
-            )).thenReturn(new ResponseEntity<>(userIds, HttpStatus.OK));
-            
-            List<String> result = client.getUsersByUnboundedRole(ROLE_ID);
-            
-            assertThat(result).containsExactly("user-004", "user-005");
-        }
-        
-        @Test
-        @DisplayName("Should throw AdminCenterUnavailableException on transport failure")
-        void shouldThrowOnTransportFailure() {
-            when(restTemplate.exchange(
-                    anyString(),
-                    eq(HttpMethod.GET),
-                    isNull(),
-                    any(ParameterizedTypeReference.class)
-            )).thenThrow(new RestClientException("Connection refused"));
-
-            assertThatThrownBy(() -> client.getUsersByUnboundedRole(ROLE_ID))
-                    .isInstanceOf(AdminCenterUnavailableException.class);
-        }
-    }
-    
-    @Nested
     @DisplayName("getEligibleRoleIds Tests")
     class GetEligibleRoleIdsTests {
         
@@ -366,34 +330,6 @@ class AdminCenterClientTest {
             List<Map<String, Object>> result = client.getBuBoundedRoles();
             
             assertThat(result).isEmpty();
-        }
-    }
-    
-    @Nested
-    @DisplayName("getBuUnboundedRoles Tests")
-    class GetBuUnboundedRolesTests {
-        
-        @Test
-        @DisplayName("Should return BU unbounded roles")
-        void shouldReturnBuUnboundedRoles() {
-            List<Map<String, Object>> roles = new ArrayList<>();
-            Map<String, Object> role1 = new HashMap<>();
-            role1.put("id", "role-002");
-            role1.put("name", "Auditor");
-            role1.put("type", "BU_UNBOUNDED");
-            roles.add(role1);
-            
-            when(restTemplate.exchange(
-                    eq(ADMIN_CENTER_URL + "/api/v1/admin/task-assignment/roles/bu-unbounded"),
-                    eq(HttpMethod.GET),
-                    isNull(),
-                    any(ParameterizedTypeReference.class)
-            )).thenReturn(new ResponseEntity<>(roles, HttpStatus.OK));
-            
-            List<Map<String, Object>> result = client.getBuUnboundedRoles();
-            
-            assertThat(result).hasSize(1);
-            assertThat(result.get(0).get("id")).isEqualTo("role-002");
         }
     }
     

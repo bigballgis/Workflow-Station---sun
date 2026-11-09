@@ -22,12 +22,15 @@ import java.util.List;
 
 import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.i18n.I18nService;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 @Slf4j
 @RestController
 @RequestMapping("/logs")
 @RequiredArgsConstructor
 @Tag(name = "Log Management", description = "Log query, analysis and export APIs")
+@AdminAccess(AdminAudience.ADMIN_READ)
 public class LogController {
     
     private final LogManagerComponent logManager;
@@ -35,6 +38,7 @@ public class LogController {
     
     // ==================== Log Query ====================
     
+    @AdminAccess(AdminAudience.ADMIN_READ)
     @PostMapping("/query")
     @Operation(summary = "Query logs")
     public ResponseEntity<Page<SystemLog>> queryLogs(
@@ -99,6 +103,7 @@ public class LogController {
     
     // ==================== Log Export ====================
     
+    @AdminAccess(AdminAudience.ADMIN_READ)
     @PostMapping("/export")
     @Operation(summary = "Export logs")
     public ResponseEntity<byte[]> exportLogs(

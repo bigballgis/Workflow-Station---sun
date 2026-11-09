@@ -22,11 +22,10 @@ export type TodoTab = 'all' | 'batch'
 function visibleToSession(list: BatchTaskGroup[]): BatchTaskGroup[] {
   const user = getStoredUser()
   const roles = user?.roles ?? []
-  const systemAdministrator = user?.systemAdministrator === true
   return list
     .map((g) => ({
       ...g,
-      actions: g.actions.filter((a) => isActionVisibleForSession(a.configJson, roles, systemAdministrator)),
+      actions: g.actions.filter((a) => isActionVisibleForSession(a.configJson, roles)),
     }))
     .filter((g) => g.actions.length > 0)
 }

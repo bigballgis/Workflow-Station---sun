@@ -3,13 +3,16 @@
  */
 import { ref, computed, type Ref } from 'vue'
 import type { CascaderValue } from 'element-plus'
-import { notifySuccess, notifyError } from '@/utils/notify'
+import { useI18n } from 'vue-i18n'
+import { notifySuccess } from '@/utils/notify'
+import { notifyUnreportedError } from '@/utils/notifyUnreportedError'
 import { functionUnitApi, type FunctionUnitAccess, type FunctionUnitAuditAccess } from '@/api/functionUnit'
 import { roleApi, type Role } from '@/api/role'
 import { businessUnitApi, type BusinessUnit } from '@/api/businessUnit'
 import { formatDate as fmtDate, roleTypeDisplayLabel, roleTagType } from '@/utils/format'
 
 export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefined>) {
+  const { t } = useI18n()
   const loading = ref(false)
   const accessList = ref<FunctionUnitAccess[]>([])
   /** Which grant the dialog is showing: launch access, or audit (review) access. */
@@ -46,7 +49,7 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
     if (fromApi) return fromApi
     return allRolesMap.value.get(roleId)?.name ?? roleId
   }
-  const resolveRoleTypeLabel = (roleId: string) => { const t = allRolesMap.value.get(roleId)?.type; return t ? (roleTypeDisplayLabel(t)) : '—' }
+  const resolveRoleTypeLabel = (roleId: string) => { const type = allRolesMap.value.get(roleId)?.type; return type ? (roleTypeDisplayLabel(type)) : '—' }
   const resolveRoleTagType = (roleId: string) => { const rt = allRolesMap.value.get(roleId)?.type; return rt ? roleTagType(rt) : 'info' }
   const formatDate = (d: string | undefined) => d ? fmtDate(d) : ''
 
@@ -120,14 +123,14 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
       if (!ids.length) return
       addLoading.value = true
       try { await Promise.all(ids.map(id => addGrant(id))); notifySuccess(`Added ${ids.length} role(s)`); showAddRole.value = false; await fetchAccessConfig() }
-      catch (e) { notifyError((e as any)?.response?.data?.error?.message || (e as any)?.response?.data?.message || 'Failed') }
+      catch (e) { notifyUnreportedError(e, t('common.failed')) }
       finally { addLoading.value = false }
     } else {
       const roleId = selectedBuRoleId.value
       if (!roleId) return
       addLoading.value = true
       try { await addGrant(roleId); notifySuccess(addedLabel); showAddRole.value = false; await fetchAccessConfig() }
-      catch (e) { notifyError((e as any)?.response?.data?.error?.message || (e as any)?.response?.data?.message || 'Failed') }
+      catch (e) { notifyUnreportedError(e, t('common.failed')) }
       finally { addLoading.value = false }
     }
   }

@@ -1,7 +1,6 @@
 package com.workflow.component;
 
 import com.workflow.aspect.WorkflowAuditAspect.Auditable;
-import com.workflow.dto.request.TaskAssignmentRequest;
 import com.workflow.dto.request.TaskClaimRequest;
 import com.workflow.dto.request.TaskDelegationRequest;
 import com.workflow.dto.request.TaskReturnRequest;
@@ -27,7 +26,7 @@ import java.util.Map;
  *
  * Collaborators (injected @Lazy to prevent circular-dependency issues):
  *   TaskQueryService      — query / orphan-repair / task-info building
- *   TaskActionService     — assign / delegate / claim / unclaim / transfer
+ *   TaskActionService     — delegate / claim / unclaim / transfer
  *   TaskCompletionService — completeTask / returnTask / getReturnableActivities
  *   TaskMultiInstanceService — MI detection / injection / write-back / WebSocket
  *   TaskStatsService      — count / overdue / high-priority stats
@@ -93,18 +92,7 @@ public class TaskManagerComponent {
         return taskQueryService.getDelegatedRuntimeTasks(userId, buCode, roleCode);
     }
 
-    // ==================== Task Assignment, Delegation, Claim ====================
-
-    @Auditable(
-        operationType = AuditOperationType.ASSIGN_TASK,
-        resourceType = AuditResourceType.TASK,
-        description = "Assign task",
-        captureArgs = true,
-        captureResult = true
-    )
-    public TaskAssignmentResult assignTask(String taskId, TaskAssignmentRequest request) {
-        return taskActionService.assignTask(taskId, request);
-    }
+    // ==================== Task Delegation, Claim ====================
 
     public TaskAssignmentResult delegateTask(String taskId, TaskDelegationRequest request) {
         return taskActionService.delegateTask(taskId, request);

@@ -7,6 +7,8 @@ import com.developer.entity.TableRelation;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableRelationRepository;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.developer.service.FieldFkPkSyncService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -24,13 +26,16 @@ public class TableRelationComponentImpl implements TableRelationComponent {
     private final TableRelationRepository tableRelationRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final FieldFkPkSyncService fieldFkPkSyncService;
+    private final WorkspaceRouteOwnership routeOwnership;
 
     public TableRelationComponentImpl(TableRelationRepository tableRelationRepository,
                                       FunctionUnitRepository functionUnitRepository,
-                                      FieldFkPkSyncService fieldFkPkSyncService) {
+                                      FieldFkPkSyncService fieldFkPkSyncService,
+                                      WorkspaceRouteOwnership routeOwnership) {
         this.tableRelationRepository = tableRelationRepository;
         this.functionUnitRepository = functionUnitRepository;
         this.fieldFkPkSyncService = fieldFkPkSyncService;
+        this.routeOwnership = routeOwnership;
     }
 
     @Override
@@ -44,6 +49,17 @@ public class TableRelationComponentImpl implements TableRelationComponent {
     public List<TableRelationDTO> saveAll(Long functionUnitId, List<TableRelationDTO> dtos) {
         functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
+
+        // Both ends of every row must be tables of this unit (§6.1, §6.2): they become field FK metadata and
+        // dw_table_relations rows as sent.
+        if (dtos != null) {
+            for (TableRelationDTO dto : dtos) {
+                if (dto != null) {
+                    routeOwnership.requireInUnit(Owned.TABLE, dto.getSourceTableId(), functionUnitId);
+                    routeOwnership.requireInUnit(Owned.TABLE, dto.getTargetTableId(), functionUnitId);
+                }
+            }
+        }
 
         fieldFkPkSyncService.applyRelationsToFieldMetadata(functionUnitId, dtos);
 

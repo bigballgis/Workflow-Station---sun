@@ -1,5 +1,6 @@
 package com.workflow.listener;
 
+import com.platform.common.constant.PlatformConstants;
 import com.platform.common.util.SafeUrlInput;
 import lombok.extern.slf4j.Slf4j;
 import com.workflow.component.ProcessCallCascade;
@@ -53,13 +54,13 @@ public class ProcessCompletionListener implements FlowableEventListener {
     private String userPortalUrl;
 
     /**
-     * Internal service token for the user-portal completion callback. The portal's
-     * {@code /api/portal/processes/{id}/complete} endpoint requires a non-blank
-     * X-Internal-Service-Token header — without it the callback is rejected (403) and the
-     * application stays RUNNING. This matters for processes with no user task (e.g. pure
-     * automation: Start → AP service task → End), whose only completion path is this callback.
+     * Shared first-party service token for the user-portal completion callback. The portal's
+     * {@code /api/portal/processes/{id}/complete} endpoint checks X-Service-Token against the same
+     * {@code service.internal-token} — without it the callback is rejected and the application stays
+     * RUNNING. This matters for processes with no user task (e.g. pure automation:
+     * Start → AP service task → End), whose only completion path is this callback.
      */
-    @Value("${platform.internal.service-token:wf-internal-service-call}")
+    @Value("${service.internal-token}")
     private String internalServiceToken;
 
     @Override
@@ -110,7 +111,7 @@ public class ProcessCompletionListener implements FlowableEventListener {
                         request.put("lastActivityName", lastActivityName);
 
                         HttpHeaders headers = new HttpHeaders();
-                        headers.set("X-Internal-Service-Token", internalServiceToken);
+                        headers.set(PlatformConstants.HEADER_SERVICE_TOKEN, internalServiceToken);
                         restTemplate.postForObject(url, new HttpEntity<>(request, headers), Map.class);
                         log.info("Successfully notified user-portal about process completion: {} with lastActivity: {}", 
                                 processInstanceId, lastActivityName);

@@ -108,4 +108,35 @@ describe('Delegations shared list', () => {
     expect(w.text()).toContain('common.delete')
     expect(w.findAll('.row-actions .el-button').length).toBeGreaterThanOrEqual(2)
   })
+
+  it('flags a rule that cannot take effect because a party lost Portal entry, keeping its status', async () => {
+    const rule = (id: number, inactiveReason: string | null) => ({
+      id,
+      delegatorId: 'u-me',
+      delegateId: 'u-other',
+      delegationType: 'FULL',
+      status: 'ACTIVE',
+      inactiveReason,
+      createdAt: '2026-08-01T00:00:00Z',
+      updatedAt: '2026-08-01T00:00:00Z',
+    })
+    rulesApi.mockResolvedValue({
+      data: {
+        columns: RULE_COLUMNS,
+        content: [rule(1, 'DELEGATOR_LOST_PORTAL_ENTRY'), rule(2, 'DELEGATE_LOST_PORTAL_ENTRY'), rule(3, null)],
+        totalElements: 3,
+        page: 0,
+        size: 20,
+      },
+    } as never)
+    const w = await mountPage()
+
+    const tags = w.findAll('[data-test="delegation-inactive-tag"]').map((tag) => tag.text())
+    expect(tags).toEqual([
+      'delegation.inactiveDelegatorLostPortalEntry',
+      'delegation.inactiveDelegateLostPortalEntry',
+    ])
+    // Status itself is untouched: every rule still reads Active (the mocked t() leaves the raw value).
+    expect(w.text().match(/ACTIVE/g)).toHaveLength(3)
+  })
 })

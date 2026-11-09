@@ -6,11 +6,16 @@ import com.developer.dto.FunctionUnitContextDTO;
 import com.developer.entity.AiMessage;
 import com.developer.entity.AiSession;
 import com.developer.enums.*;
+import com.developer.dto.ApplyGeneratedDataRequest;
 import com.developer.exception.AiGenerationException;
+import com.developer.exception.ResourceNotFoundException;
 import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
+import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
+import com.developer.security.WorkspaceRouteOwnership;
 import com.developer.service.AiWriteService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +56,7 @@ class AiGenerationComponentImplTest {
     @Mock private AiValidationService aiValidationService;
     @Mock private AiWriteService aiWriteService;
     @Mock private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    @Mock private WorkspaceRouteOwnership routeOwnership;
 
     private AiGenerationComponentImpl component;
     private UUID sessionUuid;
@@ -61,7 +67,7 @@ class AiGenerationComponentImplTest {
         // Use synchronous executor to make SSE orchestration deterministic in unit tests.
         Executor executor = Runnable::run;
         component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                functionUnitWorkspaceAccessService, executor, new com.fasterxml.jackson.databind.ObjectMapper());
+                functionUnitWorkspaceAccessService, routeOwnership, executor, new com.fasterxml.jackson.databind.ObjectMapper());
         sessionUuid = UUID.randomUUID();
         session = AiSession.builder()
                 .sessionId(sessionUuid).functionUnitId(1L).userId("user1")
@@ -347,6 +353,64 @@ class AiGenerationComponentImplTest {
         // Verify AI webhook was still called (graceful degradation, not failure)
         verify(aiGenerationService).callAiModel(any(), eq("hello"), eq(AiPhase.REQUIREMENTS), eq(AiMode.NEW),
                 isNull(), eq(1L), eq(List.of()), isNull(), eq(AM_TOKEN));
+    }
+
+    @Test
+    void chatStream_sessionOfAnotherUnit_isNotFoundAndNothingIsSaved() {
+        when(aiGenerationService.restoreSession(sessionUuid.toString())).thenReturn(session);
+        doThrow(new ResourceNotFoundException("AiSession", sessionUuid.toString())).when(routeOwnership)
+                .requireInUnit(WorkspaceRouteOwnership.Owned.AI_SESSION, sessionUuid, 2L);
+
+        AiChatRequest request = AiChatRequest.builder()
+                .functionUnitId(2L).sessionId(sessionUuid.toString()).message("hi").phase(AiPhase.REQUIREMENTS).mode(AiMode.NEW).build();
+
+        assertThrows(ResourceNotFoundException.class, () -> component.chatStream(request, "user1", AM_TOKEN));
+        verify(aiGenerationService, never()).saveMessage(any(), any(), anyString(), any());
+        verify(aiGenerationService, never()).createChatEmitter(anyLong(), anyString());
+    }
+
+    @Test
+    void chatStream_newSession_checksNoSessionOwnership() {
+        when(aiGenerationService.createSession(anyLong(), anyString(), any())).thenReturn(session);
+        when(aiGenerationService.createChatEmitter(anyLong(), anyString())).thenReturn(new SseEmitter(120000L));
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
+                .thenReturn(Map.of("reply", "ok"));
+
+        AiChatRequest request = AiChatRequest.builder()
+                .functionUnitId(1L).sessionId(null).message("hi").phase(AiPhase.REQUIREMENTS).mode(AiMode.NEW).build();
+        component.chatStream(request, "user1", AM_TOKEN);
+
+        verifyNoInteractions(routeOwnership);
+    }
+
+    @Test
+    void applyGeneratedData_sessionOfAnotherUnit_isNotFoundBeforeAnyWrite() {
+        doThrow(new ResourceNotFoundException("AiSession", sessionUuid.toString())).when(routeOwnership)
+                .requireInUnit(WorkspaceRouteOwnership.Owned.AI_SESSION, sessionUuid, 2L);
+        ApplyGeneratedDataRequest request = ApplyGeneratedDataRequest.builder()
+                .sessionId(sessionUuid.toString()).build();
+
+        assertThrows(ResourceNotFoundException.class, () -> component.applyGeneratedData(2L, request, "user1"));
+        verifyNoInteractions(aiWriteService);
+        verify(aiGenerationService, never()).updateSessionStatus(anyString(), any());
+    }
+
+    @Test
+    void applyGeneratedData_sessionIdNotAUuid_isNotFoundBeforeAnyWrite() {
+        ApplyGeneratedDataRequest request = ApplyGeneratedDataRequest.builder().sessionId("not-a-uuid").build();
+
+        assertThrows(ResourceNotFoundException.class, () -> component.applyGeneratedData(1L, request, "user1"));
+        verifyNoInteractions(aiWriteService, routeOwnership);
+    }
+
+    @Test
+    void saveDocument_unitTheCallerMayNotModify_isDeniedAndNothingIsSaved() {
+        doThrow(new FunctionUnitWorkspaceAccessDeniedException("denied")).when(functionUnitWorkspaceAccessService)
+                .assertCanAccess(2L, WorkspaceAccessAction.MODIFY);
+
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> component.saveDocument(2L, AiDocumentType.REQUIREMENTS, "doc", "user1"));
+        verify(aiGenerationService, never()).saveDocument(anyLong(), any(), anyString(), anyString(), anyString());
     }
 
     @Test

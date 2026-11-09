@@ -23,6 +23,9 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+const session = vi.hoisted(() => ({ user: { userId: 'u-me' } as { userId: string } | null }))
+vi.mock('@/api/auth', () => ({ getStoredUser: () => session.user }))
+
 vi.mock('@/api/task', () => ({
   claimTask: (...args: unknown[]) => claimTask(...args),
   unclaimTask: (...args: unknown[]) => unclaimTask(...args),
@@ -256,5 +259,48 @@ describe('useTaskClaimActions', () => {
     expect(reassignTask).toHaveBeenCalledWith('task-1', 'bob')
     expect(ElMessage.success).toHaveBeenCalledWith('task.reassignSuccess')
     expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('takes over by reassigning to the signed-in user after a confirm', async () => {
+    session.user = { userId: 'u-me' }
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as unknown as MessageBoxData)
+    reassignTask.mockResolvedValue({})
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { takeOver } = useTaskClaimActions({ reload })
+
+    await takeOver('task-1', 'Gone User')
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      'task.takeOverConfirm',
+      'task.takeOver',
+      expect.objectContaining({ type: 'warning' }),
+    )
+    expect(reassignTask).toHaveBeenCalledWith('task-1', 'u-me')
+    expect(ElMessage.success).toHaveBeenCalledWith('task.takeOverSuccess')
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('take over sends nothing when the confirm is cancelled', async () => {
+    session.user = { userId: 'u-me' }
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { takeOver } = useTaskClaimActions({ reload })
+
+    await takeOver('task-1', 'Gone User')
+
+    expect(reassignTask).not.toHaveBeenCalled()
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('take over without a signed-in user reports the session instead of guessing a target', async () => {
+    session.user = null
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { takeOver } = useTaskClaimActions({ reload })
+
+    await takeOver('task-1', 'Gone User')
+
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(reassignTask).not.toHaveBeenCalled()
+    expect(ElMessage.error).toHaveBeenCalledWith('api.unauthorized')
   })
 })

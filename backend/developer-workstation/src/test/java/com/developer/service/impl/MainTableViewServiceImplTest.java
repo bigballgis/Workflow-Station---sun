@@ -22,7 +22,10 @@ import com.developer.repository.MainTableViewAccessRepository;
 import com.developer.repository.MainTableViewConfigRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.developer.service.MainTableViewService;
+import com.developer.util.MainTableViewNameValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,6 +64,8 @@ class MainTableViewServiceImplTest {
     private TableDefinitionRepository tableDefinitionRepository;
     @Mock
     private JdbcTemplate jdbcTemplate;
+    @Mock
+    private WorkspaceRouteOwnership routeOwnership;
 
     private MainTableViewServiceImpl service;
 
@@ -67,7 +73,7 @@ class MainTableViewServiceImplTest {
     void setUp() {
         service = new MainTableViewServiceImpl(
                 viewConfigRepository, subTableViewConfigRepository, mainTableViewAccessRepository,
-                functionUnitRepository, tableDefinitionRepository, jdbcTemplate);
+                functionUnitRepository, tableDefinitionRepository, jdbcTemplate, routeOwnership);
     }
 
     @Test
@@ -255,6 +261,30 @@ class MainTableViewServiceImplTest {
                 .hasMessageContaining("cannot bind a detail form");
 
         verify(viewConfigRepository, never()).save(any(MainTableViewConfig.class));
+    }
+
+    /** The form id comes from the body; a form of another unit is answered as if it did not exist. */
+    @Test
+    void updateViewDetailForm_rejectsAFormOfAnotherUnit() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        MainTableViewConfig view = MainTableViewConfig.builder()
+                .id(5L)
+                .functionUnit(fu)
+                .mainTableId(20L)
+                .status(MainTableViewStatus.PUBLISHED)
+                .viewFields(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(5L)).thenReturn(Optional.of(view));
+        doThrow(new ResourceNotFoundException("Form", "99"))
+                .when(routeOwnership).requireInUnit(Owned.FORM, 99L, 1L);
+
+        assertThatThrownBy(() -> service.updateViewDetailForm(1L, 5L, 99L))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.updateView(1L, 5L, new UpdateMainTableViewRequest(
+                null, null, 99L, null, null, null, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(viewConfigRepository, never()).save(any(MainTableViewConfig.class));
+        assertThat(view.getDetailFormId()).isNull();
     }
 
     /** Clearing stays legal on a MAIN view — that is how a legacy binding is removed. */
@@ -764,6 +794,94 @@ class MainTableViewServiceImplTest {
                 new MainTableViewService.FieldLabelChange("qty", "quantity", "Qty", "Quantity")));
 
         verify(subTableViewConfigRepository, never()).saveAll(any());
+    }
+
+    /** Uniqueness spans the whole unit: a View on another table with the same name still clashes. */
+    @Test
+    void createView_rejectsANameAnotherViewOfTheUnitUses() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        TableDefinition sub = TableDefinition.builder()
+                .id(30L).functionUnit(fu).tableType(TableType.SUB).fieldDefinitions(new ArrayList<>()).build();
+        MainTableViewConfig onOtherTable = MainTableViewConfig.builder()
+                .id(7L).functionUnit(fu).mainTableId(20L).viewName("Cases").build();
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(fu));
+        when(tableDefinitionRepository.findByIdWithFields(30L)).thenReturn(Optional.of(sub));
+        when(viewConfigRepository.findByFunctionUnitIdOrderByIsDefaultDescViewNameAsc(1L))
+                .thenReturn(List.of(onOtherTable));
+
+        assertThatThrownBy(() -> service.createView(1L, new CreateMainTableViewRequest(" cases ", 30L)))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo(MainTableViewNameValidator.DUPLICATE_CODE);
+        verify(viewConfigRepository, never()).save(any(MainTableViewConfig.class));
+    }
+
+    @Test
+    void updateView_rejectsRenamingOntoAnotherViewsName() {
+        MainTableViewConfig config = viewConfigForAccessUpdate();
+        MainTableViewConfig other = MainTableViewConfig.builder()
+                .id(11L).functionUnit(config.getFunctionUnit()).mainTableId(21L).viewName("Stages").build();
+        when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
+        when(viewConfigRepository.findByFunctionUnitIdOrderByIsDefaultDescViewNameAsc(1L))
+                .thenReturn(List.of(config, other));
+
+        assertThatThrownBy(() -> service.updateView(1L, 10L, new UpdateMainTableViewRequest(
+                "STAGES", null, null, null, null, null, null)))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .hasMessageContaining("'Stages'")
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo(MainTableViewNameValidator.DUPLICATE_CODE);
+        verify(viewConfigRepository, never()).save(any(MainTableViewConfig.class));
+    }
+
+    /** The View itself is in the unit's list; keeping its own name must not count as a clash. */
+    @Test
+    void updateView_keepingItsOwnNameIsNotAClash() {
+        MainTableViewConfig config = viewConfigForAccessUpdate();
+        when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
+        when(viewConfigRepository.findByFunctionUnitIdOrderByIsDefaultDescViewNameAsc(1L))
+                .thenReturn(List.of(config));
+        when(tableDefinitionRepository.findByIdWithFields(20L)).thenReturn(Optional.of(
+                TableDefinition.builder().id(20L).fieldDefinitions(new ArrayList<>()).build()));
+        when(viewConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateView(1L, 10L, new UpdateMainTableViewRequest("Case", null, null, null, null, null, null));
+
+        verify(viewConfigRepository).save(config);
+    }
+
+    @Test
+    void publishViewsForFunctionUnit_rejectsDuplicateNames() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        MainTableViewConfig a = MainTableViewConfig.builder().id(1L).functionUnit(fu).mainTableId(20L)
+                .viewName("Cases").status(MainTableViewStatus.DRAFT).viewFields(new ArrayList<>()).build();
+        MainTableViewConfig b = MainTableViewConfig.builder().id(2L).functionUnit(fu).mainTableId(21L)
+                .viewName("cases").status(MainTableViewStatus.DRAFT).viewFields(new ArrayList<>()).build();
+        when(viewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(a, b));
+
+        assertThatThrownBy(() -> service.publishViewsForFunctionUnit(1L))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo(MainTableViewNameValidator.DUPLICATE_CODE);
+        assertThat(a.getStatus()).isEqualTo(MainTableViewStatus.DRAFT);
+        verify(viewConfigRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void cloneViewsForFunctionUnit_rejectsDuplicateSourceNames() {
+        FunctionUnit sourceFu = FunctionUnit.builder().id(1L).build();
+        MainTableViewConfig a = MainTableViewConfig.builder().id(10L).functionUnit(sourceFu).mainTableId(100L)
+                .viewName("Cases").viewFields(new ArrayList<>()).build();
+        MainTableViewConfig b = MainTableViewConfig.builder().id(11L).functionUnit(sourceFu).mainTableId(101L)
+                .viewName("Cases ").viewFields(new ArrayList<>()).build();
+        when(viewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(a, b));
+
+        assertThatThrownBy(() -> service.cloneViewsForFunctionUnit(
+                1L, FunctionUnit.builder().id(2L).build(), Map.of(), Map.of()))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo(MainTableViewNameValidator.DUPLICATE_CODE);
+        verify(viewConfigRepository, never()).save(any(MainTableViewConfig.class));
     }
 
     private MainTableViewConfig viewConfigForAccessUpdate() {

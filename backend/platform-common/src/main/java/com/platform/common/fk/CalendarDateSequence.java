@@ -10,7 +10,7 @@ import java.util.Locale;
  * Date-prefixed PK sequence that resets on a calendar period ({@code YYYYMMDD} daily or
  * {@code YYYYMM} monthly).
  *
- * <p>The calendar period uses {@link #ZONE} — the same Asia/Shanghai (UTC+8) zone as table-design
+ * <p>The calendar period uses {@link #ZONE} — the same Asia/Hong_Kong (UTC+8) zone as table-design
  * audit fields ({@code SystemAuditFieldFiller} / {@code created_at}).
  *
  * <p>{@code padWidth} is a <em>minimum</em> digit count: value {@code 10000} with width 4 becomes
@@ -18,7 +18,7 @@ import java.util.Locale;
  */
 public final class CalendarDateSequence {
 
-    public static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    public static final ZoneId ZONE = ZoneId.of("Asia/Hong_Kong");
     public static final int DEFAULT_PAD_WIDTH = 4;
 
     public enum Period {

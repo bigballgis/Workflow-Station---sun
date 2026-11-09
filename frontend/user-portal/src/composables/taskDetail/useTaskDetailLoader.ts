@@ -86,7 +86,9 @@ export function createTaskDetailLoader(
     // in-place reload after claiming would keep the read-only flag the previous pass set.
     formReadOnly.value = false
     try {
-      const res = await getTaskDetail(taskId)
+      // A refusal (HTTP 403) or a missing task (404) is answered below, once: with the read-only process view
+      // when the route allows it, else one message. The global handler would toast it first.
+      const res = await getTaskDetail(taskId, { skipGlobalErrorHandler: true })
       const data = res.data || res
       if (data) {
         taskInfo.value = data
@@ -282,7 +284,8 @@ export function createTaskDetailLoader(
         // Fallback to process detail (read-only) when task-level permission is denied.
         if (fallbackProcessInstanceId.value) {
           try {
-            const pr = await processApi.getProcessDetail(fallbackProcessInstanceId.value)
+            // Its refusal is the same "no permission" as the task's: the one message below covers both.
+            const pr = await processApi.getProcessDetail(fallbackProcessInstanceId.value, { skipGlobalErrorHandler: true })
             const p = (pr as any).data || pr
             if (p) {
               taskInfo.value = {

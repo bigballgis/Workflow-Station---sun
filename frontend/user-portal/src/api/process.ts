@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import request from './request'
 import { withoutRuntimeVersionContext } from '@/utils/runtimeVersionSubmission'
 import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
@@ -237,8 +238,8 @@ export const processApi = {
   },
 
   // 获取流程详情
-  getProcessDetail(processId: string) {
-    return request.get<ProcessInstance>(`/processes/${processId}`)
+  getProcessDetail(processId: string, config?: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean }) {
+    return request.get<ProcessInstance>(`/processes/${processId}`, config)
   },
 
   /**

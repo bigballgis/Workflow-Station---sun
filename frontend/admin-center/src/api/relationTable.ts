@@ -116,6 +116,8 @@ export interface RelationTableResponse {
   fieldDefinitions: FieldDefinitionResponse[]
   /** 当前管理员对该表的权限级别：READONLY=只读, READ_WRITE=读写 */
   permissionLevel?: 'READONLY' | 'READ_WRITE'
+  /** Structure page: whether the user may change the table (every linked unit is of a team they lead, or SYS_ADMIN). */
+  canWrite?: boolean
   createdAt: string
   createdBy: string
   updatedAt: string

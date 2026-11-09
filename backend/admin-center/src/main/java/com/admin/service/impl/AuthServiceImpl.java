@@ -10,6 +10,7 @@ import com.platform.security.entity.LoginAudit;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.admin.repository.UserRepository;
+import com.admin.security.AdminCapabilities;
 import com.admin.service.AuthService;
 import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
@@ -33,6 +34,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+
+    /** Platform roles that may sign in to Admin Center (§8.1, §9); TECH_LEAD only while on an active team's list. */
+    private static final Set<String> ADMIN_ENTRY_ROLES = Set.of("SYS_ADMIN", "AUDITOR", "TECH_LEAD");
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -101,8 +105,8 @@ public class AuthServiceImpl implements AuthService {
         
         // Set httpOnly cookies for access token and refresh token
         // Service-specific cookie name (e.g. ac_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
-        setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
-        setAuthCookie(response, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
+        setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, jwtProperties.getSessionCookieMaxAgeSeconds());
+        setAuthCookie(response, jwtProperties.getRefreshCookieName(), refreshToken, jwtProperties.getSessionCookieMaxAgeSeconds());
         
         log.info("User {} logged in successfully from {}", request.getUsername(), ipAddress);
         
@@ -122,6 +126,7 @@ public class AuthServiceImpl implements AuthService {
                         .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                         .language(user.getLanguage())
                         .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
+                        .adminAccess(AdminCapabilities.forRoles(roles))
                         .build())
                 .build();
     }
@@ -173,8 +178,8 @@ public class AuthServiceImpl implements AuthService {
 
         // Set httpOnly cookies for access token and refresh token
         // Service-specific cookie name (e.g. ac_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
-        setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
-        setAuthCookie(response, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
+        setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, jwtProperties.getSessionCookieMaxAgeSeconds());
+        setAuthCookie(response, jwtProperties.getRefreshCookieName(), refreshToken, jwtProperties.getSessionCookieMaxAgeSeconds());
 
         log.info("User {} SSO session issued from {}", user.getUsername(), ipAddress);
 
@@ -193,6 +198,7 @@ public class AuthServiceImpl implements AuthService {
                         .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                         .language(user.getLanguage())
                         .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
+                        .adminAccess(AdminCapabilities.forRoles(roles))
                         .build())
                 .build();
     }
@@ -207,20 +213,23 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse refreshLogin(String refreshToken, HttpServletResponse response) {
         try {
             if (!jwtTokenService.validateToken(refreshToken)) {
-                throw new RuntimeException("Invalid or expired refresh token");
+                throw new SessionRefusedException("Invalid or expired refresh token");
             }
             jwtTokenService.blacklistToken(refreshToken);
 
             String userId = jwtTokenService.extractUserId(refreshToken);
 
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(() -> new SessionRefusedException("User not found"));
+            // Revocation takes effect at refresh: a disabled account or one that lost Admin access gets no new token.
+            assertAccountActive(user, user.getUsername());
 
             List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(user.getId());
             List<String> roles = effectiveRoles.stream()
                     .map(UserEffectiveRole::getRoleCode)
                     .distinct()
                     .collect(Collectors.toList());
+            ensureAdminAccess(user, roles);
 
             List<LoginResponse.RoleWithSource> rolesWithSources = buildRolesWithSources(effectiveRoles);
 
@@ -233,8 +242,8 @@ public class AuthServiceImpl implements AuthService {
 
             // Set httpOnly cookies for new tokens
             // Service-specific cookie name (e.g. ac_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
-            setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
-            setAuthCookie(response, jwtProperties.getRefreshCookieName(), newRefreshToken, 7 * 24 * 60 * 60);
+            setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, jwtProperties.getSessionCookieMaxAgeSeconds());
+            setAuthCookie(response, jwtProperties.getRefreshCookieName(), newRefreshToken, jwtProperties.getSessionCookieMaxAgeSeconds());
 
             return LoginResponse.builder()
                     .accessToken(accessToken)
@@ -252,8 +261,13 @@ public class AuthServiceImpl implements AuthService {
                             .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                             .language(user.getLanguage())
                             .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
+                            .adminAccess(AdminCapabilities.forRoles(roles))
                             .build())
                     .build();
+        } catch (SessionRefusedException | AccessDeniedException e) {
+            // Expected after revocation (D-06): the session simply ends, no stack trace.
+            log.warn("Token refresh refused: {}", e.getMessage());
+            throw new RuntimeException("Token refresh failed");
         } catch (Exception e) {
             log.error("Failed to refresh token", e);
             throw new RuntimeException("Token refresh failed");
@@ -288,6 +302,7 @@ public class AuthServiceImpl implements AuthService {
                     .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                     .language(user.getLanguage())
                     .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
+                    .adminAccess(AdminCapabilities.forRoles(roles))
                     .build();
         } catch (Exception e) {
             log.error("Failed to get current user", e);
@@ -405,16 +420,23 @@ public class AuthServiceImpl implements AuthService {
     private void assertAccountActive(User user, String username) {
         if (user.getStatus() == UserStatus.LOCKED) {
             log.warn("Account locked: {}", username);
-            throw new RuntimeException("Account is locked");
+            throw new SessionRefusedException("Account is locked");
         }
         if (user.getStatus() == UserStatus.INACTIVE) {
             log.warn("Account disabled: {}", username);
-            throw new RuntimeException("Account is disabled");
+            throw new SessionRefusedException("Account is disabled");
+        }
+    }
+
+    /** An expected refusal to start or renew a session (bad refresh token, unusable account). */
+    private static final class SessionRefusedException extends RuntimeException {
+        SessionRefusedException(String message) {
+            super(message);
         }
     }
 
     /**
-     * Admin Center 访问校验：需具备 SYS_ADMIN 或 AUDITOR。
+     * Admin Center 访问校验：需具备 SYS_ADMIN、AUDITOR，或是某个有效团队的 Technical Lead（TECH_LEAD，§8.1）。
      *
      * <p>{@code admin.auth.developer-bypass-role-check=true} 时跳过（仅本地联调，默认关闭）。</p>
      */
@@ -424,8 +446,7 @@ public class AuthServiceImpl implements AuthService {
                     user.getUsername());
             return;
         }
-        boolean hasAdminAccess = userRoleCodes.stream()
-                .anyMatch(code -> "SYS_ADMIN".equals(code) || "AUDITOR".equals(code));
+        boolean hasAdminAccess = userRoleCodes.stream().anyMatch(ADMIN_ENTRY_ROLES::contains);
         if (!hasAdminAccess) {
             log.warn("User {} does not have admin center access. Roles: {}", user.getUsername(), userRoleCodes);
             throw new AccessDeniedException("You do not have access to Admin Center");

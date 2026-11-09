@@ -22,11 +22,8 @@ try {
     const response = await page.request.get(`${origin}/api/v1/function-units/my-dev-groups`)
     assert.equal(response.status(), 200)
     const groups = (await response.json()).data
-    const expected = groups.groups
-      .filter(group => group.status !== 'INACTIVE' && groups.memberGroupIds.includes(group.id)
-        && roles.some(role => ['TECH_LEAD', 'TEAM_LEAD'].includes(role)))
-      .map(group => group.name)
-    if (roles.includes('SYS_ADMIN')) expected.push('Public')
+    const expected = groups.groups.filter(group => group.canCreate).map(group => group.name)
+    if (groups.canWritePublic) expected.push('Public')
     await page.evaluate(id => localStorage.setItem('ws_dw_active_group', id), groups.publicGroupId)
     await page.goto(`${origin}/dev/function-units`, { waitUntil: 'domcontentloaded' })
     const loaded = page.waitForResponse(res => res.url().endsWith('/function-units/my-dev-groups') && res.ok())
@@ -41,7 +38,7 @@ try {
     await mkdir(screenshots, { recursive: true })
     const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong' }).format(new Date())
     await page.screenshot({ path: resolve(screenshots, `${date}_workspace-create-options.png`), fullPage: true })
-    console.log('PASS (creation options): only member workspaces with a lead role, plus Public for admin; no FU created')
+    console.log('PASS (creation options): only teams the user leads, plus Public for admin; no FU created')
     return
   }
   if (process.argv.includes('--workspace-api')) {

@@ -25,8 +25,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * When no UBR (JWT {@code portalAccessMode=PERMISSION_SELF_SERVICE_ONLY}), only allow
- * permission self-service and other whitelisted paths.
+ * Only sessions Portal issued (they carry {@code portalAccessMode}) reach Portal. When no UBR
+ * ({@code portalAccessMode=PERMISSION_SELF_SERVICE_ONLY}), only allow permission self-service and other whitelisted paths.
  */
 @Slf4j
 @Component
@@ -45,7 +45,15 @@ public class PortalSelfServiceAccessFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        if (!AuthController.PORTAL_ACCESS_MODE_SELF_SERVICE.equals(PortalUserSecurityUtils.getPortalAccessMode(principal))) {
+        String accessMode = PortalUserSecurityUtils.getPortalAccessMode(principal);
+        // Every session Portal issues carries its access mode. A token issued by Developer Workstation or Admin Center
+        // does not: Portal entry and the current BU + Role were never checked for it (platform access model §7.1).
+        if (accessMode == null || accessMode.isBlank()) {
+            writeError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_PORTAL_SESSION_REQUIRED",
+                    i18nService.getMessage("auth.unauthorized"));
+            return;
+        }
+        if (!AuthController.PORTAL_ACCESS_MODE_SELF_SERVICE.equals(accessMode)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -63,14 +71,19 @@ public class PortalSelfServiceAccessFilter extends OncePerRequestFilter {
             return;
         }
 
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        writeError(response, HttpServletResponse.SC_FORBIDDEN, "PORTAL_ACCESS_DENIED",
+                i18nService.getMessage("portal.self_service_access_denied"));
+    }
+
+    private void writeError(HttpServletResponse response, int status, String code, String message) throws IOException {
+        response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("success", false);
         Map<String, Object> err = new LinkedHashMap<>();
-        err.put("code", "PORTAL_ACCESS_DENIED");
-        err.put("message", i18nService.getMessage("portal.self_service_access_denied"));
+        err.put("code", code);
+        err.put("message", message);
         body.put("error", err);
         response.getWriter().write(objectMapper.writeValueAsString(body));
     }

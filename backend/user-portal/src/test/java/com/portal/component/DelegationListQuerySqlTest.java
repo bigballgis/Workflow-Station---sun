@@ -36,7 +36,10 @@ class DelegationListQuerySqlTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        component = new DelegationListQueryComponent(jdbcTemplate);
+        component = new DelegationListQueryComponent(jdbcTemplate,
+                new com.portal.component.EffectiveDelegationRules(
+                        org.mockito.Mockito.mock(com.portal.repository.DelegationRuleRepository.class),
+                        com.portal.testsupport.PortalEntryStubs.everyone()));
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {

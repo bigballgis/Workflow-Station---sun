@@ -9,7 +9,7 @@ export default {
     flow2: '選取一個檢視，或 Create view / Generate default views',
     flow3: '新增 Table columns（需要時再加 Lookup / Related columns）',
     flow4: '設 Name、Export、Detail form、Access control，再設 Sort / Filter',
-    flow5: '儲存。入口只給符合存取控制的人看這個檢視',
+    flow5: '儲存，然後部署功能單元。檢視隨功能單元部署後才在使用者入口生效，且只給符合存取控制的人看',
     whatTitle: '檢視設計是什麼',
     whatBody:
       '功能單元頁簽「檢視設計」。左側：按表分組的 Views。Default 表示該表的預設檢視。這不是表單設計，也不是表設計。',
@@ -24,7 +24,7 @@ export default {
     catAddSelected: '把目錄裡勾選的欄位追加到檢視網格。',
     propsTitle: '名稱、工具列、排序、過濾',
     propsBody:
-      'Name 是入口上的名稱。Portal toolbar 的 Show Export button 預設關閉。Detail form 用於 SUB 表；主表列開啟申請詳情頁，使用 No detail page。',
+      'Name 是入口上的名稱。同一功能單元內 Name 必須唯一（不區分大小寫，忽略首尾空格），因為使用者入口和 BI [[/bi-data-view-assignment]] 按名稱找檢視；改名後，該檢視已有的 BI 看板分派需要重新綁定。Portal toolbar 的 Show Export button 預設關閉。Detail form 用於 SUB 表；主表列開啟申請詳情頁，使用 No detail page。',
     catName: '入口檢視清單裡的名稱，必填。',
     catExport: '開啟：入口使用者看到 Export。關閉是預設。',
     catDetail: 'SUB 檢視：開啟一列用哪張表單。主表：No detail page。',
@@ -32,18 +32,18 @@ export default {
     catFilter: 'Filter by。Edit filters 開啟條件對話框（Equals、Contains 等）。',
     accessTitle: '存取控制',
     accessBody:
-      'Business Units 和 Roles 都空時，只有 System Administrator 能看見此檢視。若設定存取控制，至少選一個 Business Unit 和一個 Role。使用者必須兩邊都符合。System Administrator 始終能看見全部檢視和全部列。',
+      'Business Units 和 Roles 都空時，發佈後任何人都看不見此檢視。若設定存取控制，至少選一個 Business Unit 和一個 Role。使用者目前的 Business Unit 和 Role 必須兩邊都符合。System Administrator 與其他人按同樣規則判斷。',
     catAccess: '右側這一段。標題下的說明寫明留空和成對規則。',
     catBu: '按業務單元誰能看見。占位：Select BUs that can see this view。',
     catRoles: '在已選單元內按角色誰能看見。選項來自這些單元的准入角色，不是全域角色清單。',
     catRolesFirst: '未選 Business Unit 時 Roles 停用。此時占位：Select a Business Unit first。',
     catInvolved:
-      '關閉：通過 BU+Role 的人看見全部列。開啟：僅發起人、辦理人和 MI 參與者。System Administrator 仍看見全部列。',
+      '關閉：通過 BU+Role 的人看見全部列。開啟：僅發起人、辦理人和 MI 參與者，對所有人生效，包括 System Administrator。',
     failTitle: '失敗時',
     failPair:
-      '只配了 BU 或只配了 Role 時無法儲存。提示：Configure both BU and Role together, or leave both empty (System Administrator only)。',
-    failEmpty: '兩邊都空：沒有 System Administrator 的人在入口裡看不見此檢視。',
-    failAnd: 'BU 和 Role 都配了：該人必須屬於已選單元之一，並擁有已選角色之一。',
+      '只配了 BU 或只配了 Role 時無法儲存。提示：Configure both BU and Role together, or leave both empty (nobody can see the view)。',
+    failEmpty: '兩邊都空：仍可儲存，並提示發佈後無人可見；入口裡任何人都看不見此檢視，包括 System Administrator。',
+    failAnd: 'BU 和 Role 都配了：該人目前工作區的單元必須是已選單元之一、角色必須是已選角色之一。不同工作區的單元和角色不拼合。',
     failMainTable: '先在表設計裡建立主表。清單顯示 Create a Main Table in Table Design first。',
   },
 }

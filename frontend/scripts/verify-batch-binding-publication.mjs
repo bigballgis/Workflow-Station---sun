@@ -26,9 +26,10 @@ try {
   const original = await api('GET', `/function-units/${sourceId}/validate`)
   assert.equal(original.valid, !legacy, JSON.stringify(original.errors))
   if (process.env.FIXTURE_CLONE_ID) assert.match(process.env.FIXTURE_CLONE_ID, /^\d+$/)
+  else assert.ok(source.workspaceId, 'Source has no workspace for its clone')
   const clone = process.env.FIXTURE_CLONE_ID
     ? await api('GET', `/function-units/${process.env.FIXTURE_CLONE_ID}`)
-    : await api('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(`Batch binding UI verification ${Date.now()}`)}`)
+    : await api('POST', `/function-units/${sourceId}/clone?newName=${encodeURIComponent(`Batch binding UI verification ${Date.now()}`)}&targetGroupId=${encodeURIComponent(source.workspaceId)}`)
   assert.ok(clone.tags.includes('batch-verification-synthetic'))
   assert.match(clone.name, /^Batch binding UI verification /)
   console.log(JSON.stringify({ step: 'cloned', sourceId, unitId: clone.id }))

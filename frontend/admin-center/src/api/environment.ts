@@ -17,6 +17,8 @@ export interface EnvironmentVariable {
   defaultValue?: string
   currentValue?: string
   vaultSecretPath?: string
+  /** VAULT only: whether a secret path is set; the path itself is returned to SYS_ADMIN only (D-44). */
+  vaultConfigured?: boolean | null
 }
 
 export interface EnvironmentVariableRequest {

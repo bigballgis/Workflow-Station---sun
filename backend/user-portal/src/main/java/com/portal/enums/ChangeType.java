@@ -24,8 +24,12 @@ public enum ChangeType {
     CLAIM,
     /** 持有人释放认领 */
     UNCLAIM,
-    /** Leader / Approver / SYS_ADMIN 强制释放他人认领 */
+    /** 他人释放认领：Leader / BU Approver，办理人失去准入时同池成员；系统在办理人失去该 BU + Role 时释放（reason） */
     FORCE_UNCLAIM,
-    /** Leader / Approver / SYS_ADMIN 将认领池任务指定给同池成员 */
-    REASSIGN
+    /** 将池任务指定给同池成员（含接手：指定给自己）：Leader / BU Approver，办理人失去准入时同池成员 */
+    REASSIGN,
+    /** 系统在办理人离职（账号停用或删除）后把任务指派给其 Entity / Function Manager（D-42，reason = ASSIGNEE_DEPARTED） */
+    MANAGER_REASSIGN,
+    /** 任务换持有人时，原持有人的单次委托随之结束（D-59，reason = HOLDER_CHANGED；fieldName = delegated_to） */
+    DELEGATION_ENDED
 }

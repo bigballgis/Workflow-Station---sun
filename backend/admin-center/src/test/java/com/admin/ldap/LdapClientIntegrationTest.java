@@ -120,7 +120,9 @@ class LdapClientIntegrationTest {
     @Test
     @DisplayName("fetchUsersInGroup 优先读取 group member 属性")
     void fetchUsersInGroupViaMemberAttribute() throws Exception {
-        List<Map<String, String>> users = ldapClient.fetchUsersInGroup("Direct Members");
+        LdapClient.AdGroupMembers members = ldapClient.fetchUsersInGroup("Direct Members");
+        assertTrue(members.complete());
+        List<Map<String, String>> users = members.users();
         assertEquals(1, users.size());
         assertEquals("100003", users.get(0).get("employeeNumber"));
         assertEquals("Direct Members", users.get(0).get("_hitGroupCn"));
@@ -128,10 +130,36 @@ class LdapClientIntegrationTest {
     @Test
     @DisplayName("fetchUsersInGroup 在 group member 为空时回退 memberOf 反向搜索")
     void fetchUsersInGroupFallsBackToMemberOfSearch() throws Exception {
-        List<Map<String, String>> users = ldapClient.fetchUsersInGroup("Hermes Users");
+        LdapClient.AdGroupMembers members = ldapClient.fetchUsersInGroup("Hermes Users");
+        assertTrue(members.complete());
+        List<Map<String, String>> users = members.users();
         assertEquals(1, users.size());
         assertEquals("100002", users.get(0).get("employeeNumber"));
         assertEquals("Hermes Users", users.get(0).get("_hitGroupCn"));
+    }
+    @Test
+    @DisplayName("fetchUsersInGroup：有成员 DN 读不出时标为读不全")
+    void fetchUsersInGroupFlagsUnreadableMembers() throws Exception {
+        ds.add("dn: cn=Broken Members,ou=groups," + BASE_DN,
+            "objectClass: top", "objectClass: groupOfNames", "cn: Broken Members",
+            "member: uid=carol,ou=people," + BASE_DN,
+            "member: uid=ghost,ou=people," + BASE_DN);
+        LdapClient.AdGroupMembers members = ldapClient.fetchUsersInGroup("Broken Members");
+        assertFalse(members.complete());
+        assertEquals(1, members.users().size());
+    }
+    @Test
+    @DisplayName("fetchUsersInGroup：被 max-entries 截断时标为读不全")
+    void fetchUsersInGroupFlagsTruncatedMembers() throws Exception {
+        ds.add("dn: cn=Two Members,ou=groups," + BASE_DN,
+            "objectClass: top", "objectClass: groupOfNames", "cn: Two Members",
+            "member: uid=bob,ou=people," + BASE_DN,
+            "member: uid=carol,ou=people," + BASE_DN);
+        LdapProperties capped = buildProps(ds.getListenPort());
+        capped.setMaxEntries(1);
+        LdapClient.AdGroupMembers members = new LdapClient(capped).fetchUsersInGroup("Two Members");
+        assertFalse(members.complete());
+        assertEquals(1, members.users().size());
     }
     @Test
     @DisplayName("escapeFilterValue 转义注入字符")

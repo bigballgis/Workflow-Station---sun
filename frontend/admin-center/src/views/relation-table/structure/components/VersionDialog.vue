@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    :title="'Version History - ' + (tableName || '')"
+    :title="`${t('form.titleVersionHistory')} - ${tableName || ''}`"
     width="800px"
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -9,11 +9,11 @@
       v-loading="loading"
       :data="versions"
       stripe
-      empty-text="No versions found"
+      :empty-text="t('relationTable.version.empty')"
     >
       <el-table-column
         prop="versionNumber"
-        label="Version"
+        :label="t('form.labelVersion')"
         width="90"
         align="center"
       >
@@ -23,12 +23,12 @@
       </el-table-column>
       <el-table-column
         prop="deployedBy"
-        label="Deployed By"
+        :label="t('form.labelDeployedBy')"
         width="140"
       />
       <el-table-column
         prop="deployedAt"
-        label="Deployed At"
+        :label="t('form.labelDeployedAt')"
         width="180"
       >
         <template #default="{ row }">
@@ -37,7 +37,7 @@
       </el-table-column>
       <el-table-column
         prop="changeLog"
-        label="Change Log"
+        :label="t('form.labelChangeLog')"
         min-width="200"
       >
         <template #default="{ row }">
@@ -45,7 +45,8 @@
         </template>
       </el-table-column>
       <el-table-column
-        label="Actions"
+        v-if="!readOnly"
+        :label="t('common.actions')"
         width="100"
         align="center"
       >
@@ -56,14 +57,14 @@
             size="small"
             @click="handleRollback(row)"
           >
-            Rollback
+            {{ t('relationTable.structure.rollback') }}
           </el-button>
         </template>
       </el-table-column>
     </el-table>
     <template #footer>
       <el-button @click="emit('update:modelValue', false)">
-        Close
+        {{ t('common.close') }}
       </el-button>
     </template>
   </el-dialog>
@@ -71,7 +72,9 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useI18n } from 'vue-i18n'
+import { notifyConfirm, notifySuccess } from '@/utils/notify'
+import { formatDate } from '@/utils/format'
 import {
   relationTableStructureApi,
   type RelationTableVersionResponse
@@ -81,6 +84,8 @@ const props = defineProps<{
   modelValue: boolean
   tableId?: number
   tableName?: string
+  /** A table the user may not change (D-47): versions are listed, not rolled back. */
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -88,13 +93,9 @@ const emit = defineEmits<{
   'rollback-success': []
 }>()
 
+const { t } = useI18n()
 const loading = ref(false)
 const versions = ref<RelationTableVersionResponse[]>([])
-
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return ''
-  return new Date(dateStr).toLocaleString('zh-CN')
-}
 
 const fetchVersions = async () => {
   if (!props.tableId) return
@@ -111,13 +112,13 @@ const fetchVersions = async () => {
 const handleRollback = async (version: RelationTableVersionResponse) => {
   if (!props.tableId) return
   try {
-    await ElMessageBox.confirm(
-      `Rollback to version v${version.versionNumber}? This will update the table definition to match this version's snapshot.`,
-      'Confirm Rollback',
+    await notifyConfirm(
+      t('relationTable.version.rollbackConfirmMsg', { version: version.versionNumber }),
+      t('relationTable.version.rollbackConfirmTitle'),
       { type: 'warning' }
     )
     await relationTableStructureApi.rollback(props.tableId, { targetVersionId: version.id })
-    ElMessage.success(`Rolled back to v${version.versionNumber}`)
+    notifySuccess(t('relationTable.version.rolledBack', { version: version.versionNumber }))
     emit('update:modelValue', false)
     emit('rollback-success')
   } catch (e: unknown) {

@@ -22,12 +22,15 @@ import java.util.List;
 import java.util.Map;
 import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.i18n.I18nService;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 @Slf4j
 @RestController
 @RequestMapping("/dictionaries")
 @RequiredArgsConstructor
 @Tag(name = "Data Dictionary Management", description = "Dictionary CRUD, item query and related data query APIs")
+@AdminAccess(AdminAudience.ADMIN_READ)
 public class DictionaryController {
     
     private final DataDictionaryManagerComponent dictionaryManager;

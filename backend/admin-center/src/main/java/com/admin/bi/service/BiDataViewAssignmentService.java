@@ -16,7 +16,7 @@ public interface BiDataViewAssignmentService {
 
     List<DataViewAssignmentResponse> createBatch(DataViewAssignmentBatchRequest request);
 
-    Page<DataViewAssignmentResponse> list(String dashboardTitle, Long functionUnitId, Boolean enabled, Long viewId, Pageable pageable);
+    Page<DataViewAssignmentResponse> list(String dashboardTitle, String functionUnitCode, Boolean enabled, String viewName, Pageable pageable);
 
     DataViewAssignmentResponse update(String id, DataViewAssignmentRequest request);
 
@@ -24,12 +24,12 @@ public interface BiDataViewAssignmentService {
 
     List<DataViewFunctionUnitOptionResponse> listFunctionUnits();
 
-    List<DataViewTableOptionResponse> listTables(Long functionUnitId);
+    List<DataViewTableOptionResponse> listTables(String functionUnitCode);
 
-    List<com.admin.bi.dto.response.DataViewOptionResponse> listViews(Long functionUnitId, Long tableId);
+    List<com.admin.bi.dto.response.DataViewOptionResponse> listViews(String functionUnitCode, String tableName);
 
-    List<DataViewDashboardResponse> getDashboardsForView(String userId, Long viewId);
+    List<DataViewDashboardResponse> getDashboardsForView(String userId, String functionUnitCode, String viewName);
 
-    boolean canAccessDashboardForView(String userId, String dashboardId, Long viewId);
+    boolean canAccessDashboardForView(String userId, String dashboardId, String functionUnitCode, String viewName);
     DataViewAssignmentResponse updateEnabled(String id, boolean enabled);
 }

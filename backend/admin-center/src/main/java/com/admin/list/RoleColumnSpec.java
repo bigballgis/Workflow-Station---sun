@@ -19,9 +19,9 @@ public final class RoleColumnSpec {
     private RoleColumnSpec() {
     }
 
-    /** Same codes as frontend {@code SYSTEM_ROLE_LIST_CODES} (excludes FU_VIEWER). */
+    /** The four platform roles; same codes as frontend {@code SYSTEM_ROLE_LIST_CODES}. */
     public static final List<String> SYSTEM_ROLE_LIST_CODES = List.of(
-            "SYS_ADMIN", "AUDITOR", "TECH_LEAD", "TEAM_LEAD", "DEVELOPER", "MANAGER");
+            "SYS_ADMIN", "AUDITOR", "TECH_LEAD", "DEVELOPER");
 
     public static List<ListColumnMeta> columns() {
         return List.of(
@@ -68,7 +68,6 @@ public final class RoleColumnSpec {
     private static String roleTypeKey(RoleType type) {
         return switch (type) {
             case BU_BOUNDED -> "role.buBounded";
-            case BU_UNBOUNDED -> "role.buUnbounded";
             case ADMIN -> "role.adminRole";
             case AUDITOR -> "role.auditorRole";
             case DEVELOPER -> "role.developerRole";

@@ -1,5 +1,7 @@
 package com.developer.security;
 
+import com.platform.security.entity.VirtualGroup;
+
 /**
  * 开发者工作区「开发组（团队）」相关常量。
  *
@@ -13,5 +15,5 @@ public final class DevGroupConstants {
     }
 
     /** 内置 Public 组 id（种子/迁移脚本中固定写入）。 */
-    public static final String PUBLIC_GROUP_ID = "vg-dev-public";
+    public static final String PUBLIC_GROUP_ID = VirtualGroup.PUBLIC_TEAM_ID;
 }

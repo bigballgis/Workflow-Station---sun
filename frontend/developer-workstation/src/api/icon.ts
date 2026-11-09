@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { installSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 import i18n from '@/i18n'
 import { getUser } from './auth'
 
@@ -7,6 +8,7 @@ const iconAxios = axios.create({
   timeout: 30000,
   withCredentials: true
 })
+installSessionRefresh(iconAxios, config => axios.request(config))
 
 iconAxios.interceptors.request.use(config => {
   // Add X-User-Id request header for backend permission check

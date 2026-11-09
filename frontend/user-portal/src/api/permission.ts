@@ -69,13 +69,6 @@ export interface UserBusinessUnitRole {
   assignedAt?: string
 }
 
-/** 角色申请请求 */
-export interface RoleRequestDto {
-  roleId: string
-  organizationUnitId: string
-  reason: string
-}
-
 /** 虚拟组申请请求 */
 export interface VirtualGroupRequestDto {
   virtualGroupId: string
@@ -155,41 +148,6 @@ export interface FunctionUnitRemovalGroup {
 export interface RemovalOptionsByFunctionUnitPayload {
   functionUnitGroups: FunctionUnitRemovalGroup[]
   otherAssignments: RemovalAssignmentRow[]
-}
-
-// ==================== 旧的类型定义（保留兼容） ====================
-
-/** @deprecated 使用 RoleInfo 或 VirtualGroupInfo 替代 */
-export interface Permission {
-  id: string
-  name: string
-  type: 'FUNCTION' | 'DATA' | 'TEMPORARY' | 'ROLE' | 'VIRTUAL_GROUP'
-  validTo?: string
-}
-
-/** @deprecated 使用 PermissionRequestRecord 替代 */
-export interface PermissionRequest {
-  id: number
-  applicantId: string
-  requestType: 'FUNCTION' | 'DATA' | 'TEMPORARY'
-  permissions: string[]
-  reason: string
-  validFrom?: string
-  validTo?: string
-  status: 'PENDING' | 'APPROVED' | 'REJECTED'
-  approverId?: string
-  approveTime?: string
-  approveComment?: string
-  createdAt: string
-}
-
-/** @deprecated 使用 RoleRequestDto 或 VirtualGroupRequestDto 替代 */
-export interface PermissionRequestDto {
-  type: 'FUNCTION' | 'DATA' | 'TEMPORARY'
-  permissions: string[]
-  reason: string
-  validFrom?: string
-  validTo?: string
 }
 
 // ==================== API 方法 ====================
@@ -274,11 +232,6 @@ export const permissionApi = {
     return request.get<BusinessUnit[]>('/permissions/available-business-units')
   },
 
-  /** 获取加入业务单元后可激活的角色 */
-  getActivatableRoles(businessUnitId: string) {
-    return request.get<RoleInfo[]>(`/permission-requests/business-units/${businessUnitId}/activatable-roles`)
-  },
-
   /** 获取我的申请记录 */
   getMyRequests(params?: { page?: number; size?: number; status?: string }) {
     return request.get<{ content: PermissionRequestRecord[]; totalElements: number }>('/permissions/requests', { params })
@@ -318,25 +271,13 @@ export const permissionApi = {
 
   // ==================== 成员管理 API ====================
 
-  /** 获取虚拟组成员 */
-  getVirtualGroupMembers(virtualGroupId: string) {
-    return request.get<MemberInfo[]>(`/members/virtual-groups/${virtualGroupId}`)
-  },
-
-  /** 获取业务单元成员 */
+  /** 获取业务单元成员（含其在该单元的角色；仅该单元的审批人） */
   getBusinessUnitMembers(businessUnitId: string) {
     return request.get<MemberInfo[]>(`/members/business-units/${businessUnitId}`)
   },
 
-  /** 清退虚拟组成员 */
-  removeVirtualGroupMember(virtualGroupId: string, userId: string) {
-    return request.delete(`/members/virtual-groups/${virtualGroupId}/users/${userId}`)
-  },
-
-  /** 清退业务单元成员 */
-  removeBusinessUnitMember(businessUnitId: string, userId: string) {
-    return request.delete(`/members/business-units/${businessUnitId}/users/${userId}`)
-  },
+  // Virtual groups are not available in the portal, nor is removing a member from a whole business unit
+  // (SYS_ADMIN maintains membership in Admin Center); approvers can only remove a BU role.
 
   /** 清退业务单元角色（旧API - 保留兼容） */
   removeBusinessUnitRole(businessUnitId: string, userId: string, roleId: string) {
@@ -369,42 +310,10 @@ export const permissionApi = {
       virtualGroups: UserVirtualGroupMembership[]
       businessUnits: { id: string; name: string; joinedAt?: string }[]
       buBoundedRoles: { role: RoleInfo; activatedBusinessUnits: { id: string; name: string }[] }[]
-      buUnboundedRoles: RoleInfo[]
     }>('/my-permissions')
   },
 
-  /** 获取未激活的 BU-Bounded 角色 */
-  getUnactivatedRoles() {
-    return request.get<RoleInfo[]>('/my-permissions/unactivated-roles')
-  },
-
-  /** 检查是否需要显示提醒 */
-  shouldShowReminder() {
-    return request.get<{ shouldShow: boolean; roles: RoleInfo[] }>('/my-permissions/should-show-reminder')
-  },
-
-  /** 设置不再提醒偏好 */
-  setDontRemind() {
-    return request.post('/my-permissions/dont-remind')
-  },
-
-  /** 获取角色状态 */
-  getRoleStatus(roleId: string) {
-    return request.get<{
-      roleId: string
-      roleName: string
-      roleType: string
-      isActivated: boolean
-      activatedBusinessUnits: { id: string; name: string }[]
-    }>(`/my-permissions/roles/${roleId}/status`)
-  },
-
   // ==================== 旧的 API 方法（保留兼容） ====================
-
-  /** 申请角色 */
-  requestRole(data: RoleRequestDto) {
-    return request.post<PermissionRequestRecord>('/permissions/request-role', data)
-  },
 
   /** 获取我的角色列表 */
   getMyRoles() {
@@ -436,28 +345,8 @@ export const permissionApi = {
     )
   },
 
-  /** @deprecated 使用 getMyRoles 和 getMyVirtualGroups 替代 */
-  getMyPermissions() {
-    return request.get<Permission[]>('/permissions/my')
-  },
-
-  /** @deprecated 使用 requestRole 或 requestVirtualGroup 替代 */
-  submitRequest(data: PermissionRequestDto) {
-    return request.post<PermissionRequest>('/permissions/request', data)
-  },
-
   /** 获取申请详情 */
   getRequestDetail(requestId: number) {
     return request.get<PermissionRequestRecord>(`/permissions/requests/${requestId}`)
-  },
-
-  /** @deprecated 新的权限模型不需要续期 */
-  renewPermission(data: { permissionId: string; validTo: string; reason: string }) {
-    return request.post<PermissionRequest>('/permissions/renew', data)
-  },
-
-  /** @deprecated 新的权限模型不需要过期检查 */
-  getExpiringPermissions(days?: number) {
-    return request.get<Permission[]>('/permissions/expiring', { params: { days } })
   }
 }

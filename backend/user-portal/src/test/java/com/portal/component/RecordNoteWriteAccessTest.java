@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.platform.common.dto.UserPrincipal;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.RecordNoteDtos.NoteItem;
@@ -8,6 +9,7 @@ import com.portal.entity.RecordNote;
 import com.portal.service.RecordNoteService;
 import com.portal.service.RecordNoteService.RecordNoteException;
 import com.portal.service.UserDisplayNameResolver;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +18,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Map;
@@ -36,7 +40,8 @@ import static org.mockito.Mockito.when;
  * written from.
  *
  * <p><b>Request form</b> — the note is an audit opinion, so it needs an audit grant held by the
- * role the user is currently working as (or SYS_ADMIN). Participation grants nothing: an initiator
+ * role the user is currently working as; no role bypasses this, SYS_ADMIN included (D-05).
+ * Participation grants nothing: an initiator
  * or assignee whose active role holds no audit grant reads the notes and may not add one.
  *
  * <p><b>To Do form</b> — the note is a comment by whoever works the task, so holding the task is
@@ -95,6 +100,11 @@ class RecordNoteWriteAccessTest {
                 .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_COMMENT).build());
     }
 
+    @AfterEach
+    void clearSession() {
+        SecurityContextHolder.clearContext();
+    }
+
     /**
      * A live engine task on {@code onInstance}, as the raw engine payload the component maps.
      * {@code processInstanceId} is what the cross-check compares, so it is the interesting field.
@@ -139,7 +149,7 @@ class RecordNoteWriteAccessTest {
     @Test
     void participantWithoutAnAuditGrantMayNotAddANote() {
         when(processComponent.isProcessParticipant(eq(USER), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         assertThatThrownBy(this::createNote)
                 .isInstanceOf(RecordNoteException.class)
@@ -153,7 +163,7 @@ class RecordNoteWriteAccessTest {
     @Test
     void participantWithAnAuditGrantMayAddANote() {
         when(processComponent.isProcessParticipant(eq(USER), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(true);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(true);
 
         createNote();
 
@@ -163,7 +173,7 @@ class RecordNoteWriteAccessTest {
     @Test
     void activeRoleWithAnAuditGrantMayAddANote() {
         when(processComponent.isProcessParticipant(eq(USER), any())).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(true);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(true);
 
         createNote();
 
@@ -177,7 +187,7 @@ class RecordNoteWriteAccessTest {
     @Test
     void viewOnlyReaderWithoutAnAuditGrantMayNotAddANote() {
         when(processComponent.isProcessParticipant(eq(USER), any())).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         assertThatThrownBy(this::createNote)
                 .isInstanceOf(RecordNoteException.class)
@@ -188,33 +198,31 @@ class RecordNoteWriteAccessTest {
     }
 
     /**
-     * Holding an audit-granted role that is not the one selected must not be enough: writing a note
-     * is done *as* a role, so it follows the role the user actually switched to. This is what
-     * separates the new predicate from {@code canAuditFunctionUnit}, which spans all roles.
+     * Platform access model D-05: a System Administrator gets no write bypass. Without an audit
+     * grant on the active role (and no task held) the note is refused exactly as for anyone else.
      */
     @Test
-    void anAuditGrantOnANonActiveRoleIsNotEnough() {
+    void systemAdministratorWithoutAnAuditGrantMayNotAddANote() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                UserPrincipal.builder().userId(USER).username(USER)
+                        .roles(List.of("SYS_ADMIN")).superAdmin(true).build(),
+                null, List.of()));
         when(processComponent.isProcessParticipant(eq(USER), any())).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(true);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
-        assertThatThrownBy(this::createNote).isInstanceOf(RecordNoteException.class);
-    }
+        assertThatThrownBy(this::createNote)
+                .isInstanceOf(RecordNoteException.class)
+                .hasMessageContaining("not granted audit access");
 
-    @Test
-    void systemAdministratorMayAlwaysAddANote() {
-        when(functionUnitAccessComponent.isSystemAdministrator(USER)).thenReturn(true);
-
-        createNote();
-
-        verify(recordNoteService).createComment(any(), any(), any(), any(), any(), anyString(), any());
+        verify(recordNoteService, never())
+                .createComment(any(), any(), any(), any(), any(), anyString(), any());
     }
 
     /** Inline images are part of composing a note, so they follow the same rule. */
     @Test
     void inlineImageUploadFollowsTheWriteGate() {
         when(processComponent.isProcessParticipant(eq(USER), any())).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         assertThatThrownBy(() -> component.createInlineImage(USER, target(), null, null, null))
                 .isInstanceOf(RecordNoteException.class);
@@ -224,10 +232,10 @@ class RecordNoteWriteAccessTest {
     @Test
     void canAddNoteMirrorsTheWriteGate() {
         when(processComponent.isProcessParticipant(eq(USER), any())).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
         assertThat(component.canAddNote(USER, target(), null, null)).isFalse();
 
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(true);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(true);
         assertThat(component.canAddNote(USER, target(), null, null)).isTrue();
     }
 
@@ -243,7 +251,7 @@ class RecordNoteWriteAccessTest {
         taskId = TASK_ID;
         engineTask(TASK_ID, INSTANCE_ID);
         when(taskPermissionEvaluator.canProcessTask(any(), eq(USER), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         createNote();
 
@@ -259,7 +267,7 @@ class RecordNoteWriteAccessTest {
         taskId = TASK_ID;
         engineTask(TASK_ID, INSTANCE_ID);
         when(taskPermissionEvaluator.canProcessTask(any(), eq(USER), any())).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         assertThatThrownBy(this::createNote)
                 .isInstanceOf(RecordNoteException.class)
@@ -280,7 +288,7 @@ class RecordNoteWriteAccessTest {
         engineTask(TASK_ID, "some-other-process");
         // The user genuinely holds that task — it is simply not a task on this request.
         when(taskPermissionEvaluator.canProcessTask(any(), eq(USER), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         assertThatThrownBy(this::createNote)
                 .isInstanceOf(RecordNoteException.class)
@@ -295,7 +303,7 @@ class RecordNoteWriteAccessTest {
     void anUnresolvableTaskIdFallsThroughToTheAuditGate() {
         taskId = TASK_ID;
         when(workflowEngineClient.getTaskById(TASK_ID)).thenReturn(Optional.empty());
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         assertThatThrownBy(this::createNote).isInstanceOf(RecordNoteException.class);
 
@@ -311,7 +319,7 @@ class RecordNoteWriteAccessTest {
     void anEngineFailureDoesNotAuthorize() {
         taskId = TASK_ID;
         when(workflowEngineClient.getTaskById(TASK_ID)).thenThrow(new RuntimeException("engine down"));
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         assertThatThrownBy(this::createNote).isInstanceOf(RecordNoteException.class);
     }
@@ -321,7 +329,7 @@ class RecordNoteWriteAccessTest {
     void canAddNoteReflectsTheTaskGrant() {
         engineTask(TASK_ID, INSTANCE_ID);
         when(taskPermissionEvaluator.canProcessTask(any(), eq(USER), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         // Same user, same request: writable from the task form, refused from the request form.
         assertThat(component.canAddNote(USER, target(), null, TASK_ID)).isTrue();
@@ -332,7 +340,7 @@ class RecordNoteWriteAccessTest {
     @Test
     void readingNotesStaysOpenToAnyoneWhoCanOpenTheRequest() {
         when(processComponent.isProcessParticipant(eq(USER), any())).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(USER, FU_CODE)).thenReturn(false);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(USER, FU_CODE)).thenReturn(false);
 
         component.list(USER, target(), 0, 5, null);
 

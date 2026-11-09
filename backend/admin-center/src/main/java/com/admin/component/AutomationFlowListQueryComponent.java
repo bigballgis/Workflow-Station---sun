@@ -7,6 +7,7 @@ import com.admin.list.AutomationFlowColumnSpec;
 
 import com.admin.list.ListQuerySupport;
 import com.admin.service.AutomationFlowService;
+import com.admin.security.AdminTeamScope;
 import com.admin.servicetask.ApWorkspaceSql;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,7 @@ public class AutomationFlowListQueryComponent {
     private final JdbcTemplate jdbcTemplate;
     private final AutomationFlowService automationFlowService;
     private final ApWorkspaceSql workspaceSql;
+    private final AdminTeamScope teamScope;
 
     public AdminListPage<AutomationFlowSummary> query(AutomationFlowListQueryRequest request) {
         long started = System.nanoTime();
@@ -57,6 +59,8 @@ public class AutomationFlowListQueryComponent {
         StringBuilder where = new StringBuilder(FROM_HEAD)
                 .append(workspaceSql.joinClause())
                 .append(FROM_TAIL);
+        // A Technical Lead sees the flows of the teams they lead and of Public (D-48).
+        teamScope.appendVisibleWorkspaces(where, params, "vg.id");
         appendKeyword(where, params, request.keyword());
         where.append(filterSql.whereClause(request.filters(), params));
 

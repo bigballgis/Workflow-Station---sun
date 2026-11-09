@@ -55,16 +55,19 @@ public class BiGuestTokenServiceImpl implements BiGuestTokenService {
             throw new DashboardInactiveException(dashboardId);
         }
 
-        // 2. Verify the appropriate assignment context. Landing-page callers omit dataViewId and go
+        // 2. Verify the appropriate assignment context. Landing-page callers name no Data View and go
         //    through getUserDashboards, which already applies the RBAC-mapping role gate (Superset
         //    dashboard_roles vs. the user's mapped Superset roles), so a role-restricted dashboard the
         //    user cannot see is rejected here as well. Data -> Views callers must prove both the table
         //    binding and access to the concrete published view (same gate, applied in that service).
         boolean isAssigned;
-        if (request.getDataViewId() != null) {
+        boolean dataViewContext = request.getDataViewFunctionUnitCode() != null || request.getDataViewName() != null;
+        if (dataViewContext) {
+            // Both name the View; one without the other is no View at all.
             isAssigned = dataViewAssignmentService != null
-                    && dataViewAssignmentService.canAccessDashboardForView(
-                    userId, dashboardId, request.getDataViewId());
+                    && request.getDataViewFunctionUnitCode() != null && request.getDataViewName() != null
+                    && dataViewAssignmentService.canAccessDashboardForView(userId, dashboardId,
+                    request.getDataViewFunctionUnitCode(), request.getDataViewName());
         } else {
             List<UserDashboardResponse> userDashboards = assignmentService.getUserDashboards(
                     userId, request.getActiveBusinessUnitId());

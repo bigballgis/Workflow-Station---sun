@@ -10,7 +10,7 @@ import java.time.Instant;
 /**
  * SLA lead time of one Function Unit (calendar days). The portal stamps every open case's due date
  * as start date + {@link #leadTimeDays}; which fields hold those dates is design-time config
- * ({@code dw_table_definitions.sla_config}). Environment data: never exported with the FU.
+ * (the main table's {@code slaConfig} in the released version). Environment data: never exported with the FU.
  */
 @Entity
 @Table(name = "ac_sla_policies")

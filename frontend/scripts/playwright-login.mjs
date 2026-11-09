@@ -212,11 +212,12 @@ export async function loginViaDwPassword(page, opts = {}) {
 /**
  * Direct Admin Center username/password login via POST /api/v1/admin/auth/login.
  * Prefer this over loginViaUnifiedSso for admin screenshots (SSO form is unreliable headless).
- * Default: admin / admin123 (seed in 01-create-admin-only.sql; or LOGIN_USER / LOGIN_PASS).
+ * Default: developer / password, the dev System Administrator since the platform access model switch
+ * (admin / 44027893 hold no Admin role any more); override with LOGIN_USER / LOGIN_PASS.
  */
 export async function loginViaAdminPassword(page, opts = {}) {
-  const user = opts.user ?? process.env.LOGIN_USER ?? 'admin'
-  const pass = opts.pass ?? process.env.LOGIN_PASS ?? 'admin123'
+  const user = opts.user ?? process.env.LOGIN_USER ?? 'developer'
+  const pass = opts.pass ?? process.env.LOGIN_PASS ?? 'password'
   const origin = (opts.loginOrigin ?? 'http://localhost:3000').replace(/\/$/, '')
 
   await page.goto(`${origin}/admin/`, { waitUntil: 'commit' })

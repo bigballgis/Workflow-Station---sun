@@ -11,7 +11,8 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * View access rules must be empty (admin-only) or include both BU and Role dimensions.
+ * View access rules must be empty (nobody sees the view, System Administrator included) or include both BU and
+ * Role dimensions.
  * Used by Save, publish, clone, import/export portability.
  */
 public final class MainTableViewAccessRulesValidator {
@@ -20,6 +21,7 @@ public final class MainTableViewAccessRulesValidator {
     public static final String PAIR_ERROR_MESSAGE =
             "Business units and roles must both be configured, or both left empty";
     public static final String IMPORT_UNRESOLVED_CODE = "BIZ_VIEW_ACCESS_IMPORT_UNRESOLVED";
+    public static final String EXPORT_UNRESOLVED_CODE = "BIZ_VIEW_ACCESS_EXPORT_UNRESOLVED";
 
     private MainTableViewAccessRulesValidator() {
     }
@@ -78,5 +80,18 @@ public final class MainTableViewAccessRulesValidator {
                 "View '" + viewName + "': could not resolve access rule "
                         + targetType + " code=" + targetCode
                         + " — ensure BU/Role codes exist in target environment");
+    }
+
+    /**
+     * Another environment can only map a rule by its BU/Role code, so a rule whose id no longer
+     * resolves to a code here would arrive pointing at nothing.
+     */
+    public static DeveloperBusinessException exportUnresolved(String viewName, String targetType, String targetId) {
+        String target = MainTableViewAccessTargetType.ROLE.name().equals(targetType) ? "role" : "business unit";
+        return new DeveloperBusinessException(
+                EXPORT_UNRESOLVED_CODE,
+                "View '" + viewName + "': access rule " + targetType + " id=" + targetId
+                        + " does not match any " + target + " with a code in this environment, so it cannot be"
+                        + " exported. Reselect the Business Units and Roles of this View in View Design.");
     }
 }

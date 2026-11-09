@@ -2,8 +2,12 @@
 -- Flowable 7.0.0 → 7.2.0 数据库迁移（合并脚本，图形客户端可整文件执行）
 -- =============================================================================
 --
--- 用途：把已在跑 Flowable 7.0.0 的现有库升级到 7.2.0。
---       新建空库**不要**用本文件，请用 ../create/flowable.postgres.all.create.sql。
+-- 用途：把 Flowable 7.0.0 的库升级到 7.2.0：
+--   - 已在跑 7.0.0 的现有库；
+--   - k8s 新建空库：../create/flowable.postgres.all.create.sql 只建到 7.0.0.0，按
+--     deploy/k8s/init-data/README.md 的顺序（Flowable create → schema 包 → seed 包 → 本文件）最后执行，
+--     否则 7.2.0 的引擎（FLOWABLE_SCHEMA_UPDATE=false）报 version mismatch 拒绝启动。
+--     本文件的后置校验要求 schema 包里 30-/31- 的加宽列已存在，所以排在 schema 包之后。
 --
 -- 本文件 = 三个官方增量脚本按序合并 + 前后置校验 + 本仓库自有加宽列的保护：
 --     flowable.postgres.upgradestep.7.0.0.to.7.0.1.all.sql   → 7.0.1.1

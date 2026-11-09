@@ -71,9 +71,9 @@ public interface FunctionUnitComponent {
     FunctionUnit publishForDeployment(Long id, String changeLog);
     
     /**
-     * Clone a function unit
+     * Clone a function unit into one workspace: the caller can see the source (D-35) and may create in the target.
      */
-    FunctionUnit clone(Long id, String newName);
+    FunctionUnit clone(Long id, String newName, String targetGroupId);
     
     /**
      * Validate function unit integrity
@@ -114,7 +114,8 @@ public interface FunctionUnitComponent {
     boolean existsByNameAndIdNot(String name, Long id);
 
     /**
-     * Replace virtual dev group assignments (only Team Lead creator or Technical Lead)
+     * Move the function unit to exactly one other workspace: the caller manages it where it is and may create in the
+     * target (platform access model §6.2, §6.3).
      */
     void replaceDevGroupAssignments(Long functionUnitId, DevGroupAssignmentRequest request);
 
@@ -122,13 +123,6 @@ public interface FunctionUnitComponent {
      * List of sys_virtual_groups.id currently assigned to this function unit
      */
     java.util.List<String> getDevGroupAssignments(Long functionUnitId);
-
-    /**
-     * Whether the current user may enter the function unit workspace.
-     * True for ADMIN/TECH_LEAD/TEAM_LEAD/DEVELOPER capability roles, or for
-     * members of a team (virtual group) that owns at least one function unit (read-only baseline).
-     */
-    boolean canAccessWorkspace();
 
     /**
      * The current user's selectable teams (for the entry dialog / header switcher), plus

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { installSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 import i18n from '@/i18n'
 import { getUser } from './auth'
 
@@ -8,6 +9,7 @@ const workstationAuthAxios = axios.create({
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 })
+installSessionRefresh(workstationAuthAxios, config => axios.request(config))
 workstationAuthAxios.interceptors.response.use(
   response => response.data,
   error => Promise.reject(error)
@@ -23,6 +25,7 @@ const adminCenterAxios = axios.create({
   timeout: 30000,
   withCredentials: true
 })
+installSessionRefresh(adminCenterAxios, config => axios.request(config))
 
 adminCenterAxios.interceptors.request.use(config => {
   // This UI is English-only; without the header the backend answers in the browser's language.

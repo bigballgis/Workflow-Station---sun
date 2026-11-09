@@ -6,6 +6,8 @@ import com.developer.entity.FormDefinition;
 import com.developer.entity.FormStageBinding;
 import com.developer.enums.FormScene;
 import com.developer.repository.FormStageBindingRepository;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,6 +40,7 @@ public class FormStageBindingController {
 
     private final FormStageBindingRepository formStageBindingRepository;
     private final FormDesignComponent formDesignComponent;
+    private final FunctionUnitWorkspaceAccessService workspaceAccessService;
 
     @GetMapping
     @Transactional(readOnly = true)
@@ -85,6 +88,8 @@ public class FormStageBindingController {
     }
 
     private ResponseEntity<ApiResponse<Map<String, Object>>> buildSuccess(FormStageBinding binding) {
+        // The path names no unit, so the unit of the form found is the one the caller must be able to see (§6.1).
+        workspaceAccessService.assertCanAccess(binding.getForm().getFunctionUnit().getId(), WorkspaceAccessAction.VIEW);
         FormDefinition def = formDesignComponent.getById(binding.getForm().getId());
         Map<String, Object> form = new HashMap<>();
         form.put("formName", def.getFormName());

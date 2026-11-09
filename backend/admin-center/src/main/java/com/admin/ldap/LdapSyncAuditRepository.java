@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,8 +15,8 @@ import java.util.Optional;
 @Repository
 public interface LdapSyncAuditRepository extends JpaRepository<LdapSyncAudit, String> {
 
-    /** 最近一次成功的同步（任意类型），用于增量水位回退到全量基线判断。 */
-    Optional<LdapSyncAudit> findTopByStatusOrderByStartedAtDesc(String status);
+    /** 最近一次给定类型之一、给定状态的同步（用户增量同步的起点只认用户同步）。 */
+    Optional<LdapSyncAudit> findTopBySyncTypeInAndStatusOrderByStartedAtDesc(Collection<String> syncTypes, String status);
 
     /** 最近一次指定类型 + 状态的同步记录。 */
     Optional<LdapSyncAudit> findTopBySyncTypeAndStatusOrderByStartedAtDesc(String syncType, String status);
@@ -25,7 +26,4 @@ public interface LdapSyncAuditRepository extends JpaRepository<LdapSyncAudit, St
 
     /** 同步历史（前 N 条，时间倒序）。 */
     List<LdapSyncAudit> findTop20ByOrderByStartedAtDesc();
-
-    /** 最近一次成功的 Hermes 组同步（HERMES_AD_GROUP 或 HERMES_AD_INCR），用于增量水位。 */
-    Optional<LdapSyncAudit> findTopBySyncTypeInAndStatusOrderByStartedAtDesc(List<String> syncTypes, String status);
 }

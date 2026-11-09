@@ -28,14 +28,16 @@ public class LinkFormComponentController {
     
     @PostMapping("/data")
     public ApiResponse<LinkFormDataResponse> saveFormData(
+            @PathVariable Long functionUnitId,
             @Valid @RequestBody LinkFormDataRequest request) {
-        return ApiResponse.success(service.saveFormData(request));
+        return ApiResponse.success(service.saveFormData(functionUnitId, request));
     }
-    
+
     @GetMapping("/data")
     public ApiResponse<LinkFormDataResponse> getFormData(
+            @PathVariable Long functionUnitId,
             @RequestParam Long componentId,
             @RequestParam Long subTableRowId) {
-        return ApiResponse.success(service.getFormData(componentId, subTableRowId));
+        return ApiResponse.success(service.getFormData(functionUnitId, componentId, subTableRowId));
     }
 }

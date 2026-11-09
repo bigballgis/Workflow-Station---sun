@@ -3,16 +3,14 @@
  *
  * - No allowedRoles / empty array / unreadable legacy configJson → visible to every portal user.
  * - Non-empty allowedRoles → visible only when session role codes intersect (any one match).
- * - System Administrator → always visible.
+ * - Same rule for everyone, System Administrator included (platform access model D-05).
  *
  * Display-only; the server does not reject the action (see help actionAllowedRolesGuide.failApi).
  */
 export function isActionVisibleForSession(
   configJson: unknown,
   sessionRoleCodes: readonly string[],
-  systemAdministrator: boolean,
 ): boolean {
-  if (systemAdministrator) return true
   const allowed = readAllowedRoleCodes(configJson)
   if (allowed.length === 0) return true
   const held = new Set(sessionRoleCodes)

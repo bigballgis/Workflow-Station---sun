@@ -41,8 +41,9 @@ public class ExportImportController {
     @RequireDeveloperPermission(value = {"FUNCTION_UNIT_CREATE", "FUNCTION_UNIT_UPDATE"}, mode = RequireDeveloperPermission.Mode.ALL)
     public ResponseEntity<ApiResponse<Map<String, Object>>> importFunctionUnit(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(required = false) String changeLog) {
-        Map<String, Object> result = exportImportComponent.importFunctionUnit(file, changeLog);
+            @RequestParam(required = false) String changeLog,
+            @RequestParam(required = false) String targetGroupId) {
+        Map<String, Object> result = exportImportComponent.importFunctionUnit(file, changeLog, targetGroupId);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 

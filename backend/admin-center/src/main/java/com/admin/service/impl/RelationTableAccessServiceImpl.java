@@ -78,9 +78,10 @@ public class RelationTableAccessServiceImpl implements RelationTableAccessServic
 
     @Override
     @Transactional
-    public RelationTableAccess updatePermissionLevel(String accessId, String permissionLevel) {
+    public RelationTableAccess updatePermissionLevel(Long tableId, String accessId, String permissionLevel) {
         RelationTableAccess access = accessRepository.findById(accessId)
                 .orElseThrow(() -> new IllegalArgumentException("Access config not found: " + accessId));
+        requireOfTable(access, tableId);
         access.setPermissionLevel(RelationPermissionLevel.normalize(permissionLevel));
         access = accessRepository.save(access);
         log.info("Updated access {} permission level to {}", accessId, access.getPermissionLevel());
@@ -89,9 +90,19 @@ public class RelationTableAccessServiceImpl implements RelationTableAccessServic
 
     @Override
     @Transactional
-    public void removeAccess(String accessId) {
-        accessRepository.deleteById(accessId);
-        log.info("Removed access config: {}", accessId);
+    public void removeAccess(Long tableId, String accessId) {
+        accessRepository.findById(accessId).ifPresent(access -> {
+            requireOfTable(access, tableId);
+            accessRepository.delete(access);
+            log.info("Removed access config: {}", accessId);
+        });
+    }
+
+    /** Who may change a table is decided by the table in the path; a grant of another table is not reachable. */
+    private static void requireOfTable(RelationTableAccess access, Long tableId) {
+        if (!access.getTableId().equals(tableId)) {
+            throw new IllegalArgumentException("Access config does not belong to this relation table");
+        }
     }
 
     @Override

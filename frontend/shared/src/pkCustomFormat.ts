@@ -1,6 +1,6 @@
 /**
  * Custom PK template parse/preview. Runtime allocation lives in backend CustomPkFormat.
- * DATETIME uses Asia/Shanghai, matching table audit fields.
+ * DATETIME uses Asia/Hong_Kong, matching table audit fields.
  */
 
 import { formatJavaDatePattern, type PkResetPeriod } from './pkDatetimeFormat'

@@ -24,8 +24,8 @@ public class BiAssignmentConfigurationComponentImpl implements BiAssignmentConfi
         return dataView.updateEnabled(id, enabled);
     }
 
-    public List<DataViewOptionResponse> listViews(Long functionUnitId, Long tableId) {
+    public List<DataViewOptionResponse> listViews(String functionUnitCode, String tableName) {
         guard.requireAdminUserId();
-        return dataView.listViews(functionUnitId, tableId);
+        return dataView.listViews(functionUnitCode, tableName);
     }
 }

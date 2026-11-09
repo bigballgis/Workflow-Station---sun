@@ -27,10 +27,9 @@ class EntityTypeConverterTest {
     }
     
     @Test
-    @DisplayName("toRoleType: Should convert BU_UNBOUNDED string to enum")
+    @DisplayName("toRoleType: BU_UNBOUNDED is an unknown type (D-64)")
     void testToRoleType_BuUnbounded() {
-        RoleType result = EntityTypeConverter.toRoleType("BU_UNBOUNDED");
-        assertEquals(RoleType.BU_UNBOUNDED, result);
+        assertThrows(IllegalArgumentException.class, () -> EntityTypeConverter.toRoleType("BU_UNBOUNDED"));
     }
     
     @Test
@@ -102,13 +101,6 @@ class EntityTypeConverterTest {
     }
     
     @Test
-    @DisplayName("fromRoleType: Should convert BU_UNBOUNDED enum to string")
-    void testFromRoleType_BuUnbounded() {
-        String result = EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED);
-        assertEquals("BU_UNBOUNDED", result);
-    }
-    
-    @Test
     @DisplayName("fromRoleType: Should convert ADMIN enum to string")
     void testFromRoleType_Admin() {
         String result = EntityTypeConverter.fromRoleType(RoleType.ADMIN);
@@ -152,7 +144,7 @@ class EntityTypeConverterTest {
     @Test
     @DisplayName("Bidirectional: fromRoleType(toRoleType(x)) should equal x for all valid strings")
     void testBidirectionalConversion_AllValidStrings() {
-        String[] validStrings = {"BU_BOUNDED", "BU_UNBOUNDED", "ADMIN", "AUDITOR", "DEVELOPER"};
+        String[] validStrings = {"BU_BOUNDED", "ADMIN", "AUDITOR", "DEVELOPER"};
         
         for (String stringType : validStrings) {
             RoleType enumType = EntityTypeConverter.toRoleType(stringType);

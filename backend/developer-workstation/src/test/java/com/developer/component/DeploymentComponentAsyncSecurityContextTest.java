@@ -86,6 +86,8 @@ class DeploymentComponentAsyncSecurityContextTest {
                 functionUnitWorkspaceAccessService,
                 new JwtProperties(),
                 emailMonitorRuleComponent);
+        // Spring injects admin-center.url; deployments may only target it.
+        org.springframework.test.util.ReflectionTestUtils.setField(deploymentComponent, "defaultAdminCenterUrl", "http://admin-center:8080");
         when(i18nService.getMessage(anyString())).thenReturn("Test Message");
         when(i18nService.getMessage(anyString(), (Object[]) any())).thenReturn("Test Message");
     }

@@ -50,6 +50,11 @@ public final class FunctionUnitManagerTestFactory {
         ImportViewAccessValidator viewValidator = Mockito.mock(ImportViewAccessValidator.class);
         Mockito.lenient().when(viewValidator.remapAndValidate(Mockito.any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        // Team placement has its own tests (FunctionUnitTeamServiceTest); here every import lands in one team.
+        com.admin.service.FunctionUnitTeamService teamService = Mockito.mock(com.admin.service.FunctionUnitTeamService.class);
+        Mockito.lenient().when(teamService.resolveImportTeam(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+                Mockito.any())).thenReturn("TEAM_TEST");
+        Mockito.lenient().when(teamService.teamOf(Mockito.any())).thenReturn(java.util.Optional.empty());
         FunctionUnitImportComponent importComponent = new FunctionUnitImportComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(FunctionUnitAccessService.class),
@@ -59,10 +64,10 @@ public final class FunctionUnitManagerTestFactory {
                 Mockito.mock(EmailConnectionSyncComponent.class),
                 Mockito.mock(EmailMonitorSyncComponent.class),
                 Mockito.mock(ImportBpmnStructureValidator.class),
-                viewValidator);
-        FormTableBindingLoader bindingLoader = new FormTableBindingLoader(jdbcTemplate, objectMapper);
+                viewValidator,
+                teamService);
         FunctionUnitContentComponent contentComponent = new FunctionUnitContentComponent(
-                contentRepository, jdbcTemplate, lookup, bindingLoader, objectMapper);
+                contentRepository, jdbcTemplate, lookup, objectMapper);
         FunctionUnitLifecycleComponent lifecycleComponent = new FunctionUnitLifecycleComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(com.admin.repository.FunctionUnitAuditAccessRepository.class),

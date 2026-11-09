@@ -7,7 +7,6 @@ import com.admin.enums.DeveloperPermission;
 import com.admin.repository.DeveloperRolePermissionRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
-import com.admin.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,7 +25,7 @@ import java.util.stream.Collectors;
 public class DeveloperPermissionService {
     
     private final DeveloperRolePermissionRepository permissionRepository;
-    private final UserRoleRepository userRoleRepository;
+    private final UserRoleIdResolver userRoleIdResolver;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     
@@ -37,15 +36,13 @@ public class DeveloperPermissionService {
         // Technical Lead (技术主管)：所有权限
         DEFAULT_ROLE_PERMISSIONS.put("TECH_LEAD", EnumSet.allOf(DeveloperPermission.class));
 
-        // Team Lead：与 Developer 同一套设计/发布能力 + 功能单元创建/删除/分配开发组
-        EnumSet<DeveloperPermission> teamLead = EnumSet.of(
-            DeveloperPermission.FUNCTION_UNIT_CREATE,
+        // Developer：设计、发布、部署本团队的功能单元，不能新建 / 删除功能单元、不能改所属团队（平台访问模型 §6.2）。
+        // 在哪个团队生效由 DW 按团队名单判断；这里只是能力上限。
+        DEFAULT_ROLE_PERMISSIONS.put("DEVELOPER", EnumSet.of(
             DeveloperPermission.FUNCTION_UNIT_UPDATE,
-            DeveloperPermission.FUNCTION_UNIT_DELETE,
             DeveloperPermission.FUNCTION_UNIT_VIEW,
             DeveloperPermission.FUNCTION_UNIT_DEVELOP,
             DeveloperPermission.FUNCTION_UNIT_PUBLISH,
-            DeveloperPermission.FUNCTION_UNIT_ASSIGN_DEV_GROUP,
             DeveloperPermission.FORM_CREATE,
             DeveloperPermission.FORM_UPDATE,
             DeveloperPermission.FORM_DELETE,
@@ -62,15 +59,7 @@ public class DeveloperPermissionService {
             DeveloperPermission.ACTION_UPDATE,
             DeveloperPermission.ACTION_DELETE,
             DeveloperPermission.ACTION_VIEW
-        );
-        DEFAULT_ROLE_PERMISSIONS.put("TEAM_LEAD", teamLead);
-
-        // Developer：与 Team Lead 相同的设计站权限，但不能创建/删除功能单元、不能分配开发组
-        EnumSet<DeveloperPermission> developer = teamLead.clone();
-        developer.remove(DeveloperPermission.FUNCTION_UNIT_CREATE);
-        developer.remove(DeveloperPermission.FUNCTION_UNIT_DELETE);
-        developer.remove(DeveloperPermission.FUNCTION_UNIT_ASSIGN_DEV_GROUP);
-        DEFAULT_ROLE_PERMISSIONS.put("DEVELOPER", developer);
+        ));
 
         DEFAULT_ROLE_PERMISSIONS.put("AUDITOR", EnumSet.of(DeveloperPermission.FUNCTION_UNIT_VIEW));
     }
@@ -121,7 +110,7 @@ public class DeveloperPermissionService {
     }
 
     private List<Role> loadActiveRoles(String userId) {
-        List<String> allRoleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
+        List<String> allRoleIds = userRoleIdResolver.allRoleIds(userId);
         List<Role> roles = new ArrayList<>();
         for (String roleId : allRoleIds) {
             Role role = roleRepository.findById(roleId).orElse(null);

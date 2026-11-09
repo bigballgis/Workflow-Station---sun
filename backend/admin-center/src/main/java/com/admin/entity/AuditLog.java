@@ -21,7 +21,7 @@ import java.time.Instant;
         @Index(name = "idx_audit_timestamp", columnList = "timestamp")
 })
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class AuditLog {

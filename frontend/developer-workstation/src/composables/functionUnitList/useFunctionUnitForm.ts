@@ -4,14 +4,12 @@ import { ElMessage, type FormInstance } from 'element-plus'
 import {
   functionUnitApi,
   type FunctionUnitResponse,
-  type DevGroupOption,
   type FunctionUnitStartupMode
 } from '@/api/functionUnit'
-import { adminCenterApi, type VirtualGroupInfo } from '@/api/adminCenter'
 import type { useFunctionUnitStore } from '@/stores/functionUnit'
 import { normalizeTags } from '@/utils/tagStorage'
-import { permissions, canCreateInWorkspace } from '@/utils/permission'
-import { ALL_GROUPS, getActiveGroupRaw, setMemberGroupIds } from '@/utils/devGroupContext'
+import { canCreateInWorkspace, canManageFunctionUnit } from '@/utils/permission'
+import { ALL_GROUPS, getActiveGroupRaw, setMyDevGroups } from '@/utils/devGroupContext'
 
 type FunctionUnitStore = ReturnType<typeof useFunctionUnitStore>
 
@@ -20,14 +18,23 @@ interface UseFunctionUnitFormOptions {
   reload: () => void
 }
 
-/** Create / settings dialog state and submission for the function unit list. */
+interface WorkspaceOption {
+  id: string
+  name: string
+}
+
+/**
+ * Create / settings dialog state and submission for the function unit list. A function unit belongs to exactly one
+ * workspace (platform access model §6.3): it is chosen when creating, and changing it in the settings moves the unit,
+ * which only the workspace's Technical Lead or a System Administrator may do (§6.2).
+ */
 export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
   const { store, reload } = options
   const { t } = useI18n()
 
   const showFormDialog = ref(false)
   const formDialogMode = ref<'create' | 'settings'>('create')
-  const settingsItemId = ref<number | null>(null)
+  const settingsItem = ref<FunctionUnitResponse | null>(null)
   const formSubmitting = ref(false)
   const formRef = ref<FormInstance>()
   const basicForm = reactive({
@@ -35,7 +42,7 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     description: '',
     iconId: null as number | null,
     tags: [] as string[],
-    teamGroupIds: [] as string[],
+    teamGroupId: '',
     /**
      * Only meaningful when editing: a new unit is created STANDALONE, and whether it should be
      * callable is typically decided later, once its process exists.
@@ -43,86 +50,60 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     startupMode: 'STANDALONE' as FunctionUnitStartupMode
   })
 
-  const teamOptions = ref<VirtualGroupInfo[]>([])
+  const teamOptions = ref<WorkspaceOption[]>([])
   const teamsLoading = ref(false)
-  const myGroups = ref<DevGroupOption[]>([])
-  const canSeeAll = ref(false)
-  const publicGroupId = ref<string>('')
 
-  // Whether the team field is an editable selector (SYS_ADMIN / TECH_LEAD) vs read-only
-  // (regular creators: team = their currently selected team; enforced by backend).
-  const teamEditable = computed(() => permissions.canReassignTeam())
+  // Creating always picks the workspace; in the settings only someone who may move the unit picks another one.
+  const teamEditable = computed(() =>
+    formDialogMode.value === 'create' || canManageFunctionUnit(settingsItem.value))
 
   // Always show the team field so the user sees which team owns the FU.
   const showTeamSelector = computed(() => true)
 
-  // Display name of the user's currently active team (for the read-only field on create).
-  const activeGroupName = computed(() => {
-    const raw = getActiveGroupRaw()
-    if (!raw || raw === ALL_GROUPS) return raw === ALL_GROUPS ? t('devGroup.allGroups') : ''
-    if (raw === publicGroupId.value) return 'Public'
-    return myGroups.value.find(g => g.id === raw)?.name ?? ''
+  /** The unit's workspace as the settings show it read-only, with its state when the team is gone or disabled. */
+  const currentTeamName = computed(() => {
+    const item = settingsItem.value
+    if (!item) return ''
+    if (item.workspaceStatus === 'MISSING') return t('devGroup.workspaceMissing')
+    if (item.workspaceStatus === 'INACTIVE') return `${item.workspaceName ?? ''} (${t('devGroup.inactive')})`
+    return item.workspaceStatus === 'PUBLIC' ? t('devGroup.publicGroup') : item.workspaceName ?? ''
   })
-
-  // Read-only display of a function unit's current team names (settings, non-editable users).
-  const currentTeamNames = ref<string>('')
 
   const formDialogTitle = computed(() =>
     formDialogMode.value === 'create' ? t('functionUnit.create') : t('functionUnit.settings')
   )
   const formRules = computed(() => ({
     name: [{ required: true, message: t('functionUnit.enterName'), trigger: 'blur' }],
-    // Only editable creators must pick a team; regular creators inherit the active team.
-    teamGroupIds: (formDialogMode.value === 'create' && teamEditable.value)
+    teamGroupId: teamEditable.value
       ? [{ required: true, message: t('functionUnit.selectTeamRequired'), trigger: 'change' }]
       : []
   }))
 
-  function nameById(id: string): string {
-    if (id === publicGroupId.value) return 'Public'
-    return teamOptions.value.find(g => g.id === id)?.name
-      ?? myGroups.value.find(g => g.id === id)?.name
-      ?? id
-  }
-
+  /** Workspaces a unit may land in for the user: teams they may create in, and Public for a System Administrator. */
   async function loadTeamOptions() {
     teamsLoading.value = true
     try {
-      // Dev-group context: names for read-only display + team scoping for the editable selector.
       const my = await functionUnitApi.getMyDevGroups()
-      myGroups.value = my?.data?.groups ?? []
-      canSeeAll.value = my?.data?.canSeeAllGroups === true
-      publicGroupId.value = my?.data?.publicGroupId ?? ''
-      setMemberGroupIds(my?.data?.memberGroupIds)
-    } catch {
-      myGroups.value = []
-      canSeeAll.value = false
-    }
-    if (teamEditable.value) {
-      try {
-        // Creation destinations obey the same scope/capability rule as the create button.
-        if (formDialogMode.value === 'create') {
-          teamOptions.value = myGroups.value
-            .filter(g => g.status !== 'INACTIVE' && canCreateInWorkspace(g.id))
-            .map(g => ({ id: g.id, name: g.name }))
-          if (publicGroupId.value && canCreateInWorkspace(publicGroupId.value)) {
-            teamOptions.value.push({ id: publicGroupId.value, name: 'Public' })
-          }
-        } else if (canSeeAll.value) {
-          const developer = await adminCenterApi.getVirtualGroups('DEVELOPER', 'ACTIVE')
-          teamOptions.value = developer.sort((a, b) =>
-            (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
-          )
-        } else {
-          const opts: VirtualGroupInfo[] = myGroups.value.map(g => ({ id: g.id, name: g.name }))
-          if (publicGroupId.value) opts.push({ id: publicGroupId.value, name: 'Public' })
-          teamOptions.value = opts
-        }
-      } catch {
-        teamOptions.value = []
+      const groups = my?.data?.groups ?? []
+      const publicGroupId = my?.data?.publicGroupId ?? ''
+      setMyDevGroups(groups, my?.data?.canWritePublic === true)
+      const options: WorkspaceOption[] = groups
+        .filter(g => canCreateInWorkspace(g.id))
+        .map(g => ({ id: g.id, name: g.name }))
+      if (publicGroupId && canCreateInWorkspace(publicGroupId)) {
+        options.push({ id: publicGroupId, name: t('devGroup.publicGroup') })
       }
+      // Moving: the current workspace stays listed so the field shows where the unit is now.
+      const item = settingsItem.value
+      if (item?.workspaceId && !options.some(o => o.id === item.workspaceId)) {
+        options.unshift({ id: item.workspaceId, name: currentTeamName.value })
+      }
+      teamOptions.value = options
+    } catch {
+      teamOptions.value = []
+    } finally {
+      teamsLoading.value = false
     }
-    teamsLoading.value = false
   }
 
   function resetBasicForm() {
@@ -130,24 +111,19 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     basicForm.description = ''
     basicForm.iconId = null
     basicForm.tags = []
-    basicForm.teamGroupIds = []
+    basicForm.teamGroupId = ''
     basicForm.startupMode = 'STANDALONE'
   }
 
   function openCreateDialog() {
     formDialogMode.value = 'create'
-    settingsItemId.value = null
+    settingsItem.value = null
     resetBasicForm()
-    currentTeamNames.value = ''
     void loadTeamOptions().then(() => {
-      // Pre-select the user's currently active team so editable creators (admin/tech-lead)
-      // default to the team they are working in and don't accidentally file the FU under the
-      // wrong team. "All groups" (__ALL__) has no single team, so leave the selection empty.
-      if (teamEditable.value) {
-        const raw = getActiveGroupRaw()
-        if (raw && raw !== ALL_GROUPS) {
-          basicForm.teamGroupIds = [raw]
-        }
+      // Default to the workspace the user is working in, when they may create there.
+      const raw = getActiveGroupRaw()
+      if (raw && raw !== ALL_GROUPS && teamOptions.value.some(o => o.id === raw)) {
+        basicForm.teamGroupId = raw
       }
     })
     showFormDialog.value = true
@@ -155,33 +131,20 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
 
   function handleFormDialogClosed() {
     formRef.value?.resetFields()
-    settingsItemId.value = null
+    settingsItem.value = null
   }
 
   function handleSettings(item: FunctionUnitResponse) {
     formDialogMode.value = 'settings'
-    settingsItemId.value = item.id
+    settingsItem.value = item
     basicForm.name = item.name
     basicForm.description = item.description ?? ''
     basicForm.iconId = item.iconId ?? null
     basicForm.tags = [...normalizeTags(item.tags)]
-    basicForm.teamGroupIds = []
+    basicForm.teamGroupId = item.workspaceId ?? ''
     basicForm.startupMode = item.startupMode ?? 'STANDALONE'
-    currentTeamNames.value = ''
     showFormDialog.value = true
-    // Load names/options, then the FU's current team assignment for display / editing.
-    void loadTeamOptions().then(() => {
-      functionUnitApi.getDevGroups(item.id)
-        .then(res => {
-          const ids = res.data ?? []
-          basicForm.teamGroupIds = ids
-          currentTeamNames.value = ids.map(nameById).join(', ')
-        })
-        .catch(() => {
-          basicForm.teamGroupIds = []
-          currentTeamNames.value = ''
-        })
-    })
+    if (teamEditable.value) void loadTeamOptions()
   }
 
   async function handleFormSubmit() {
@@ -195,20 +158,17 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
         iconId: basicForm.iconId ?? undefined,
         tags: normalizeTags(basicForm.tags),
       }
+      const item = settingsItem.value
       if (formDialogMode.value === 'create') {
-        // Editable creators (admin/tech-lead) choose the team; regular creators inherit the
-        // currently selected team server-side (backend resolves from the X-Dev-Group-Id header).
-        const virtualGroupIds = teamEditable.value ? basicForm.teamGroupIds : undefined
-        await store.create({ ...payload, startupMode: basicForm.startupMode, virtualGroupIds })
+        await store.create({ ...payload, startupMode: basicForm.startupMode, virtualGroupIds: [basicForm.teamGroupId] })
         ElMessage.success(t('functionUnit.createSuccess'))
-      } else if (settingsItemId.value != null) {
-        await store.update(settingsItemId.value, {
+      } else if (item) {
+        await store.update(item.id, {
           ...payload,
           startupMode: basicForm.startupMode
         })
-        // Only editable users may reassign the team.
-        if (teamEditable.value) {
-          await functionUnitApi.replaceDevGroups(settingsItemId.value, basicForm.teamGroupIds)
+        if (teamEditable.value && basicForm.teamGroupId && basicForm.teamGroupId !== item.workspaceId) {
+          await functionUnitApi.moveToWorkspace(item.id, basicForm.teamGroupId)
         }
         ElMessage.success(t('functionUnit.saveSuccess'))
       }
@@ -217,8 +177,8 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
       reload()
       store.fetchAllTags()
     } catch (e: unknown) {
-      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-      ElMessage.error(message || t('functionUnit.saveFailed'))
+      const data = (e as { response?: { data?: { message?: string; error?: { message?: string } } } })?.response?.data
+      ElMessage.error(data?.error?.message || data?.message || t('functionUnit.saveFailed'))
     } finally {
       formSubmitting.value = false
     }
@@ -236,8 +196,7 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     teamsLoading,
     showTeamSelector,
     teamEditable,
-    activeGroupName,
-    currentTeamNames,
+    currentTeamName,
     openCreateDialog,
     handleFormDialogClosed,
     handleSettings,

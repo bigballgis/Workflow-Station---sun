@@ -5,7 +5,7 @@ import com.developer.dto.LoginRequest;
 import com.developer.dto.LoginResponse;
 import com.developer.entity.User;
 import com.developer.repository.UserRepository;
-import com.developer.security.LegacyVirtualGroupRoleLookup;
+import com.developer.security.DeveloperWorkstationEntitlement;
 import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.service.JwtTokenService;
@@ -40,7 +40,6 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final LegacyVirtualGroupRoleLookup legacyVirtualGroupRoleLookup;
     private final UserRoleService userRoleService;
     private final I18nService i18nService;
     private final JwtTokenService jwtTokenService;
@@ -49,7 +48,7 @@ public class AuthController {
     @Value("${jwt.secret}")
     private String jwtSecret;
     
-    @Value("${jwt.expiration:2592000000}")
+    @Value("${jwt.expiration}")
     private long jwtExpiration;
 
     @PostMapping("/login")
@@ -65,7 +64,8 @@ public class AuthController {
                 throw new RuntimeException(i18nService.getMessage("auth.account_locked"));
             }
             
-            if ("DISABLED".equals(user.getStatus())) {
+            // sys_users.status holds UserStatus names (ACTIVE / INACTIVE / LOCKED); there is no "DISABLED".
+            if (!isAccountUsable(user)) {
                 throw new RuntimeException(i18nService.getMessage("auth.account_disabled"));
             }
             
@@ -78,23 +78,23 @@ public class AuthController {
                 userRepository.save(user);
                 throw new RuntimeException(i18nService.getMessage("auth.invalid_credentials"));
             }
-            
-            user.resetFailedLoginCount();
-            user.setLastLoginAt(LocalDateTime.now());
-            user.setLastLoginIp(ipAddress);
-            userRepository.save(user);
-            
+
             // Resolve effective roles via UserRoleService
             List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(user.getId().toString());
             List<String> roles = effectiveRoles.stream()
                     .map(UserEffectiveRole::getRoleCode)
                     .distinct()
                     .collect(Collectors.toList());
-            
-            // Fall back to legacy role lookup when the new system returns none
-            if (roles.isEmpty()) {
-                roles = legacyVirtualGroupRoleLookup.findRoleCodes(user.getId());
+            // Platform access model §6.1: only SYS_ADMIN, AUDITOR and the lists of an active team enter DW.
+            if (!DeveloperWorkstationEntitlement.isEntitled(roles)) {
+                log.warn("DW login denied: user {} has no Developer Workstation access", request.getUsername());
+                return ResponseEntity.status(403).body(LoginResponse.builder().build());
             }
+            
+            user.resetFailedLoginCount();
+            user.setLastLoginAt(LocalDateTime.now());
+            user.setLastLoginIp(ipAddress);
+            userRepository.save(user);
             
             List<String> permissions = getPermissionsForRoles(roles);
             List<LoginResponse.RoleWithSource> rolesWithSources = buildRolesWithSources(effectiveRoles);
@@ -108,7 +108,7 @@ public class AuthController {
             accessTokenCookie.setHttpOnly(true);
             accessTokenCookie.setSecure(false);
             accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
+            accessTokenCookie.setMaxAge(jwtProperties.getSessionCookieMaxAgeSeconds());
             accessTokenCookie.setAttribute("SameSite", "Lax");
             response.addCookie(accessTokenCookie);
 
@@ -116,7 +116,7 @@ public class AuthController {
             refreshTokenCookie.setHttpOnly(true);
             refreshTokenCookie.setSecure(false);
             refreshTokenCookie.setPath("/");
-            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
+            refreshTokenCookie.setMaxAge(jwtProperties.getSessionCookieMaxAgeSeconds());
             refreshTokenCookie.setAttribute("SameSite", "Lax");
             response.addCookie(refreshTokenCookie);
             
@@ -182,18 +182,25 @@ public class AuthController {
             String userId = claims.getSubject();
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
-            
+            if (!isAccountUsable(user)) {
+                log.warn("DW refresh denied: user {} is not active (status={})", userId, user.getStatus());
+                return ResponseEntity.status(401).build();
+            }
+
             List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(userId);
             List<String> roles = effectiveRoles.stream()
                     .map(UserEffectiveRole::getRoleCode).distinct().collect(java.util.stream.Collectors.toList());
-            if (roles.isEmpty()) { roles = legacyVirtualGroupRoleLookup.findRoleCodes(user.getId()); }
+            if (!DeveloperWorkstationEntitlement.isEntitled(roles)) {
+                log.warn("DW refresh denied: user {} no longer has Developer Workstation access", userId);
+                return ResponseEntity.status(401).build();
+            }
             List<String> permissions = getPermissionsForRoles(roles);
             
             String newAccessToken = generateToken(user, roles, permissions);
             String newRefreshToken = generateRefreshToken(user.getId());
             
-            setAuthCookie(response, jwtProperties.getPrimaryCookieName(), newAccessToken, (int)(jwtExpiration / 1000));
-            setAuthCookie(response, jwtProperties.getRefreshCookieName(), newRefreshToken, 7 * 24 * 60 * 60);
+            setAuthCookie(response, jwtProperties.getPrimaryCookieName(), newAccessToken, jwtProperties.getSessionCookieMaxAgeSeconds());
+            setAuthCookie(response, jwtProperties.getRefreshCookieName(), newRefreshToken, jwtProperties.getSessionCookieMaxAgeSeconds());
             
             return ResponseEntity.ok(Map.of(
                     "accessToken", newAccessToken,
@@ -277,10 +284,6 @@ public class AuthController {
                     .distinct()
                     .collect(Collectors.toList());
             
-            if (roles.isEmpty()) {
-                roles = legacyVirtualGroupRoleLookup.findRoleCodes(user.getId());
-            }
-            
             List<LoginResponse.RoleWithSource> rolesWithSources = buildRolesWithSources(effectiveRoles);
             
             return ResponseEntity.ok(LoginResponse.UserLoginInfo.builder()
@@ -363,9 +366,14 @@ public class AuthController {
         return user.getUsername();
     }
 
+    /** A locked or non-ACTIVE account gets no new token at refresh. */
+    private static boolean isAccountUsable(User user) {
+        return "ACTIVE".equals(user.getStatus()) && !user.isLocked();
+    }
+
     private String generateRefreshToken(String userId) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + 604800000);
+        Date expiry = new Date(now.getTime() + jwtProperties.getRefreshExpirationMs());
         
         return Jwts.builder()
                 .subject(userId)

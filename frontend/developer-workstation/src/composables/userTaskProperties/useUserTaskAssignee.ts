@@ -24,7 +24,6 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     candidateGroups,
     businessUnits,
     buBoundedRoles,
-    buUnboundedRoles,
     eligibleRoles,
     loadingBusinessUnits,
     loadingRoles,
@@ -39,7 +38,7 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
 
   /** All role catalogs merged for id⇄code lookup, regardless of current assignee type. */
   function allKnownRoles(): RoleInfo[] {
-    return [...buBoundedRoles.value, ...buUnboundedRoles.value, ...eligibleRoles.value]
+    return [...buBoundedRoles.value, ...eligibleRoles.value]
   }
 
   function roleIdToCode(id: string): string {
@@ -80,8 +79,7 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     'CURRENT_PARENT_BU_ROLE',
     'INITIATOR_BU_ROLE',
     'INITIATOR_PARENT_BU_ROLE',
-    'FIXED_BU_ROLE',
-    'BU_UNBOUNDED_ROLE'
+    'FIXED_BU_ROLE'
   ]
 
   function assigneeTypeNeedsRoleId(t: AssigneeTypeEnum): boolean {
@@ -133,8 +131,7 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
       'CURRENT_PARENT_BU_ROLE',
       'INITIATOR_BU_ROLE',
       'INITIATOR_PARENT_BU_ROLE',
-      'FIXED_BU_ROLE',
-      'BU_UNBOUNDED_ROLE'
+      'FIXED_BU_ROLE'
     ].includes(assigneeType.value)
   })
 
@@ -149,9 +146,6 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
 
   // Filter roles by assignment type
   const filteredRoles = computed(() => {
-    if (assigneeType.value === 'BU_UNBOUNDED_ROLE') {
-      return buUnboundedRoles.value
-    }
     if ((assigneeType.value === 'FIXED_BU_ROLE' || assigneeType.value === 'BU_ROLE') && businessUnitId.value) {
       return eligibleRoles.value
     }
@@ -175,7 +169,6 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
       const cached =
         filteredRoles.value.find(r => r.id === roleId.value)
         ?? buBoundedRoles.value.find(r => r.id === roleId.value)
-        ?? buUnboundedRoles.value.find(r => r.id === roleId.value)
       out.push(cached ?? { id: roleId.value, name: roleId.value, code: '', type: 'BU_BOUNDED' })
     }
     return out
@@ -209,9 +202,6 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
 
   // Role selection tip
   const roleSelectTip = computed(() => {
-    if (assigneeType.value === 'BU_UNBOUNDED_ROLE') {
-      return t('properties.buUnboundedRoleTip')
-    }
     if (assigneeType.value === 'FIXED_BU_ROLE' || assigneeType.value === 'BU_ROLE') {
       return t('properties.fixedBuMultiRoleTip')
     }
@@ -238,8 +228,7 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
       CURRENT_PARENT_BU_ROLE: '',
       INITIATOR_BU_ROLE: '',
       INITIATOR_PARENT_BU_ROLE: '',
-      FIXED_BU_ROLE: '',
-      BU_UNBOUNDED_ROLE: ''
+      FIXED_BU_ROLE: ''
     }
 
     roleId.value = ''
@@ -354,8 +343,7 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
       CURRENT_PARENT_BU_ROLE: t('properties.currentParentBuRole'),
       INITIATOR_BU_ROLE: t('properties.initiatorBuRoleOption'),
       INITIATOR_PARENT_BU_ROLE: t('properties.initiatorParentBuRole'),
-      FIXED_BU_ROLE: t('properties.fixedBuRole'),
-      BU_UNBOUNDED_ROLE: t('properties.buUnboundedRole')
+      FIXED_BU_ROLE: t('properties.fixedBuRole')
     }
     return labels[type] || type
   }
@@ -376,16 +364,10 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
   async function loadRoles() {
     loadingRoles.value = true
     try {
-      const [bounded, unbounded] = await Promise.all([
-        adminCenterApi.getBuBoundedRoles(),
-        adminCenterApi.getBuUnboundedRoles()
-      ])
-      buBoundedRoles.value = bounded || []
-      buUnboundedRoles.value = unbounded || []
+      buBoundedRoles.value = (await adminCenterApi.getBuBoundedRoles()) || []
     } catch (e) {
       console.error('Failed to load roles:', e)
       buBoundedRoles.value = []
-      buUnboundedRoles.value = []
     } finally {
       loadingRoles.value = false
     }

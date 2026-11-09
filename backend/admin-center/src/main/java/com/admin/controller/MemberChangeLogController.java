@@ -16,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 成员变更审计查询（供 user-portal 等内部调用）
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/member-change-logs")
 @RequiredArgsConstructor
 @Tag(name = "成员变更记录", description = "成员加入/退出/移除审计查询")
+@AdminAccess(AdminAudience.ADMIN_READ)
 public class MemberChangeLogController {
 
     private final MemberChangeLogRepository memberChangeLogRepository;

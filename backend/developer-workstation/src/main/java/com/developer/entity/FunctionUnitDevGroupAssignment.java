@@ -10,7 +10,10 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "dw_function_unit_dev_groups",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"function_unit_id", "virtual_group_id"}))
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uq_dw_fu_dev_group", columnNames = {"function_unit_id", "virtual_group_id"}),
+                // A function unit belongs to exactly one workspace (platform access model §6.3)
+                @UniqueConstraint(name = "uq_dw_fu_dev_group_fu", columnNames = {"function_unit_id"})})
 @Data
 @Builder
 @NoArgsConstructor

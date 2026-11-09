@@ -19,6 +19,7 @@
     "paths": {
       "@/*": ["src/*"],
       "@platform-shared/*": ["../shared/src/*"],
+      "axios": ["node_modules/axios"],
       "vue": ["node_modules/vue"],
       "vue-i18n": ["node_modules/vue-i18n"],
       "element-plus": ["node_modules/element-plus"],

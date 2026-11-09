@@ -13,7 +13,7 @@ class WorkspaceExceptionHandlerMissingParameterTest {
 
     private final MockMvc mvc = MockMvcBuilders
             .standaloneSetup(new FunctionUnitController(null))
-            .setControllerAdvice(new WorkspaceExceptionHandler())
+            .setControllerAdvice(new WorkspaceExceptionHandler(org.mockito.Mockito.mock(com.platform.common.i18n.I18nService.class)))
             .build();
 
     @Test

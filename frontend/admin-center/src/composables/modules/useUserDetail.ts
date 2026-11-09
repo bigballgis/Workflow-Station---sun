@@ -24,7 +24,6 @@ export function useUserDetail(userId: Ref<string>) {
 
   const getPlatformRoleTagType = (type?: string) => {
     if (type === 'BU_BOUNDED') return 'warning'
-    if (type === 'BU_UNBOUNDED') return 'success'
     if (type === 'ADMIN') return 'danger'
     if (type === 'AUDITOR') return 'info'
     if (type === 'DEVELOPER') return 'primary'

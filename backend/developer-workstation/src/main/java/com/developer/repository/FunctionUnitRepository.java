@@ -55,4 +55,9 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Long
      */
     @Query(value = "SELECT DISTINCT jsonb_array_elements_text(tags) AS tag FROM dw_function_units WHERE enabled = true ORDER BY tag", nativeQuery = true)
     List<String> findAllDistinctTags();
+
+    /** The distinct tags of the given enabled function units, sorted. */
+    @Query(value = "SELECT DISTINCT jsonb_array_elements_text(tags) AS tag FROM dw_function_units"
+            + " WHERE enabled = true AND id IN (:ids) ORDER BY tag", nativeQuery = true)
+    List<String> findDistinctTagsByIdIn(@Param("ids") java.util.Collection<Long> ids);
 }

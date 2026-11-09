@@ -14,15 +14,12 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.platform.common.i18n.I18nService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -63,11 +60,6 @@ class EmailConnectionComponentImplTest {
 
     @InjectMocks
     private EmailConnectionComponentImpl emailConnectionComponent;
-
-    @BeforeEach
-    void setUp() {
-        ReflectionTestUtils.setField(emailConnectionComponent, "ssrfAllowedHosts", List.of("localhost"));
-    }
 
     @Test
     void testConnection_blankRecipient_throwsValidationException() {
@@ -174,6 +166,56 @@ class EmailConnectionComponentImplTest {
         assertEquals("smtp.local", response.getHost());
         assertEquals(587, response.getPort());
         verify(adminCenterSystemImapClient, never()).fetchSystemImapEndpoint();
+    }
+
+    /**
+     * The global SMTP relay is checked once, by Admin, when it serves the endpoint; DW does not run its own SSRF
+     * allowlist on it again (a corporate relay on an RFC1918 address used to be refused with SSRF_SMTP_HOST_BLOCKED).
+     */
+    @Test
+    void create_outbound_acceptsAdminSmtpOnPrivateAddress() {
+        FunctionUnit functionUnit = FunctionUnit.builder().id(1L).name("FU").build();
+        EmailConnectionRequest request = new EmailConnectionRequest();
+        request.setName("notify@example.com");
+        request.setConnectionType(ConnectionType.SMTP);
+        request.setDirection(EmailConnectionDirection.OUTBOUND);
+        request.setEnabled(true);
+
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(emailConnectionRepository.existsByFunctionUnitIdAndNameAndDirection(
+                eq(1L), eq("notify@example.com"), eq(EmailConnectionDirection.OUTBOUND))).thenReturn(false);
+        when(adminCenterSystemSmtpClient.fetchSystemSmtpEndpoint())
+                .thenReturn(new AdminCenterSystemSmtpClient.SystemSmtpEndpoint("10.1.2.3", 25, false));
+        when(emailConnectionRepository.save(any(EmailConnection.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        EmailConnectionResponse response = emailConnectionComponent.create(1L, request);
+
+        assertEquals("10.1.2.3", response.getHost());
+        assertEquals(25, response.getPort());
+    }
+
+    @Test
+    void update_outbound_acceptsAdminSmtpOnPrivateAddress() {
+        EmailConnection existing = sampleConnection(EmailConnectionDirection.OUTBOUND);
+        EmailConnectionRequest request = new EmailConnectionRequest();
+        request.setName("notify@example.com");
+        request.setConnectionType(ConnectionType.SMTP);
+        request.setDirection(EmailConnectionDirection.OUTBOUND);
+        request.setEnabled(true);
+
+        when(emailConnectionRepository.findById(10L)).thenReturn(Optional.of(existing));
+        when(emailConnectionRepository.existsByFunctionUnitIdAndNameAndDirectionAndIdNot(
+                eq(1L), eq("notify@example.com"), eq(EmailConnectionDirection.OUTBOUND), eq(10L)))
+                .thenReturn(false);
+        when(adminCenterSystemSmtpClient.fetchSystemSmtpEndpoint())
+                .thenReturn(new AdminCenterSystemSmtpClient.SystemSmtpEndpoint("192.168.10.5", 25, false));
+        when(emailConnectionRepository.save(any(EmailConnection.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        EmailConnectionResponse response = emailConnectionComponent.update(1L, 10L, request);
+
+        assertEquals("192.168.10.5", response.getHost());
     }
 
     @Test

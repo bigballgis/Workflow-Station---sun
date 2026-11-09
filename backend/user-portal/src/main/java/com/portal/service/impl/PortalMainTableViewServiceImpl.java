@@ -338,7 +338,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     }
 
     private MainTableViewInvolvementScope.Predicate involvementPredicate(String userId, ViewDefinition view) {
-        if (!view.restrictToInvolvedUsers() || mainTableViewAccessResolver.isSystemAdministrator(userId)) {
+        if (!view.restrictToInvolvedUsers()) {
             return null;
         }
         return involvementScope.predicateFor(userId, view.functionUnitCode());

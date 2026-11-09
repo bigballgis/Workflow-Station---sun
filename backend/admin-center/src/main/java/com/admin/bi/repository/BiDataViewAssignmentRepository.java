@@ -21,31 +21,32 @@ public interface BiDataViewAssignmentRepository extends JpaRepository<BiDataView
     @Query("SELECT a FROM BiDataViewAssignment a WHERE a.id = :id")
     Optional<BiDataViewAssignment> findByIdForUpdate(@Param("id") String id);
 
-    boolean existsByDashboardIdAndTableId(String dashboardId, Long tableId);
+    boolean existsByDashboardIdAndFunctionUnitCodeAndViewNameAndIdNot(
+            String dashboardId, String functionUnitCode, String viewName, String id);
 
-    boolean existsByDashboardIdAndViewIdAndIdNot(String dashboardId, Long viewId, String id);
+    boolean existsByDashboardIdAndFunctionUnitCodeAndViewName(
+            String dashboardId, String functionUnitCode, String viewName);
 
-    boolean existsByDashboardIdAndViewId(String dashboardId, Long viewId);
+    boolean existsByDashboardIdAndFunctionUnitCodeAndViewNameAndEnabledTrue(
+            String dashboardId, String functionUnitCode, String viewName);
 
-    boolean existsByDashboardIdAndViewIdAndEnabledTrue(String dashboardId, Long viewId);
-
-    List<BiDataViewAssignment> findByViewIdAndEnabledTrueOrderByCreatedAtAscIdAsc(Long viewId);
+    List<BiDataViewAssignment> findByFunctionUnitCodeAndViewNameAndEnabledTrueOrderByCreatedAtAscIdAsc(
+            String functionUnitCode, String viewName);
 
     long countByDashboardId(String dashboardId);
 
-    List<BiDataViewAssignment> findByTableIdOrderByCreatedAtAsc(Long tableId);
-
-    List<BiDataViewAssignment> findByViewId(Long viewId);
+    List<BiDataViewAssignment> findByFunctionUnitCodeAndViewName(String functionUnitCode, String viewName);
 
     @Query("SELECT a FROM BiDataViewAssignment a JOIN BiDashboardRegistry d ON a.dashboardId = d.id WHERE " +
             "(CAST(:dashboardTitle AS string) IS NULL OR LOWER(d.dashboardTitle) LIKE " +
             "LOWER(CONCAT('%', CAST(:dashboardTitle AS string), '%'))) AND " +
-            "(:functionUnitId IS NULL OR a.functionUnitId = :functionUnitId) AND " +
-            "(:enabled IS NULL OR a.enabled = :enabled) AND (:viewId IS NULL OR a.viewId = :viewId)")
+            "(CAST(:functionUnitCode AS string) IS NULL OR a.functionUnitCode = :functionUnitCode) AND " +
+            "(:enabled IS NULL OR a.enabled = :enabled) AND " +
+            "(CAST(:viewName AS string) IS NULL OR a.viewName = :viewName)")
     Page<BiDataViewAssignment> findByFilters(
             @Param("dashboardTitle") String dashboardTitle,
-            @Param("functionUnitId") Long functionUnitId,
+            @Param("functionUnitCode") String functionUnitCode,
             @Param("enabled") Boolean enabled,
-            @Param("viewId") Long viewId,
+            @Param("viewName") String viewName,
             Pageable pageable);
 }

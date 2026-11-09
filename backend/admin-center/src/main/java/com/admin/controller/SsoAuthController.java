@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 统一登录页调用的 SSO 登录（签发 authorization code）。
@@ -37,6 +39,7 @@ public class SsoAuthController {
     private final DspSsoService dspSsoService;
     private final PlatformSsoProperties ssoProperties;
 
+    @AdminAccess(AdminAudience.PUBLIC)
     @PostMapping("/login")
     public ResponseEntity<SsoLoginResponse> login(@Valid @RequestBody SsoLoginRequest request,
                                                   HttpServletRequest httpRequest) {
@@ -59,6 +62,7 @@ public class SsoAuthController {
     /**
      * DSP 免密登录：用浏览器侧 AMToken（或网关注入的 E2E header）换 SSO code。
      */
+    @AdminAccess(AdminAudience.PUBLIC)
     @PostMapping("/passwordless")
     public ResponseEntity<ApiResponse<SsoLoginResponse>> passwordless(
             @Valid @RequestBody DspPasswordlessRequest request,

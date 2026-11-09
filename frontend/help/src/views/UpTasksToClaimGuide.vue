@@ -35,6 +35,8 @@ const sections: GuideSection[] = [
       { code: 'Unclaim', hintKey: 'upTasksToClaimGuide.unclaimButtonSample' },
       { code: 'Release Claim', hintKey: 'upTasksToClaimGuide.releaseClaimButtonSample' },
       { code: 'Reassign', hintKey: 'upTasksToClaimGuide.reassignButtonSample' },
+      { code: 'Take over', hintKey: 'upTasksToClaimGuide.takeOverButtonSample' },
+      { code: 'More', hintKey: 'upTasksToClaimGuide.moreButtonSample' },
     ],
   },
   {
@@ -88,6 +90,26 @@ const sections: GuideSection[] = [
     samples: [
       { code: 'Release Claim', hintKey: 'upTasksToClaimGuide.forceUnclaimSample' },
       { code: 'Reassign', hintKey: 'upTasksToClaimGuide.reassignSample' },
+    ],
+  },
+  {
+    anchor: 'lost-access',
+    titleKey: 'upTasksToClaimGuide.lostTitle',
+    bodyKey: 'upTasksToClaimGuide.lostBody',
+    bodyKeys: [
+      'upTasksToClaimGuide.lostDirectBody',
+      'upTasksToClaimGuide.leftBody',
+      'upTasksToClaimGuide.roleChangeBody',
+      'upTasksToClaimGuide.standingDelegationBody',
+    ],
+    samples: [
+      { code: 'Assignee has lost Portal access', hintKey: 'upTasksToClaimGuide.lostTagSample' },
+      { code: 'Take over', hintKey: 'upTasksToClaimGuide.takeOverSample' },
+      { code: 'Reassigned to manager', hintKey: 'upTasksToClaimGuide.managerReassignSample' },
+      {
+        code: 'Not in effect: the delegator has lost Portal access',
+        hintKey: 'upTasksToClaimGuide.delegationInactiveSample',
+      },
     ],
   },
   {

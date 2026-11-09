@@ -23,7 +23,7 @@ import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.UserBusinessUnitRoleRepository;
-import com.admin.repository.UserRoleRepository;
+import com.admin.service.UserRoleIdResolver;
 import com.admin.service.UserBusinessUnitService;
 import com.platform.security.entity.UserBusinessUnitRole;
 import net.jqwik.api.*;
@@ -58,7 +58,7 @@ class BiDashboardAssignmentServicePropertyTest {
     private UserRepository userRepository;
     private RoleRepository roleRepository;
     private BusinessUnitRepository businessUnitRepository;
-    private UserRoleRepository userRoleRepository;
+    private UserRoleIdResolver userRoleIdResolver;
     private UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private UserBusinessUnitService userBusinessUnitService;
     private BiRbacMappingService rbacMappingService;
@@ -72,7 +72,7 @@ class BiDashboardAssignmentServicePropertyTest {
         userRepository = mock(UserRepository.class);
         roleRepository = mock(RoleRepository.class);
         businessUnitRepository = mock(BusinessUnitRepository.class);
-        userRoleRepository = mock(UserRoleRepository.class);
+        userRoleIdResolver = mock(UserRoleIdResolver.class);
         userBusinessUnitRoleRepository = mock(UserBusinessUnitRoleRepository.class);
         userBusinessUnitService = mock(UserBusinessUnitService.class);
         rbacMappingService = mock(BiRbacMappingService.class);
@@ -80,8 +80,8 @@ class BiDashboardAssignmentServicePropertyTest {
         service = new BiDashboardAssignmentServiceImpl(
                 assignmentRepository, registryRepository,
                 userRepository, roleRepository, businessUnitRepository,
-                userRoleRepository, userBusinessUnitRoleRepository, userBusinessUnitService,
-                new DashboardRoleGate(rbacMappingService, biProperties, userRoleRepository),
+                userRoleIdResolver, userBusinessUnitRoleRepository, userBusinessUnitService,
+                new DashboardRoleGate(rbacMappingService, biProperties, userRoleIdResolver),
                 mock(jakarta.persistence.EntityManager.class));
     }
 
@@ -359,7 +359,7 @@ class BiDashboardAssignmentServicePropertyTest {
         // Mock repositories
         when(assignmentRepository.findByTargetTypeAndTargetId(AssignmentTargetType.USER, userId))
                 .thenReturn(userAssignments);
-        when(userRoleRepository.findGlobalRoleIdsByUserId(userId)).thenReturn(roleIds);
+        when(userRoleIdResolver.platformRoleIds(userId)).thenReturn(roleIds);
 
         String activeBuId = buIds.isEmpty() ? null : buIds.get(0);
         List<BiDashboardAssignment> activeBuAssignments = activeBuId == null
@@ -555,7 +555,7 @@ class BiDashboardAssignmentServicePropertyTest {
         BiDashboardRegistry activeBuRoleDashboard = activeDashboard("dash-active-bu-role");
         BiDashboardRegistry activeBuDashboard = activeDashboard("dash-active-bu");
 
-        when(userRoleRepository.findGlobalRoleIdsByUserId(userId))
+        when(userRoleIdResolver.platformRoleIds(userId))
                 .thenReturn(List.of(globalRoleId));
         when(userBusinessUnitService.isMember(userId, activeBuId)).thenReturn(true);
         when(userBusinessUnitRoleRepository.findByUserIdAndBusinessUnitId(userId, activeBuId))
@@ -613,7 +613,7 @@ class BiDashboardAssignmentServicePropertyTest {
         BiDashboardAssignment role = buildAssignment("dash", AssignmentTargetType.ROLE, "role", 9);
         when(assignmentRepository.findByTargetTypeAndTargetId(AssignmentTargetType.USER, userId))
                 .thenReturn(List.of(direct));
-        when(userRoleRepository.findGlobalRoleIdsByUserId(userId)).thenReturn(List.of("role"));
+        when(userRoleIdResolver.platformRoleIds(userId)).thenReturn(List.of("role"));
         when(assignmentRepository.findByTargetTypeAndTargetIdIn(AssignmentTargetType.ROLE, List.of("role")))
                 .thenReturn(List.of(role));
         when(registryRepository.findById("dash")).thenReturn(Optional.of(BiDashboardRegistry.builder()
@@ -664,7 +664,7 @@ class BiDashboardAssignmentServicePropertyTest {
 
         when(assignmentRepository.findByTargetTypeAndTargetId(AssignmentTargetType.USER, userId))
                 .thenReturn(List.of(buildAssignment(dashboard.getId(), AssignmentTargetType.USER, userId, 0)));
-        when(userRoleRepository.findGlobalRoleIdsByUserId(userId)).thenReturn(sysRoleIds);
+        when(userRoleIdResolver.platformRoleIds(userId)).thenReturn(sysRoleIds);
         when(registryRepository.findById(dashboard.getId())).thenReturn(Optional.of(dashboard));
 
         List<BiSupersetRole> mapped = new ArrayList<>();

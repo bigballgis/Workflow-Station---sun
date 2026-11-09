@@ -60,9 +60,11 @@
             :height="gridTableHeight || '100%'"
             @selection-change="onSelectionChange"
           >
+            <!-- Batch actions change every selected unit: only units the user may change can be selected. -->
             <el-table-column
               type="selection"
               :width="selectionWidth"
+              :selectable="(row: FunctionUnitRow) => row.canManage === true"
             />
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
@@ -99,9 +101,25 @@
                 <el-switch
                   v-else-if="col.field === 'enabled'"
                   v-model="row.enabled"
+                  :disabled="!row.canManage"
                   :loading="row._enabledLoading"
                   @change="() => handleEnabledChange(row, row.enabled)"
                 />
+                <template v-else-if="col.field === 'team'">
+                  <template v-if="row.teamName">
+                    {{ row.teamName }}
+                  </template>
+                  <el-tag
+                    v-else-if="row.teamCode"
+                    type="warning"
+                    size="small"
+                  >
+                    {{ t('functionUnit.teamDeleted', { code: row.teamCode }) }}
+                  </el-tag>
+                  <template v-else>
+                    -
+                  </template>
+                </template>
                 <template v-else>
                   {{ row[col.field as keyof typeof row] ?? '-' }}
                 </template>
@@ -128,7 +146,7 @@
                     {{ t('functionUnit.access') }}
                   </el-button>
                   <el-button
-                    v-if="canValidateFunctionUnit(row.status)"
+                    v-if="row.canManage && canValidateFunctionUnit(row.status)"
                     link
                     type="primary"
                     :loading="validateLoadingId === row.id"
@@ -136,29 +154,31 @@
                   >
                     {{ t('functionUnit.validate') }}
                   </el-button>
-                  <el-tooltip
-                    v-if="!canDeployFunctionUnit(row.status)"
-                    :content="t('functionUnit.deployRequiresValidation')"
-                  >
-                    <span>
-                      <el-button
-                        link
-                        type="primary"
-                        disabled
-                      >
-                        {{ t('functionUnit.deploy') }}
-                      </el-button>
-                    </span>
-                  </el-tooltip>
-                  <el-button
-                    v-else
-                    link
-                    type="primary"
-                    :loading="deployLoadingId === row.id"
-                    @click="handleDeploy(row)"
-                  >
-                    {{ t('functionUnit.deploy') }}
-                  </el-button>
+                  <template v-if="row.canManage">
+                    <el-tooltip
+                      v-if="!canDeployFunctionUnit(row.status)"
+                      :content="t('functionUnit.deployRequiresValidation')"
+                    >
+                      <span>
+                        <el-button
+                          link
+                          type="primary"
+                          disabled
+                        >
+                          {{ t('functionUnit.deploy') }}
+                        </el-button>
+                      </span>
+                    </el-tooltip>
+                    <el-button
+                      v-else
+                      link
+                      type="primary"
+                      :loading="deployLoadingId === row.id"
+                      @click="handleDeploy(row)"
+                    >
+                      {{ t('functionUnit.deploy') }}
+                    </el-button>
+                  </template>
                   <el-button
                     link
                     type="primary"
@@ -167,6 +187,7 @@
                     {{ t('functionUnit.versions') }}
                   </el-button>
                   <el-button
+                    v-if="row.canManage"
                     link
                     type="danger"
                     @click="handleRollback(row)"
@@ -174,6 +195,7 @@
                     {{ t('functionUnit.rollback') }}
                   </el-button>
                   <el-button
+                    v-if="row.canManage"
                     link
                     type="danger"
                     @click="handleDeleteClick(row)"

@@ -60,10 +60,10 @@ public class TaskInfo {
     /**
      * MI 按角色分派信号（引擎从 ExtendedTaskInfo.extendedProperties 透出）：
      * miAssigneeMode=role 表示该 MI 子任务按角色分派（共享认领池），据此做 workspace 可见性收敛
-     * （role 分派仅在用户切到该 role 的 workspace 才可见）；miRoleCode/miBusinessUnitCode 为分派角色/BU code。
+     * （role 分派仅在用户切到该 role 的 workspace 才可见）；miRoleCodes/miBusinessUnitCode 为分派的全部角色 / BU code。
      */
     private String miAssigneeMode;
-    private String miRoleCode;
+    private List<String> miRoleCodes;
     private String miBusinessUnitCode;
 
     /**
@@ -97,6 +97,14 @@ public class TaskInfo {
 
     private String delegatedBuCode;
     private String delegatedRoleCode;
+
+    /**
+     * Display names of the single-task delegate on the task page ({@code TaskDelegateDisplayNames}): the user's
+     * name, or the BU and role names. Null when not known; the page then shows the stored id / code.
+     */
+    private String delegatedToName;
+    private String delegatedBuName;
+    private String delegatedRoleName;
 
     /** Engine flag: wf_extended_task_info is delegated */
     private Boolean delegated;
@@ -206,15 +214,56 @@ public class TaskInfo {
     private boolean claimable = false;
 
     /**
-     * Leader / BU Approver / SYS_ADMIN may force-unclaim a hold that is not theirs.
-     * Filled by {@code ClaimForceUnclaimAnnotator} after claim flags.
+     * May release a hold that is not theirs: the BU Approver or a Leader of the BU + Role while the holder has Portal
+     * entry; any pool member with entry once the holder lost it (platform access model §7.3). No System Administrator
+     * exception. Filled by {@code ClaimForceUnclaimAnnotator} after claim flags.
      */
     @Builder.Default
     private boolean canForceUnclaim = false;
 
-    /**
-     * Leader / BU Approver / SYS_ADMIN may assign this claim-pool task to a specified pool member.
-     */
+    /** May hand this pool task to another pool member, on the same rule as {@link #canForceUnclaim}. */
     @Builder.Default
     private boolean canReassign = false;
+
+    /** How the task's people were chosen, as the engine decides it: {@code NONE} / {@code PEOPLE} / {@code MEMBERSHIP}. */
+    private String poolKind;
+
+    /** The current holder has lost Portal entry (§7.3); filled by {@code ClaimForceUnclaimAnnotator}. */
+    @Builder.Default
+    private boolean assigneeLostPortalEntry = false;
+
+    /** The current user may take over a task whose holder lost Portal entry (reassign it to themselves). */
+    @Builder.Default
+    private boolean canTakeOver = false;
+
+    /** Whom the task may be reassigned to: pool members with Portal entry, the holder excluded. */
+    private List<String> reassignTargetUserIds;
+
+    /**
+     * Why this task's single-task delegation is not in effect right now (D-55): {@code DELEGATOR_LOST_PORTAL_ENTRY} or
+     * {@code DELEGATE_LOST_PORTAL_ENTRY}; null when it is in effect or there is none. Filled by
+     * {@code EffectiveDelegationRules#markSingleTaskDelegations}.
+     */
+    private String delegationInactiveReason;
+
+    /**
+     * The task can be delegated for this one task, as the engine judges it (D-56: only tasks that have the extended row
+     * a delegation is kept on, held by someone and not completed). The task page offers "Delegate" only then.
+     */
+    @Builder.Default
+    private boolean delegable = false;
+
+    /**
+     * The signed-in user may transfer this task (D-60): nobody holds it, or they do; a delegate may not. Filled by
+     * {@code TaskPermissionEvaluator#annotateClaimState}, not by the engine.
+     */
+    @Builder.Default
+    private boolean canTransfer = false;
+
+    /**
+     * The signed-in user may delegate this task (D-60): nobody holds it, or they do; a delegate may not. Filled like
+     * {@link #canTransfer}; whether the task can be delegated at all is {@link #delegable} (D-56).
+     */
+    @Builder.Default
+    private boolean canDelegate = false;
 }

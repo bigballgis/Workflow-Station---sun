@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
     getMembers: vi.fn()
   },
   businessUnitApi: {
-    getApprovers: vi.fn()
+    getApprovers: vi.fn(),
+    getReferences: vi.fn()
   }
 }))
 
@@ -54,6 +55,8 @@ describe('useBusinessUnit drag & drop', () => {
     mocks.notifyConfirm.mockResolvedValue(undefined)
     mocks.orgStore.moveBusinessUnit.mockResolvedValue(undefined)
     mocks.orgStore.fetchTree.mockResolvedValue(undefined)
+    // The move confirmation lists where the unit is used (notice only, §8.3).
+    mocks.businessUnitApi.getReferences.mockResolvedValue({ functionUnits: [], others: [] })
   })
 
   it('only nodes below the first level can be dragged', () => {

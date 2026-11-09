@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.platform.common.dto.UserPrincipal;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.repository.ProcessInstanceRepository;
@@ -10,6 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 
@@ -71,9 +74,7 @@ class ProcessApplicationQueryComponentAuditAccessTest {
 
     @Test
     void auditGrantOnTheOwningUnitAllowsDetail() {
-        ProcessInstanceInfo detail = otherUsersRequest("fu-expense");
-        when(mainTableViewAccessResolver.isSystemAdministrator("reviewer")).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnit("reviewer", "fu-expense")).thenReturn(true);
+        ProcessInstanceInfo detail = otherUsersRequest("fu-expense");        when(functionUnitAccessComponent.canAuditFunctionUnit("reviewer", "fu-expense")).thenReturn(true);
 
         assertThat(component.canAuditProcessDetail("reviewer", detail)).isTrue();
     }
@@ -84,20 +85,37 @@ class ProcessApplicationQueryComponentAuditAccessTest {
      */
     @Test
     void auditGrantOnAnotherUnitDoesNotAllowDetail() {
-        ProcessInstanceInfo detail = otherUsersRequest("fu-expense");
-        when(mainTableViewAccessResolver.isSystemAdministrator("reviewer")).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnit("reviewer", "fu-expense")).thenReturn(false);
+        ProcessInstanceInfo detail = otherUsersRequest("fu-expense");        when(functionUnitAccessComponent.canAuditFunctionUnit("reviewer", "fu-expense")).thenReturn(false);
 
         assertThat(component.canAuditProcessDetail("reviewer", detail)).isFalse();
     }
 
     @Test
     void withoutAnyGrantAuditAccessIsRefused() {
-        ProcessInstanceInfo detail = otherUsersRequest("fu-expense");
-        when(mainTableViewAccessResolver.isSystemAdministrator("stranger")).thenReturn(false);
-        when(functionUnitAccessComponent.canAuditFunctionUnit("stranger", "fu-expense")).thenReturn(false);
+        ProcessInstanceInfo detail = otherUsersRequest("fu-expense");        when(functionUnitAccessComponent.canAuditFunctionUnit("stranger", "fu-expense")).thenReturn(false);
 
         assertThat(component.canAuditProcessDetail("stranger", detail)).isFalse();
+    }
+
+    /**
+     * Platform access model D-05: a System Administrator who is not a participant, sees no
+     * published view and holds no audit grant opens nothing — no detail, no history.
+     */
+    @Test
+    void systemAdministratorWithoutParticipationViewOrGrantIsRefused() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                UserPrincipal.builder().userId("admin").username("admin")
+                        .roles(List.of("SYS_ADMIN")).superAdmin(true).build(),
+                null, List.of()));
+        try {
+            ProcessInstanceInfo detail = otherUsersRequest("fu-expense");
+            when(functionUnitAccessComponent.canAuditFunctionUnit("admin", "fu-expense")).thenReturn(false);
+
+            assertThat(component.canAccessProcessDetail("admin", detail)).isFalse();
+            assertThat(component.canAuditProcessDetail("admin", detail)).isFalse();
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     /**
@@ -107,8 +125,6 @@ class ProcessApplicationQueryComponentAuditAccessTest {
     @Test
     void instanceWithoutFunctionUnitCodeIsRefusedWithoutConsultingGrants() {
         ProcessInstanceInfo detail = otherUsersRequest(null);
-        when(mainTableViewAccessResolver.isSystemAdministrator("reviewer")).thenReturn(false);
-
         assertThat(component.canAuditProcessDetail("reviewer", detail)).isFalse();
         verify(functionUnitAccessComponent, never()).canAuditFunctionUnit(anyString(), anyString());
     }

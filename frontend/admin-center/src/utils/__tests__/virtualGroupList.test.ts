@@ -14,6 +14,8 @@ function vg(partial: Partial<VirtualGroup> & Pick<VirtualGroup, 'id' | 'name' | 
     memberCount: 0,
     createdAt: '',
     updatedAt: '',
+    publicTeam: false,
+    systemAdministrators: false,
     ...partial,
   }
 }

@@ -72,4 +72,7 @@ public class FunctionUnitImportRequest {
      * 图标SVG内容（可选，从导出包manifest中提取）
      */
     private String iconSvg;
+
+    /** Team the unit is imported into; required by the Admin import dialog (platform access model §8.1). */
+    private String teamCode;
 }

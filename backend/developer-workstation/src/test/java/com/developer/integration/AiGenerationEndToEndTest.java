@@ -10,6 +10,7 @@ import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceRouteOwnership;
 import com.developer.service.AiWriteService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,7 @@ class AiGenerationEndToEndTest {
     @Mock private AiValidationService aiValidationService;
     @Mock private AiWriteService aiWriteService;
     @Mock private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    @Mock private WorkspaceRouteOwnership routeOwnership;
 
     private AiGenerationComponentImpl component;
     private ObjectMapper objectMapper;
@@ -65,7 +67,7 @@ class AiGenerationEndToEndTest {
         objectMapper = new ObjectMapper();
         component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                functionUnitWorkspaceAccessService, executor, objectMapper);
+                functionUnitWorkspaceAccessService, routeOwnership, executor, objectMapper);
         sessionUuid = UUID.randomUUID();
         session = AiSession.builder()
                 .sessionId(sessionUuid)

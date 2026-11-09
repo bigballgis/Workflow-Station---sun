@@ -41,7 +41,7 @@ class AutomationFlowRunListQuerySqlTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        component = new AutomationFlowRunListQueryComponent(jdbcTemplate, automationFlowRunService, new ApWorkspaceSql(new ServiceTaskProperties()));
+        component = new AutomationFlowRunListQueryComponent(jdbcTemplate, automationFlowRunService, new ApWorkspaceSql(new ServiceTaskProperties()), com.admin.security.TestTeamScopes.everything());
         Connection connection = mock(Connection.class);
         PreparedStatement statement = mock(PreparedStatement.class);
         when(connection.prepareStatement(anyString())).thenAnswer(call -> {

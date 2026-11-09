@@ -14,6 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Dashboard 控制器 - 管理员中心仪表盘统计接口
@@ -23,6 +25,7 @@ import java.util.List;
 @RequestMapping("/dashboard")
 @RequiredArgsConstructor
 @Tag(name = "Dashboard", description = "管理员中心仪表盘统计接口")
+@AdminAccess(AdminAudience.SHARED_READ)
 public class DashboardController {
 
     private final DashboardComponent dashboardComponent;

@@ -31,34 +31,24 @@ function extractBaseURL(sourceContent: string, varName: string): string | null {
 }
 
 // ============================================================
-// Test C7: user-portal user.ts adminCenterAxios baseURL should be /api/v1/admin
+// Test C7: user-portal user.ts user lookups go through the user-portal backend
+// (originally: adminCenterAxios pointed at the unrouted /api/admin-center; since the platform access
+// model WP1 the browser no longer calls admin-center at all — see noDirectAdminCenterCalls.test.ts)
 // ============================================================
 
-describe('C7: user-portal user.ts adminCenterAxios baseURL', () => {
+describe('C7: user-portal user.ts user lookups', () => {
   const userTsPath = path.resolve(PORTAL_API_DIR, 'user.ts')
   const sourceContent = fs.readFileSync(userTsPath, 'utf-8')
 
-  test('adminCenterAxios baseURL should be /api/v1/admin (not /api/admin-center)', () => {
-    const baseURL = extractBaseURL(sourceContent, 'adminCenterAxios')
-    expect(baseURL).not.toBeNull()
-    expect(baseURL).toBe('/api/v1/admin')
+  test('creates no admin-center client and uses neither /api/admin-center nor /api/v1/admin', () => {
+    expect(extractBaseURL(sourceContent, 'adminCenterAxios')).toBeNull()
+    expect(sourceContent).not.toMatch(/\/api\/admin-center\b/)
+    expect(sourceContent).not.toMatch(/\/api\/v1\/admin\b/)
   })
 
-  test('property: for any userId, user API requests go through /api/v1/admin route', () => {
-    fc.assert(
-      fc.property(
-        fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0),
-        (userId: string) => {
-          const baseURL = extractBaseURL(sourceContent, 'adminCenterAxios')
-          expect(baseURL).toBe('/api/v1/admin')
-
-          const fullPath = `${baseURL}/users/${userId}/business-units`
-          expect(fullPath).toMatch(/^\/api\/v1\/admin\//)
-          expect(fullPath).not.toMatch(/^\/api\/admin-center\//)
-        }
-      ),
-      { numRuns: 100 }
-    )
+  test('user search and user name lookups call the user-portal backend', () => {
+    expect(sourceContent).toMatch(/portalRequest\.get<[^>]*>\('\/tasks\/users\/search'/)
+    expect(sourceContent).toMatch(/portalRequest\.post<[^>]*>\(\s*'\/tasks\/users\/summaries'/)
   })
 })
 
@@ -103,6 +93,11 @@ describe('C9: user-portal request.ts X-User-Id header behavior', () => {
   const requestTsPath = path.resolve(PORTAL_API_DIR, 'request.ts')
   const sourceContent = fs.readFileSync(requestTsPath, 'utf-8')
 
+  // Platform access model §7.2: the Portal backend takes the user from the credential only.
+  test('requests carry no X-User-Id at all', () => {
+    expect(sourceContent.includes('X-User-Id')).toBe(false)
+  })
+
   test('source code should NOT contain hardcoded user_1 fallback for X-User-Id', () => {
     // The source should not have a fallback to 'user_1'
     // Expected: userId is set only when it exists, no hardcoded fallback
@@ -123,11 +118,8 @@ describe('C9: user-portal request.ts X-User-Id header behavior', () => {
                                       sourceContent.includes('userId || "user_1"')
         expect(hasHardcodedFallback).toBe(false)
 
-        // Check that X-User-Id is set conditionally (only when userId exists)
-        // The fixed code should have a conditional check before setting the header
-        const hasConditionalSet = sourceContent.includes("if (userId)") ||
-                                   sourceContent.includes("if(userId)")
-        expect(hasConditionalSet).toBe(true)
+        // Platform access model §7.2: the header is not sent at all (identity comes from the credential).
+        expect(sourceContent.includes('X-User-Id')).toBe(false)
       }),
       { numRuns: 100 }
     )

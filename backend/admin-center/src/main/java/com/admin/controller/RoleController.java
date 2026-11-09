@@ -1,33 +1,27 @@
 package com.admin.controller;
 
+import com.admin.component.RoleHolderQueryComponent;
 import com.admin.component.RoleListQueryComponent;
-import com.admin.component.RoleMemberManagerComponent;
+import com.admin.component.RoleReferenceFinder;
 import com.admin.component.RolePermissionManagerComponent;
 import com.admin.dto.list.AdminListPage;
-import com.admin.dto.request.BatchRoleMemberRequest;
-import com.admin.dto.request.PermissionConfig;
 import com.admin.dto.request.RoleListQueryRequest;
-import com.admin.dto.response.BatchRoleMemberResult;
+import com.admin.dto.response.ReferenceNotice;
+import com.admin.dto.response.RoleHolder;
 import com.admin.dto.response.RoleListItem;
 import com.admin.util.EntityTypeConverter;
-import com.platform.security.entity.Permission;
-import com.admin.entity.PermissionChangeHistory;
 import com.platform.security.entity.Role;
-import com.platform.security.entity.UserRole;
-import com.platform.security.util.SecurityContextUtils;
 import com.admin.enums.RoleType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Set;
-import com.platform.common.i18n.I18nService;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Role Management Controller
@@ -35,16 +29,18 @@ import com.platform.common.i18n.I18nService;
 @RestController
 @RequestMapping("/roles")
 @RequiredArgsConstructor
-@Tag(name = "Role Management", description = "Role creation, configuration, member management APIs")
+@Tag(name = "Role Management", description = "Role creation, configuration and holder APIs")
+@AdminAccess(value = AdminAudience.WORKSTATION, services = true)
 public class RoleController {
     
     private final RolePermissionManagerComponent rolePermissionManager;
-    private final RoleMemberManagerComponent roleMemberManager;
-    private final I18nService i18nService;
     private final RoleListQueryComponent roleListQueryComponent;
+    private final RoleReferenceFinder roleReferenceFinder;
+    private final RoleHolderQueryComponent roleHolderQuery;
     
     // ==================== Role CRUD ====================
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PostMapping
     @Operation(summary = "Create role")
     public ResponseEntity<Role> createRole(@RequestBody @Valid CreateRoleRequest request) {
@@ -80,6 +76,7 @@ public class RoleController {
         return ResponseEntity.ok(result);
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/query")
     @Operation(summary = "Page roles", description = "Shared list: COUNT(*) and the page share one predicate including SYSTEM/CUSTOM tab")
     public ResponseEntity<AdminListPage<RoleListItem>> queryRoles(
@@ -101,6 +98,7 @@ public class RoleController {
         return ResponseEntity.ok(roles);
     }
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @DeleteMapping("/{roleId}")
     @Operation(summary = "Delete role")
     public ResponseEntity<Void> deleteRole(@PathVariable String roleId) {
@@ -108,6 +106,7 @@ public class RoleController {
         return ResponseEntity.noContent().build();
     }
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PutMapping("/{roleId}")
     @Operation(summary = "Update role")
     public ResponseEntity<Role> updateRole(
@@ -123,116 +122,24 @@ public class RoleController {
     }
 
     
-    // ==================== Permission Configuration ====================
+    // ==================== References and Holders ====================
     
-    @PutMapping("/{roleId}/permissions")
-    @Operation(summary = "Configure role permissions")
-    public ResponseEntity<Void> configurePermissions(
-            @PathVariable String roleId,
-            @RequestBody @Valid List<PermissionConfig> permissions) {
-        rolePermissionManager.configureRolePermissions(roleId, permissions);
-        return ResponseEntity.ok().build();
-    }
-    
-    @GetMapping("/{roleId}/permissions")
-    @Operation(summary = "Get role permissions")
-    public ResponseEntity<Set<Permission>> getRolePermissions(@PathVariable String roleId) {
-        Set<Permission> permissions = rolePermissionManager.getEffectivePermissions(roleId);
-        return ResponseEntity.ok(permissions);
-    }
-    
-    // ==================== Member Management ====================
-    
-    @GetMapping("/{roleId}/members")
-    @Operation(summary = "Get role member list")
-    public ResponseEntity<List<UserRole>> getRoleMembers(@PathVariable String roleId) {
-        List<UserRole> members = roleMemberManager.getRoleMembers(roleId);
-        return ResponseEntity.ok(members);
-    }
-    
-    @GetMapping("/{roleId}/members/paged")
-    @Operation(summary = "Get role members (paged)")
-    public ResponseEntity<Page<UserRole>> getRoleMembersPaged(
-            @PathVariable String roleId,
-            Pageable pageable) {
-        Page<UserRole> members = roleMemberManager.getRoleMembersPaged(roleId, pageable);
-        return ResponseEntity.ok(members);
-    }
-    
-    @PostMapping("/{roleId}/members/{userId}")
-    @Operation(summary = "Add role member")
-    public ResponseEntity<Void> addMember(
-            @PathVariable String roleId,
-            @PathVariable String userId,
-            @RequestParam(required = false) String reason) {
-        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
-        roleMemberManager.assignRoleToUser(userId, roleId, operatedBy, reason);
-        return ResponseEntity.ok().build();
-    }
-    
-    @DeleteMapping("/{roleId}/members/{userId}")
-    @Operation(summary = "Remove role member")
-    public ResponseEntity<Void> removeMember(
-            @PathVariable String roleId,
-            @PathVariable String userId,
-            @RequestParam(required = false) String reason) {
-        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
-        roleMemberManager.removeRoleFromUser(userId, roleId, operatedBy, reason);
-        return ResponseEntity.noContent().build();
-    }
-    
-    @PostMapping("/{roleId}/members/batch")
-    @Operation(summary = "Batch add role members")
-    public ResponseEntity<BatchRoleMemberResult> batchAddMembers(
-            @PathVariable String roleId,
-            @RequestBody @Valid BatchRoleMemberRequest request) {
-        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
-        request.setRoleId(roleId);
-        BatchRoleMemberResult result = roleMemberManager.batchAddMembers(request, operatedBy);
-        return ResponseEntity.ok(result);
-    }
-    
-    @DeleteMapping("/{roleId}/members/batch")
-    @Operation(summary = "Batch remove role members")
-    public ResponseEntity<BatchRoleMemberResult> batchRemoveMembers(
-            @PathVariable String roleId,
-            @RequestBody @Valid BatchRoleMemberRequest request) {
-        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
-        request.setRoleId(roleId);
-        BatchRoleMemberResult result = roleMemberManager.batchRemoveMembers(request, operatedBy);
-        return ResponseEntity.ok(result);
-    }
-    
-    @GetMapping("/{roleId}/members/count")
-    @Operation(summary = "Get role member count")
-    public ResponseEntity<Long> getMemberCount(@PathVariable String roleId) {
-        long count = roleMemberManager.getRoleMemberCount(roleId);
-        return ResponseEntity.ok(count);
+    /** Function units and other places that use the role, shown before it is changed or deleted (§8.3). */
+    @AdminAccess(AdminAudience.LEAD_WRITE)
+    @GetMapping("/{roleId}/references")
+    @Operation(summary = "Where the role is used (notice before change or delete)")
+    public ResponseEntity<ReferenceNotice> getRoleReferences(@PathVariable String roleId) {
+        return ResponseEntity.ok(roleReferenceFinder.findForNotice(rolePermissionManager.getRole(roleId)));
     }
 
-    
-    // ==================== Change History ====================
-    
-    @GetMapping("/{roleId}/history")
-    @Operation(summary = "Get role change history")
-    public ResponseEntity<List<PermissionChangeHistory>> getRoleHistory(@PathVariable String roleId) {
-        List<PermissionChangeHistory> history = roleMemberManager.getRoleChangeHistory(roleId);
-        return ResponseEntity.ok(history);
+    /** Who holds the role: SYSTEM group members, team lists, or business unit memberships by role type. */
+    @AdminAccess(AdminAudience.SHARED_READ)
+    @GetMapping("/{roleId}/holders")
+    @Operation(summary = "Holders of the role")
+    public ResponseEntity<List<RoleHolder>> getRoleHolders(@PathVariable String roleId) {
+        return ResponseEntity.ok(roleHolderQuery.holders(roleId));
     }
-    
-    @GetMapping("/{roleId}/history/paged")
-    @Operation(summary = "Get role change history (paged)")
-    public ResponseEntity<Page<PermissionChangeHistory>> getRoleHistoryPaged(
-            @PathVariable String roleId,
-            Pageable pageable) {
-        Page<PermissionChangeHistory> history = roleMemberManager.getRoleChangeHistoryPaged(roleId, pageable);
-        return ResponseEntity.ok(history);
-    }
-    
+
     // ==================== Request Objects ====================
     
     @lombok.Data

@@ -31,9 +31,10 @@ public final class BiDataViewAssignmentColumnSpec {
     private static String sqlFor(String field) {
         return switch (field) {
             case "dashboardTitle" -> "d.dashboard_title";
-            case "functionUnitName" -> "fu.name";
-            case "tableDisplayName" -> "COALESCE(NULLIF(t.table_display_name, ''), t.table_name)";
-            case "viewName" -> "v.view_name";
+            // Aliases of BiDataViewMetadataRepository.releaseJoin: the unit's active release and its published View.
+            case "functionUnitName" -> "COALESCE(fu.name, a.function_unit_code)";
+            case "tableDisplayName" -> "COALESCE(NULLIF(rt.t ->> 'tableDisplayName', ''), rt.t ->> 'tableName')";
+            case "viewName" -> "a.view_name";
             case "enabled" -> "a.enabled::text";
             default -> throw new IllegalArgumentException("Unknown Data View Assignment column: " + field);
         };

@@ -12,16 +12,16 @@ app:
   database:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
-    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     max-pool-size: 20
     min-idle: 5
     connection-timeout: 20000
     
   security:
-    jwt-secret-key: ${JWT_SECRET:?JWT_SECRET is required}
-    jwt-expiration-ms: ${JWT_EXPIRATION:86400000}
-    jwt-refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+    jwt-secret-key: ${JWT_SECRET}
+    jwt-expiration-ms: ${JWT_EXPIRATION}
+    jwt-refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION}
     password:
       min-length: 8
       max-length: 128
@@ -53,7 +53,7 @@ app:
   cache:
     redis-host: ${SPRING_REDIS_HOST:localhost}
     redis-port: ${SPRING_REDIS_PORT:6379}
-    redis-password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
+    redis-password: ${SPRING_REDIS_PASSWORD}
     redis-database: 1
     user-ttl-minutes: 30
     permission-ttl-minutes: 60
@@ -78,7 +78,7 @@ user-portal:
 # admin-center 才信任裸 X-User-Id/X-Username 铸身份。Activepieces 不持有此密钥。
 # 未配置 → header 身份兜底整体禁用（fail-closed）。须与 DW/user-portal 的同名密钥一致。
 service:
-  internal-token: ${SERVICE_INTERNAL_TOKEN:}
+  internal-token: ${SERVICE_INTERNAL_TOKEN}  # required: every Admin Center call is authorized (platform access model WP2)
 
 # HashiCorp Vault (admin-center only). Kubernetes JWT login + KV v2 GET/POST.
 # Do not log VAULT_TOKEN. Local Docker may set VAULT_TOKEN; K8s uses the pod SA token.
@@ -102,7 +102,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
-    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -120,7 +120,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         jdbc:
-          time_zone: Asia/Shanghai
+          time_zone: Asia/Hong_Kong
 
   flyway:
     # schema 唯一来源 = deploy/init-scripts/00-schema（见 docs/schema-single-source-init-scripts-plan.md）。
@@ -137,7 +137,7 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
-      password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
+      password: ${SPRING_REDIS_PASSWORD}
       database: 1
       timeout: 5000ms
       lettuce:
@@ -169,7 +169,7 @@ spring:
 
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: Asia/Shanghai
+    time-zone: Asia/Hong_Kong
     serialization:
       write-dates-as-timestamps: false
 
@@ -311,9 +311,8 @@ service-task:
     # team-project-external-id-prefix + <虚拟组 id>，故此值只服务 Public（存量 flow 原地不动）。
     project-external-id: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:hermes-main}
     token-ttl-seconds: ${ACTIVEPIECES_MANAGED_TOKEN_TTL:120}
-    # Automation workspace 映射（DW 开发组 → AP project）。默认值与 DW 的 DevGroupConstants
-    # 及种子脚本一致，正常环境无需覆盖。
-    public-group-id: vg-dev-public
+    # Automation workspace 映射（DW 开发组 → AP project）。Public 的虚拟组 id 不在这里配置，
+    # 取 VirtualGroup.PUBLIC_TEAM_ID（DW、AD 同步、种子脚本认的是同一个值）。
     team-project-external-id-prefix: hermes-dg-
     # Public workspace 里非 SYS_ADMIN 用的 AP 角色：Viewer 只有 READ_*，AP 路由层据此真的拒写。
     read-only-project-role: Viewer
@@ -324,17 +323,17 @@ service-task:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:?JWT_SECRET is required}
-  expiration: ${JWT_EXPIRATION:86400000}
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION}
 
 # Platform Security JWT Configuration (used by platform-security JwtProperties)
 platform:
   security:
     jwt:
-      secret: ${JWT_SECRET:?JWT_SECRET is required}
-      expiration-ms: ${JWT_EXPIRATION:86400000}
-      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      secret: ${JWT_SECRET}
+      expiration-ms: ${JWT_EXPIRATION}
+      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION}
       # 服务自有 cookie 名，避免与 user-portal / developer-workstation 在同源下互相覆盖。
       # 列表首项是本服务写出 Cookie 的名字；其它项用于读取（兼容老客户端 / 转发场景）。
       #
@@ -355,7 +354,7 @@ platform:
       issuer: platform
       validate-issuer: false
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:?ENCRYPTION_SECRET_KEY is required}
+    secret-key: ${ENCRYPTION_SECRET_KEY}
   # 统一登录页 /login：签发 SSO code；子系统凭 SSO_INTERNAL_TOKEN 调用 /internal/sso/redeem
   sso:
     internal-token: ${SSO_INTERNAL_TOKEN:}
@@ -446,13 +445,7 @@ ldap:
     auth-manager-emp-id: ${LDAP_ATTR_AUTH_MANAGER_EMP_ID:hsbc-ad-AuthManagerEmpId}
     lockout-time: ${LDAP_ATTR_LOCKOUT_TIME:lockoutTime}
     when-changed: ${LDAP_ATTR_WHEN_CHANGED:whenChanged}
-  # Hermes AD 组同步：环境名（DEV/UAT/PPD/PRD），用于构建 AD 组名
-  hermes-env: ${LDAP_HERMES_ENV:}
-  # AD 组→角色/虚拟组同步配置
+  # AD group sync. Which AD group feeds which group or list is configured on the virtual group in Admin.
   group-sync:
-    env: ${LDAP_GROUP_ENV:}
     search-base-dn: ${LDAP_GROUP_SEARCH_BASE_DN:}
-    groups: ${LDAP_HERMES_GROUP_SYNC_GROUPS:${LDAP_GROUP_GROUPS:}}
-    roles: ${LDAP_HERMES_GROUP_SYNC_ROLES:${LDAP_GROUP_ROLES:}}
-    pattern: ${LDAP_HERMES_GROUP_SYNC_PATTERN:${LDAP_GROUP_PATTERN:Infodir-Hermes-Default-{env}-{role}}}
     batch-size: ${LDAP_HERMES_GROUP_SYNC_BATCH_SIZE:${LDAP_GROUP_BATCH_SIZE:20}}

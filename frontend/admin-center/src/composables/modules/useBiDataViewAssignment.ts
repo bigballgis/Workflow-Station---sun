@@ -1,21 +1,25 @@
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 import { biManagementApi, type DataViewAssignmentResponse, type DataViewFunctionUnitOption } from '@/api/biManagement'
 import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
+import { canWrite } from '@/utils/permission'
 
 export function useBiDataViewAssignment() {
   const { t } = useI18n()
   const ACTIONS_COL_WIDTH = 220
+  /** Technical Leads bind dashboards to their teams' Views (rows say which, canEdit); Auditors only read (D-15). */
+  const writable = computed(() => canWrite('biDataViewAssignment'))
   const grid = useAdminListGrid<DataViewAssignmentResponse>({
-    storageKey: 'admin-list-layout:bi-data-view-assignments', extraWidth: ACTIONS_COL_WIDTH,
+    storageKey: 'admin-list-layout:bi-data-view-assignments',
+    extraWidth: () => (writable.value ? ACTIONS_COL_WIDTH : 0),
   })
   const loading = ref(false)
   const functionUnits = ref<DataViewFunctionUnitOption[]>([])
   const dialogVisible = ref(false)
   const dialogMode = ref<'create' | 'edit'>('create')
   const editingRow = ref<DataViewAssignmentResponse | null>(null)
-  const query = reactive({ dashboardTitle: '', functionUnitId: undefined as number | undefined })
+  const query = reactive({ dashboardTitle: '', functionUnitCode: undefined as string | undefined })
 
   async function load() {
     const seq = grid.beginQuery()
@@ -23,7 +27,7 @@ export function useBiDataViewAssignment() {
     try {
       const page = await biManagementApi.dataViewAssignment.query({
         ...grid.buildQuery(), dashboardTitle: query.dashboardTitle.trim() || undefined,
-        functionUnitId: query.functionUnitId,
+        functionUnitCode: query.functionUnitCode,
       })
       if (grid.isCurrentQuery(seq)) grid.applyPage(page, 'Data View Assignment query is missing its column declaration')
     } catch {
@@ -36,7 +40,7 @@ export function useBiDataViewAssignment() {
   function search() { grid.resetPage(); void load() }
   function reset() {
     query.dashboardTitle = ''
-    query.functionUnitId = undefined
+    query.functionUnitCode = undefined
     search()
   }
   function openCreate() { dialogMode.value = 'create'; editingRow.value = null; dialogVisible.value = true }
@@ -64,6 +68,6 @@ export function useBiDataViewAssignment() {
     }
     await load()
   }
-  return { ...grid, ACTIONS_COL_WIDTH, loading, functionUnits, dialogVisible, dialogMode, editingRow,
+  return { ...grid, ACTIONS_COL_WIDTH, writable, loading, functionUnits, dialogVisible, dialogMode, editingRow,
     query, load, search, reset, openCreate, openEdit, remove, initialize }
 }

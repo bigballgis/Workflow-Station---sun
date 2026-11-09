@@ -65,8 +65,17 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
     return !!(info.delegatedBuCode && info.delegatedRoleCode)
   }
 
+  /** D-55: a single-task delegation keeps its target but says when it is not in effect. */
   function getDelegationStatusDisplay(): string {
     if (!isDelegatedTask()) return ''
+    const status = getDelegationTargetDisplay()
+    const reason = taskInfo.value.delegationInactiveReason
+    if (reason === 'DELEGATOR_LOST_PORTAL_ENTRY') return `${status} · ${t('delegation.inactiveDelegatorLostPortalEntry')}`
+    if (reason === 'DELEGATE_LOST_PORTAL_ENTRY') return `${status} · ${t('delegation.inactiveDelegateLostPortalEntry')}`
+    return status
+  }
+
+  function getDelegationTargetDisplay(): string {
     const info = taskInfo.value
     const userStore = useUserStore()
     const me = userStore.userInfo?.id
@@ -81,11 +90,11 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
       || (info.delegatedBuCode && info.delegatedRoleCode)
     if (buRole) {
       return t('task.delegatedToBuRole', {
-        bu: info.delegatedBuCode || '-',
-        role: info.delegatedRoleCode || '-',
+        bu: info.delegatedBuName || info.delegatedBuCode || '-',
+        role: info.delegatedRoleName || info.delegatedRoleCode || '-',
       })
     }
-    const name = info.delegatedTo || '-'
+    const name = info.delegatedToName || info.delegatedTo || '-'
     return t('task.delegatedToUser', { name })
   }
 

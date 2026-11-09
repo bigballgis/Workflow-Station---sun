@@ -1,7 +1,7 @@
 /**
  * BI Dashboard Registry 业务逻辑 composable
  */
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
@@ -12,6 +12,7 @@ import {
   type DashboardStatus,
 } from '@/api/biManagement'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+import { canWrite } from '@/utils/permission'
 
 const ACTIONS_COL_WIDTH = 220
 
@@ -23,9 +24,12 @@ export function useBiDashboard() {
   const editLoading = ref(false)
   const query = reactive({ title: '', tags: '', status: undefined as DashboardStatus | undefined })
 
+  /** Sync, edit, enable / disable and delete are SYS_ADMIN's; Technical Leads and Auditors read (D-21). */
+  const writable = computed(() => canWrite('biDashboardRegistry'))
   const grid = useAdminListGrid<DashboardRegistryResponse>({
     storageKey: 'admin-list-layout:bi-dashboards',
-    extraWidth: ACTIONS_COL_WIDTH,
+    // No action column for a read-only viewer, so the columns take its width.
+    extraWidth: () => (writable.value ? ACTIONS_COL_WIDTH : 0),
   })
 
   const editDialogVisible = ref(false)
@@ -121,6 +125,7 @@ export function useBiDashboard() {
   }
 
   return {
+    writable,
     loading, syncing, editLoading, query,
     editDialogVisible, editForm,
     handleSearch, handleReset, handleSync, loadDashboards,

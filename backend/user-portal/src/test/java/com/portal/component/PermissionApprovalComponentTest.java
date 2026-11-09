@@ -28,8 +28,6 @@ class PermissionApprovalComponentTest {
     @Mock
     private PermissionRequestRepository permissionRequestRepository;
     @Mock
-    private RoleAccessComponent roleAccessComponent;
-    @Mock
     private VirtualGroupAccessComponent virtualGroupAccessComponent;
     @Mock
     private I18nService i18nService;
@@ -42,7 +40,6 @@ class PermissionApprovalComponentTest {
     void setUp() {
         component = new PermissionApprovalComponent(
                 permissionRequestRepository,
-                roleAccessComponent,
                 virtualGroupAccessComponent,
                 i18nService,
                 enrichmentComponent);

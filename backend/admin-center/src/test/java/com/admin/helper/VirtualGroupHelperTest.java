@@ -203,23 +203,23 @@ class VirtualGroupHelperTest {
     @Test
     @DisplayName("getMemberCount: Should return correct count")
     void testGetMemberCount_ReturnsCorrectCount() {
-        when(memberRepository.countByGroupId("vg-1")).thenReturn(3L);
+        when(memberRepository.countDistinctUsersByGroupId("vg-1")).thenReturn(3L);
         
         long count = virtualGroupHelper.getMemberCount("vg-1");
         
         assertEquals(3L, count);
-        verify(memberRepository, times(1)).countByGroupId("vg-1");
+        verify(memberRepository, times(1)).countDistinctUsersByGroupId("vg-1");
     }
     
     @Test
     @DisplayName("getMemberCount: Should return 0 for group with no members")
     void testGetMemberCount_NoMembers() {
-        when(memberRepository.countByGroupId("vg-2")).thenReturn(0L);
+        when(memberRepository.countDistinctUsersByGroupId("vg-2")).thenReturn(0L);
         
         long count = virtualGroupHelper.getMemberCount("vg-2");
         
         assertEquals(0L, count);
-        verify(memberRepository, times(1)).countByGroupId("vg-2");
+        verify(memberRepository, times(1)).countDistinctUsersByGroupId("vg-2");
     }
     
     @Test
@@ -228,7 +228,7 @@ class VirtualGroupHelperTest {
         long count = virtualGroupHelper.getMemberCount(null);
         
         assertEquals(0L, count);
-        verify(memberRepository, never()).countByGroupId(any());
+        verify(memberRepository, never()).countDistinctUsersByGroupId(any());
     }
     
     // ========== getMembers Tests ==========

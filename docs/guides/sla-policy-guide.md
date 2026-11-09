@@ -97,16 +97,14 @@
 
 ### 3.5 权限
 
-| 角色 / 权限 | 能力 |
+| 角色 | 能力 |
 |---|---|
-| SYS_ADMIN / SUPER_ADMIN | 全部 |
-| `sla:policy:edit` | 查看 + 修改天数 + 重算 |
-| `sla:policy:view` | 只读（种子数据默认授予 AUDITOR） |
-| AUDITOR | 即使被授予 edit 也**不能**写 |
+| SYS_ADMIN | 所有功能单元：查看 + 修改天数 + 重算 |
+| Technical Lead | 本团队功能单元（`function_unit_code` 在 Admin 目录里的所属团队是自己担任 Technical Lead 的团队）：查看 + 修改 + 重算；其他团队的看不到 |
+| AUDITOR | 全部只读 |
 
-后端由 `SlaPolicyAccessInterceptor` 强制校验（无权限返回 403 `PERM_ACCESS_DENIED`），前端按同样的权限隐藏菜单和按钮。
-AUDITOR 角色在 dev 里通过虚拟组 `AUDITORS`（`vg-auditors`）授予；直接写 `sys_user_roles` 不会进入令牌。
-新授予的权限需要用户**重新登录**才生效。
+后端由 `SlaPolicyController` 上的 `@AdminAccess(TEAM_READ / TEAM_WRITE)` 经 `AdminAccessInterceptor` 强制校验，Technical Lead 再按团队限定范围（越权返回 403 `PERM_ACCESS_DENIED`）；前端按同样的能力隐藏菜单和按钮（[平台访问模型 PRD](../design/platform-access-model-requirements.md) §8.2）。
+角色来自 System Administrators / Auditors 组和团队的 Technical Lead 名单；移出后最多 15 分钟（access token 有效期）失效。
 
 ### 3.6 审计
 
@@ -237,7 +235,7 @@ body `{"functionUnitCode", "policyVersion", "triggeredBy"}`，请求头 `X-Inter
 |---|---|
 | DW 后端 | `dto/SlaConfig.java`、`service/SlaConfigValidator.java`；导出 / 导入 / 克隆见 `FunctionUnitExporter` / `FunctionUnitImportWriter` / `FunctionUnitCloner` |
 | DW 前端 | `components/designer/SlaConfigDialog.vue`、`utils/slaConfigFields.ts`（改名跟随）、`utils/formFieldMeta.ts`（`markSlaDerivedFields` 只读） |
-| Admin 后端 | `controller/SlaPolicyController.java`、`component/SlaPolicyComponent.java`、`component/PortalSlaRecalcClient.java`、`config/SlaPolicyAccessInterceptor.java`、`list/SlaPolicyColumnSpec.java` |
+| Admin 后端 | `controller/SlaPolicyController.java`、`component/SlaPolicyComponent.java`、`component/PortalSlaRecalcClient.java`、`security/AdminAccessInterceptor.java`（`@AdminAccess` 统一鉴权）、`list/SlaPolicyColumnSpec.java` |
 | Admin 前端 | `views/sla-policy/`、`composables/modules/useSlaPolicies.ts`、`api/slaPolicy.ts` |
 | Portal 后端 | `component/SlaDueDateEnricher.java`、`component/SlaRecalcJobService.java`、`controller/InternalSlaRecalcController.java` |
 | SQL | `deploy/init-scripts/00-schema/88-…`、`89-…`、`90-…`，`01-admin/12-sla-policy-permissions.sql` |

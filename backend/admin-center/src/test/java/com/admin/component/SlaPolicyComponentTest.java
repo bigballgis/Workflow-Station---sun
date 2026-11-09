@@ -3,10 +3,12 @@ package com.admin.component;
 import com.admin.dto.SlaPolicyListQueryRequest;
 import com.admin.dto.SlaPolicyResponse;
 import com.admin.dto.SlaPolicyUpdateRequest;
+import com.admin.entity.FunctionUnit;
 import com.admin.entity.SlaPolicy;
 import com.admin.entity.SlaPolicyHistory;
 import com.admin.repository.SlaPolicyHistoryRepository;
 import com.admin.repository.SlaPolicyRepository;
+import com.admin.security.AdminTeamScope;
 import com.platform.common.exception.BusinessException;
 import com.platform.common.exception.ResourceNotFoundException;
 import com.platform.common.i18n.I18nService;
@@ -37,12 +39,15 @@ import static org.mockito.Mockito.when;
 class SlaPolicyComponentTest {
 
     private static final String FU = "FU_CASES";
+    private static final String ACTIVE_ID = "catalog-active";
 
     private SlaPolicyRepository policyRepository;
     private SlaPolicyHistoryRepository historyRepository;
     private PortalSlaRecalcClient portalClient;
     private JdbcTemplate jdbcTemplate;
     private SlaPolicyComponent component;
+    private AdminTeamScope teamScope;
+    private FunctionUnitLifecycleComponent lifecycle;
 
     @BeforeEach
     void setUp() {
@@ -50,8 +55,12 @@ class SlaPolicyComponentTest {
         historyRepository = mock(SlaPolicyHistoryRepository.class);
         portalClient = mock(PortalSlaRecalcClient.class);
         jdbcTemplate = mock(JdbcTemplate.class);
+        teamScope = mock(AdminTeamScope.class);
+        lifecycle = mock(FunctionUnitLifecycleComponent.class);
         component = new SlaPolicyComponent(policyRepository, historyRepository, portalClient, jdbcTemplate,
-                mock(I18nService.class), mock(PlatformTransactionManager.class));
+                mock(I18nService.class), mock(PlatformTransactionManager.class), teamScope, lifecycle);
+        when(lifecycle.listLatestDeployedFunctionUnits()).thenReturn(List.of(release(ACTIVE_ID)));
+        when(lifecycle.getActiveCatalogForPortalStart(FU)).thenReturn(Optional.of(release(ACTIVE_ID)));
         when(historyRepository.save(any(SlaPolicyHistory.class))).thenAnswer(inv -> inv.getArgument(0));
         when(policyRepository.save(any(SlaPolicy.class))).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -171,13 +180,73 @@ class SlaPolicyComponentTest {
                 .allSatisfy(s -> assertThat(s).doesNotContainPattern("[A-Za-z_)]FROM"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void aTechnicalLeadListsOnlyTheCodesOfTheTeamsTheyLead() throws Exception {
+        when(teamScope.visibleFunctionUnitCodes()).thenReturn(java.util.Set.of(FU));
+        when(jdbcTemplate.query(any(PreparedStatementCreator.class), any(ResultSetExtractor.class)))
+                .thenReturn(0L, List.of());
+        component.query(new SlaPolicyListQueryRequest(0, 20, null, null, null));
+
+        ArgumentCaptor<PreparedStatementCreator> creators = ArgumentCaptor.forClass(PreparedStatementCreator.class);
+        verify(jdbcTemplate, atLeastOnce()).query(creators.capture(), any(ResultSetExtractor.class));
+        Connection connection = mock(Connection.class);
+        when(connection.prepareStatement(anyString())).thenReturn(mock(PreparedStatement.class));
+        for (PreparedStatementCreator creator : creators.getAllValues()) {
+            creator.createPreparedStatement(connection);
+        }
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(connection, atLeastOnce()).prepareStatement(sql.capture());
+        // Count and page both carry the team filter (the code comes from the module's own query, D-46).
+        assertThat(sql.getAllValues()).hasSize(2).allSatisfy(s -> assertThat(s).contains("AND fu.id IN (?)").contains("AND fu.code IN (?)"));
+    }
+
+    @Test
+    void aUnitWithoutAnActiveReleaseIsRejectedWithoutReadingAnyMapping() {
+        when(lifecycle.getActiveCatalogForPortalStart(FU)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> component.recalculate(FU, "u-1")).isInstanceOf(ResourceNotFoundException.class);
+        verify(jdbcTemplate, never()).queryForObject(anyString(), eq(Long.class), any());
+    }
+
+    @Test
+    void theMappingIsReadFromTheActiveReleaseNeverFromTheDesigner() {
+        mapped(true);
+        when(policyRepository.findById(FU)).thenReturn(Optional.of(policy(45, 7)));
+        component.recalculate(FU, "u-1");
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).queryForObject(sql.capture(), eq(Long.class), eq(ACTIVE_ID));
+        assertThat(sql.getValue()).contains("FROM sys_function_units fu").contains("AND fu.id = ?")
+                .doesNotContainPattern("\\bdw_");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theListHoldsActiveReleasesOnlyAndNoneWhenThereAreNone() throws Exception {
+        when(lifecycle.listLatestDeployedFunctionUnits()).thenReturn(List.of());
+        when(jdbcTemplate.query(any(PreparedStatementCreator.class), any(ResultSetExtractor.class)))
+                .thenReturn(0L, List.of());
+        component.query(new SlaPolicyListQueryRequest(0, 20, null, null, null));
+
+        ArgumentCaptor<PreparedStatementCreator> creators = ArgumentCaptor.forClass(PreparedStatementCreator.class);
+        verify(jdbcTemplate, atLeastOnce()).query(creators.capture(), any(ResultSetExtractor.class));
+        Connection connection = mock(Connection.class);
+        when(connection.prepareStatement(anyString())).thenReturn(mock(PreparedStatement.class));
+        for (PreparedStatementCreator creator : creators.getAllValues()) {
+            creator.createPreparedStatement(connection);
+        }
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(connection, atLeastOnce()).prepareStatement(sql.capture());
+        assertThat(sql.getAllValues()).hasSize(2)
+                .allSatisfy(s -> assertThat(s).contains("AND 1 = 0").doesNotContainPattern("\\bdw_"));
+    }
+
     private void insertCreatesRow(boolean created) {
         when(jdbcTemplate.update(org.mockito.ArgumentMatchers.contains("ON CONFLICT"), any(Object[].class)))
                 .thenReturn(created ? 1 : 0);
     }
 
     private void mapped(boolean mapped) {
-        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(FU))).thenReturn(mapped ? 1L : 0L);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(ACTIVE_ID))).thenReturn(mapped ? 1L : 0L);
     }
 
     private SlaPolicyHistory lastSavedHistory() {
@@ -185,6 +254,13 @@ class SlaPolicyComponentTest {
         verify(historyRepository, atLeastOnce()).save(captor.capture());
         List<SlaPolicyHistory> all = captor.getAllValues();
         return all.get(all.size() - 1);
+    }
+
+    private static FunctionUnit release(String id) {
+        FunctionUnit unit = new FunctionUnit();
+        unit.setId(id);
+        unit.setCode(FU);
+        return unit;
     }
 
     private static SlaPolicy policy(int days, int version) {

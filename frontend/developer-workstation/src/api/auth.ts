@@ -1,6 +1,7 @@
 // NOTE: This file is duplicated across admin-center, developer-workstation, user-portal.
 // Consider extracting to a shared package. See ISSUE-095.
 import axios from 'axios'
+import { installSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 /**
  * Authentication API module.
@@ -13,6 +14,7 @@ const authRequest = axios.create({
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 })
+installSessionRefresh(authRequest, config => axios.request(config))
 
 /** Per-app keys so DW / Portal / Admin on the same origin do not clobber each other's sessions */
 export const TOKEN_KEY = 'ws_dw_access_token'

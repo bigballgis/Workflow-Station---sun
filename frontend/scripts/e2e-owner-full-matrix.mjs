@@ -264,8 +264,8 @@ async function adminLogin() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      username: process.env.ADMIN_USER ?? 'admin',
-      password: process.env.ADMIN_PASS ?? 'admin123',
+      username: process.env.ADMIN_USER ?? 'developer',
+      password: process.env.ADMIN_PASS ?? 'password',
     }),
   })
   const json = await res.json().catch(() => ({}))

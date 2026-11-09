@@ -33,6 +33,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
+import com.admin.security.AdminOwner;
 
 /**
  * 自动化 flow 迁移管理（uat 导出 → prod 导入的发布通道）。
@@ -45,6 +48,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/automation/flows")
 @RequiredArgsConstructor
+@AdminAccess(AdminAudience.SYS_ADMIN)
 public class AutomationFlowController {
 
     private static final String ERR_FORBIDDEN = "FORBIDDEN";
@@ -68,20 +72,17 @@ public class AutomationFlowController {
         return ResponseEntity.ok(ApiResponse.success(automationFlowService.listFlows()));
     }
 
+    // Read-only for Technical Leads (their teams and Public, D-48) and Auditors; @AdminAccess admits them.
+    @AdminAccess(AdminAudience.TEAM_READ)
     @PostMapping("/query")
     public ResponseEntity<ApiResponse<AdminListPage<AutomationFlowSummary>>> queryFlows(
             @RequestBody @Valid AutomationFlowListQueryRequest request) {
-        if (!isSystemAdmin()) {
-            return forbidden();
-        }
         return ResponseEntity.ok(ApiResponse.success(flowListQueryComponent.query(request)));
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, owner = AdminOwner.AUTOMATION_FLOW, ownerVariable = "flowId")
     @GetMapping("/{flowId}/export")
     public ResponseEntity<byte[]> exportFlow(@PathVariable String flowId) {
-        if (!isSystemAdmin()) {
-            return ResponseEntity.status(403).build();
-        }
         AutomationFlowService.FlowExportFile file = automationFlowService.exportFlow(flowId);
         log.info("Automation flow exported: {} by {}", flowId,
                 SecurityContextUtils.getCurrentUsername());
@@ -220,6 +221,7 @@ public class AutomationFlowController {
      * {@code ap:flowId} 取可携带 JSON。与 {@code /resolve} 同门禁——服务间调用,
      * 无用户上下文,以 C-3 的 X-Service-Token 把关。
      */
+    @AdminAccess(AdminAudience.SERVICE)
     @GetMapping("/internal/export")
     public ResponseEntity<byte[]> exportFlowForService(
             @RequestParam String ref,
@@ -238,6 +240,7 @@ public class AutomationFlowController {
      * FU 导入随包还原 flow（DW 的 FunctionUnitImporter 调用；admin-center 自身的
      * ZIP 导入直接走 service）。只补齐本环境缺失的 flow,不覆盖既有草稿。
      */
+    @AdminAccess(AdminAudience.SERVICE)
     @PostMapping("/internal/restore")
     public ResponseEntity<ApiResponse<List<AutomationFlowService.FlowRestoreResult>>> restoreFlows(
             @RequestBody FlowRestoreRequest request,
@@ -267,6 +270,7 @@ public class AutomationFlowController {
      * 错误体说明 flow 未发布——引用未发布 flow 的部署必须显式失败,而不是部署成功后
      * 运行时 404/204。</p>
      */
+    @AdminAccess(AdminAudience.SERVICE)
     @GetMapping("/resolve")
     public ResponseEntity<ApiResponse<Map<String, String>>> resolveFlowRef(
             @RequestParam String ref,

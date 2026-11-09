@@ -76,7 +76,6 @@ export function useUserTaskState(
   // Business unit and role data
   const businessUnits = ref<BusinessUnitInfo[]>([])
   const buBoundedRoles = ref<RoleInfo[]>([])
-  const buUnboundedRoles = ref<RoleInfo[]>([])
   const eligibleRoles = ref<RoleInfo[]>([])
   const loadingBusinessUnits = ref(false)
   const loadingRoles = ref(false)
@@ -151,7 +150,6 @@ export function useUserTaskState(
     topologyTick,
     businessUnits,
     buBoundedRoles,
-    buUnboundedRoles,
     eligibleRoles,
     loadingBusinessUnits,
     loadingRoles,

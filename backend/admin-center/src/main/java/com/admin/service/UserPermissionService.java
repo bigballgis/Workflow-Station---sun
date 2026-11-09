@@ -6,6 +6,7 @@ import com.admin.helper.RoleHelper;
 import com.admin.util.EntityTypeConverter;
 import com.admin.repository.*;
 import com.platform.security.entity.Role;
+import com.platform.security.entity.VirtualGroup;
 import com.platform.security.entity.BusinessUnit;
 import com.platform.security.entity.UserBusinessUnit;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +33,7 @@ public class UserPermissionService {
     private final VirtualGroupRoleRepository virtualGroupRoleRepository;
     private final UserBusinessUnitRepository userBusinessUnitRepository;
     private final RoleRepository roleRepository;
-    private final UserRoleRepository userRoleRepository;
+    private final UserRoleIdResolver userRoleIdResolver;
     private final UserPreferenceRepository userPreferenceRepository;
     private final BusinessUnitRepository businessUnitRepository;
     private final RoleHelper roleHelper;
@@ -71,7 +72,7 @@ public class UserPermissionService {
      * 顶栏 / 各前端「个人摘要」用的角色列表。
      * <ul>
      *     <li>{@code profileContext} 为空或未知：保持历史行为，仅返回经虚拟组继承的角色（与 {@link #getUserRoles(String)} 一致）。</li>
-     *     <li>否则：合并「用户直配 + 虚拟组展开 + 业务单元工作台角色」的有效角色（与 {@code UserRoleRepository#findAllRoleIdsByUserId} 一致），再按前端场景过滤类型。</li>
+     *     <li>否则：合并平台角色与业务单元工作台角色（{@link UserRoleIdResolver#allRoleIds}），再按前端场景过滤类型。</li>
      * </ul>
      *
      * @param profileContext {@code PORTAL} 仅业务角色；{@code ADMIN} 仅 {@code ADMIN} 类型；{@code DEVELOPER} 仅 {@code DEVELOPER}
@@ -97,18 +98,21 @@ public class UserPermissionService {
     }
 
     /**
-     * 虚拟组是否属于指定前端上下文（按该组绑定的单一角色类型判断；无绑定则不展示）。
+     * 虚拟组是否属于指定前端上下文，按组的类型判断（平台访问模型 §5.1）：Portal 看 CUSTOM（准入组），Admin 看
+     * SYSTEM（System Administrators、Auditors），DW 看团队（DEVELOPER）。组不再绑定角色，不能再按绑定判断。
      */
-    public boolean isVirtualGroupVisibleForProfile(String virtualGroupId, String profileContext) {
+    public boolean isVirtualGroupVisibleForProfile(VirtualGroup group, String profileContext) {
         if (!isRecognizedProfileContext(profileContext)) {
             return true;
         }
         String ctx = profileContext.trim();
-        return virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId)
-                .flatMap(b -> roleRepository.findById(b.getRoleId()))
-                .filter(r -> "ACTIVE".equals(r.getStatus()))
-                .map(r -> roleMatchesProfile(r, ctx))
-                .orElse(false);
+        if ("PORTAL".equalsIgnoreCase(ctx)) {
+            return "CUSTOM".equals(group.getType());
+        }
+        if ("ADMIN".equalsIgnoreCase(ctx)) {
+            return "SYSTEM".equals(group.getType());
+        }
+        return "DEVELOPER".equals(group.getType());
     }
 
     private boolean isRecognizedProfileContext(String profileContext) {
@@ -122,7 +126,7 @@ public class UserPermissionService {
     }
 
     private List<Role> loadActiveRolesMerged(String userId) {
-        List<String> roleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
+        List<String> roleIds = userRoleIdResolver.allRoleIds(userId);
         if (roleIds == null || roleIds.isEmpty()) {
             return Collections.emptyList();
         }
@@ -188,19 +192,6 @@ public class UserPermissionService {
     }
     
     /**
-     * 获取用户的 BU-Unbounded 角色
-     * 
-     * @param userId 用户ID
-     * @return BU-Unbounded 角色列表
-     */
-    public List<Role> getUserBuUnboundedRoles(String userId) {
-        return getUserRoles(userId).stream()
-                .filter(role -> "BU_UNBOUNDED".equals(role.getType()))
-                .collect(Collectors.toList());
-    }
-
-    
-    /**
      * 检查用户是否在指定业务单元中拥有指定角色
      * 
      * @param userId 用户ID
@@ -222,11 +213,6 @@ public class UserPermissionService {
         }
         
         Role role = targetRole.get();
-        
-        // 如果是 BU-Unbounded 角色，直接返回 true（不需要业务单元）
-        if (EntityTypeConverter.toRoleType(role.getType()) == RoleType.BU_UNBOUNDED) {
-            return true;
-        }
         
         // 如果是 BU-Bounded 角色，检查用户是否是该业务单元的成员
         if (EntityTypeConverter.toRoleType(role.getType()) == RoleType.BU_BOUNDED) {

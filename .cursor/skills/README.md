@@ -21,5 +21,5 @@
 | [portal-dialog-form-labels](portal-dialog-form-labels/SKILL.md) | 三前端弹窗 label 不折行、不被输入框遮挡、输入框对齐 |
 | [secure-coding-sast](secure-coding-sast/SKILL.md) | 从 Checkmarx/Cyberflows 结论提炼的编码规则,减少 SAST 告警 |
 | [verify-ui-fix-with-screenshot](verify-ui-fix-with-screenshot/SKILL.md) | UI 改动后 build+重建 Docker+Playwright 截图验证 |
-| [view-access-control](view-access-control/SKILL.md) | Main Table View BU/Role 访问 + SYS_ADMIN bypass(空配置仅 admin 可见) |
+| [view-access-control](view-access-control/SKILL.md) | Main Table View BU/Role 访问;SYS_ADMIN 无特权(空配置无人可见,一律按 UBR) |
 | [extract-help-guideline](extract-help-guideline/SKILL.md) | 提取/维护 `/help/` 给人看的指南（deep-documentation 质量：分层、精确界面、流程图、交叉链接、`llms.txt`）；细则见 [reference.md](extract-help-guideline/reference.md) |

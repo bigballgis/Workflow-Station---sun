@@ -117,7 +117,8 @@ class TaskProcessProperties {
         WorkspaceTaskFilterComponent workspaceFilter = new WorkspaceTaskFilterComponent(
                 workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository);
         TaskPermissionEvaluator taskPermissionEvaluator =
-            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter);
+            new TaskPermissionEvaluator(com.portal.testsupport.PortalEntryStubs.delegationRules(delegationRuleRepository), workflowEngineClient, workspaceFilter,
+                com.portal.testsupport.PortalEntryStubs.everyone());
         EngineVisibleTaskFetcher engineFetcher = new EngineVisibleTaskFetcher(
                 workflowEngineClient, processInstanceRepository, workspaceFilter);
         MineTaskListCache mineCache = new MineTaskListCache();
@@ -135,7 +136,7 @@ class TaskProcessProperties {
         org.springframework.test.util.ReflectionTestUtils.setField(taskDetail, "hydration", detailHydration);
         taskQueryComponent = new TaskQueryComponent(
             workflowEngineClient,
-            new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
+            new DelegatedTaskQueryComponent(workflowEngineClient, com.portal.testsupport.PortalEntryStubs.delegationRules(delegationRuleRepository)),
             new TaskHistoryComponent(workflowEngineClient, processHistoryRepository),
             requestIdEnricher,
             Mockito.mock(CompletedTaskListQueryComponent.class),
@@ -179,7 +180,8 @@ class TaskProcessProperties {
             processInstanceSyncComponent,
             miOverlayComponent,
             Mockito.mock(com.portal.component.ClaimForceUnclaimAnnotator.class),
-            Mockito.mock(com.portal.component.TaskAssignmentHistoryRecorder.class)
+            Mockito.mock(com.portal.component.TaskAssignmentHistoryRecorder.class),
+            Mockito.mock(com.portal.component.TaskDelegationGuard.class)
         );
         random = new Random();
 
@@ -359,7 +361,7 @@ class TaskProcessProperties {
 
         // 委托任务应该成功
         assertDoesNotThrow(() ->
-            taskProcessComponent.delegateTask(taskId, delegatorId, delegateId, "出差委托"));
+            taskProcessComponent.delegateTask(taskId, delegatorId, delegateId, "出差委托", null));
         verify(workflowEngineClient).delegateTask(eq(taskId), any());
     }
 
@@ -377,8 +379,25 @@ class TaskProcessProperties {
         mockFlowableTaskResponse(taskId, taskMap);
 
         // 转办任务应该成功
-        assertDoesNotThrow(() -> 
-            taskProcessComponent.transferTask(taskId, fromUserId, toUserId, "工作交接"));
+        assertDoesNotThrow(() ->
+            taskProcessComponent.transferTask(taskId, fromUserId, toUserId, "工作交接", null));
+    }
+
+    /**
+     * 属性8b: 直接转办（POST /tasks/{id}/transfer）只允许能办理该任务的人；其他人 403，且不调用引擎。
+     */
+    @RepeatedTest(20)
+    void transferByUserWhoCannotProcessTheTaskIsRefused() {
+        String assignee = "user_" + random.nextInt(1000);
+        String otherUser = "other_" + random.nextInt(1000);
+        String taskId = "task_" + random.nextInt(1000);
+        mockFlowableTaskResponse(taskId, createTaskMap(taskId, "USER", assignee));
+
+        PortalException denied = assertThrows(PortalException.class, () ->
+            taskProcessComponent.transferTask(taskId, otherUser, "to_someone", "接管", otherUser));
+
+        assertEquals("403", denied.getCode());
+        verify(workflowEngineClient, Mockito.never()).transferTask(any(), any(), any(), any());
     }
 
     /**

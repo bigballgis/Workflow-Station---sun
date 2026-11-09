@@ -17,6 +17,9 @@ import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.developer.exception.ResourceNotFoundException;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -56,12 +61,15 @@ class ActionPostEmailActionTableFilterTest {
     @Mock private TableDefinitionRepository tableDefinitionRepository;
     @Mock private FormTableBindingRepository formTableBindingRepository;
     @Mock private I18nService i18nService;
+    @Mock private WorkspaceRouteOwnership routeOwnership;
 
     @InjectMocks
     private ActionDesignComponentImpl component;
 
     @BeforeEach
     void setUp() {
+        // The email-reference rule itself is WorkspaceRouteOwnership's: run it, against the stubbed owner lookups.
+        lenient().doCallRealMethod().when(routeOwnership).requireEmailReferencesInUnit(any(), any(), any());
         lenient().when(i18nService.getMessage(anyString())).thenReturn("msg");
         lenient().when(i18nService.getMessage(anyString(), any(Object[].class))).thenReturn("msg");
         FunctionUnit fu = FunctionUnit.builder().id(FU_ID).build();
@@ -118,6 +126,52 @@ class ActionPostEmailActionTableFilterTest {
         DeveloperBusinessException ex = assertThrows(DeveloperBusinessException.class,
                 () -> component.update(ACTION_ID, request(ActionType.FORM_POPUP, condition("amount", "SUB"))));
         assertEquals("ACTION_EMAIL_FILTER_INVALID", ex.getErrorCode());
+    }
+
+    @Test
+    void rejectsPopupFormOfAnotherUnit() {
+        lenient().doThrow(new ResourceNotFoundException("Form", String.valueOf(POPUP_FORM_ID)))
+                .when(routeOwnership).requireInUnit(Owned.FORM, POPUP_FORM_ID, FU_ID);
+
+        assertThrows(ResourceNotFoundException.class, () -> component.update(ACTION_ID,
+                request(ActionType.FORM_POPUP, condition("amount", null))));
+        verify(actionDefinitionRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsPostEmailConnectionOfAnotherUnit() {
+        lenient().doThrow(new ResourceNotFoundException("EmailConnection", "conn-1"))
+                .when(routeOwnership).requireInUnit(Owned.EMAIL_CONNECTION_UID, "conn-1", FU_ID);
+
+        assertThrows(ResourceNotFoundException.class, () -> component.update(ACTION_ID,
+                request(ActionType.APPROVE, condition("amount", null))));
+        verify(actionDefinitionRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsPostEmailTemplateOfAnotherUnitEvenOnADisabledRule() {
+        lenient().doThrow(new ResourceNotFoundException("EmailTemplate", "2"))
+                .when(routeOwnership).requireInUnit(Owned.EMAIL_TEMPLATE, 2L, FU_ID);
+        ActionDefinitionRequest request = request(ActionType.APPROVE, condition("amount", null));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rule = ((List<Map<String, Object>>) request.getConfigJson().get("postEmailRules")).get(0);
+        rule.put("enabled", false);
+
+        assertThrows(ResourceNotFoundException.class, () -> component.update(ACTION_ID, request));
+        verify(actionDefinitionRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsLegacyNumericConnectionIdOfAnotherUnit() {
+        lenient().doThrow(new ResourceNotFoundException("EmailConnection", "44"))
+                .when(routeOwnership).requireInUnit(Owned.EMAIL_CONNECTION, 44L, FU_ID);
+        ActionDefinitionRequest request = request(ActionType.APPROVE, condition("amount", null));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rule = ((List<Map<String, Object>>) request.getConfigJson().get("postEmailRules")).get(0);
+        rule.put("connectionId", "44");
+
+        assertThrows(ResourceNotFoundException.class, () -> component.update(ACTION_ID, request));
+        verify(actionDefinitionRepository, never()).save(any());
     }
 
     private static TableDefinition table(long id, TableType type, String fieldName) {

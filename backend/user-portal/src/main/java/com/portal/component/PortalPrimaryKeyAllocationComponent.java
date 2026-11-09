@@ -37,7 +37,7 @@ public class PortalPrimaryKeyAllocationComponent {
         PkGenerationConfig config = toPkConfig(pkJson);
         int count = request.getCount() != null && request.getCount() > 0 ? request.getCount() : 1;
         List<String> values = primaryKeyAllocationService.allocate(
-                tableId, request.getFieldName(), config, count, "");
+                tableId, request.getFieldName(), config, count, "", "up_pk_sequences");
         return AllocatePrimaryKeyResponse.builder().values(values).build();
     }
 
@@ -56,7 +56,7 @@ public class PortalPrimaryKeyAllocationComponent {
         int count = request.getCount() == null ? 1 : request.getCount();
         if (count < 1 || count > 1000) throw new IllegalArgumentException("Invalid allocation count");
         return AllocatePrimaryKeyResponse.builder().values(primaryKeyAllocationService.allocate(
-                request.getTableId(), request.getFieldName(), config, count, "", "dw_pk_sequences")).build();
+                request.getTableId(), request.getFieldName(), config, count, "", "up_pk_sequences")).build();
     }
 
     /**

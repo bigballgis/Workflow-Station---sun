@@ -20,6 +20,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * RBAC mapping management controller
@@ -29,6 +31,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "RBAC Mapping Management", description = "Superset role sync, RBAC mapping query and update endpoints")
+@AdminAccess(AdminAudience.SHARED_READ)
 public class BiRbacMappingController {
 
     private final BiRbacMappingService rbacMappingService;
@@ -60,6 +63,7 @@ public class BiRbacMappingController {
         return ResponseEntity.ok(mappings);
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/mappings/query")
     @Operation(summary = "Query RBAC mappings (true paging; column filters and sort)")
     public ResponseEntity<AdminListPage<RbacMappingResponse>> queryMappings(

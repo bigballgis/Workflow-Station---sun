@@ -20,6 +20,8 @@ export interface SlaPolicyRow {
   updatedAt: string | null
   latestJobStatus: SlaJobStatus | null
   latestJobId: string | null
+  /** Whether the user may change this unit's lead time: a team they lead, or SYS_ADMIN (§8.2). */
+  canEdit: boolean
 }
 
 export interface SlaPolicyListQuery {

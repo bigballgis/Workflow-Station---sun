@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Guest Token controller.
@@ -26,6 +28,7 @@ public class BiGuestTokenController {
     private final BiGuestTokenService guestTokenService;
     private final BiAdminAccessGuard adminAccessGuard;
 
+    @AdminAccess(AdminAudience.ADMIN_READ)
     @PostMapping
     @Operation(summary = "Get Guest Token", description = "Verify user Dashboard assignment permission and obtain Superset Guest Token")
     public ResponseEntity<GuestTokenResponse> getGuestToken(

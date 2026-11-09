@@ -34,6 +34,13 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    /** Inbound {@code X-Service-Token} check for the endpoints only platform services call. */
+    @Bean
+    public com.platform.security.util.ServiceTokenVerifier serviceTokenVerifier(
+            @org.springframework.beans.factory.annotation.Value("${service.internal-token}") String serviceToken) {
+        return new com.platform.security.util.ServiceTokenVerifier(serviceToken);
+    }
+
     @Bean
     @Order(1)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -42,6 +49,10 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/record-note-targets")).permitAll()
+                // Service token checked in ClaimPoolInternalController (Admin Center after UBR changes).
+                .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/claim-pools/**")).permitAll()
+                // Service token checked in DepartedUserTasksInternalController (Admin Center after a user left).
+                .requestMatchers(new AntPathRequestMatcher("/api/v1/internal/departed-users/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/auth/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/actuator/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/health/**")).permitAll()

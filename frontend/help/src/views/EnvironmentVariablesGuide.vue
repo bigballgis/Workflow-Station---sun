@@ -28,6 +28,7 @@ const flowKeys = [
 const jumpLinks: GuideJump[] = [
   { anchor: 'catalog', titleKey: 'environmentVariablesGuide.catalogTitle' },
   { anchor: 'bind', titleKey: 'environmentVariablesGuide.bindTitle' },
+  { anchor: 'permissions', titleKey: 'environmentVariablesGuide.permTitle' },
   { anchor: 'fail', titleKey: 'environmentVariablesGuide.failTitle' },
 ]
 
@@ -66,6 +67,18 @@ const sections: GuideSection[] = [
     ],
   },
   {
+    anchor: 'permissions',
+    titleKey: 'environmentVariablesGuide.permTitle',
+    bodyKey: 'environmentVariablesGuide.permBody',
+    bodyKeys: ['environmentVariablesGuide.permLead'],
+    figure: { src: 'guides/ac-env-readonly.png', captionKey: 'environmentVariablesGuide.permFigure' },
+    ...catalog,
+    samples: [
+      { code: 'Value / secret path · TEXT', hintKey: 'environmentVariablesGuide.fPermText' },
+      { code: 'Value / secret path · VAULT', hintKey: 'environmentVariablesGuide.fPermVault' },
+    ],
+  },
+  {
     anchor: 'fail',
     titleKey: 'environmentVariablesGuide.failTitle',
     bodyKey: 'environmentVariablesGuide.failBody',
@@ -75,6 +88,7 @@ const sections: GuideSection[] = [
       'environmentVariablesGuide.failVaultWrite',
       'environmentVariablesGuide.failVault404',
       'environmentVariablesGuide.failTextForMail',
+      'environmentVariablesGuide.failReadOnly',
     ],
   },
 ]

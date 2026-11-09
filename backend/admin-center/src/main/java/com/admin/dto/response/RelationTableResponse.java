@@ -64,6 +64,12 @@ public class RelationTableResponse {
     private String permissionLevel;
 
     /**
+     * Structure page: whether the caller may change the table — every linked unit is of a team they lead, or they
+     * are SYS_ADMIN; a Common table is SYS_ADMIN's (D-47).
+     */
+    private Boolean canWrite;
+
+    /**
      * 字段定义响应
      */
     @Data

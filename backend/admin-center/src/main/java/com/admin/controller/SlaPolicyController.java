@@ -20,11 +20,15 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import com.admin.security.AdminOwner;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
-/** SLA lead time per Function Unit. Access is enforced by {@code SlaPolicyAccessInterceptor}. */
+/** SLA lead time per Function Unit. Access is declared with {@code @AdminAccess} and enforced by {@code AdminAccessInterceptor}. */
 @RestController
 @RequestMapping("/sla-policies")
 @Tag(name = "SLA policies", description = "SLA lead time per Function Unit and due date recalculation")
+@AdminAccess(AdminAudience.TEAM_READ)
 public class SlaPolicyController extends AbstractBaseController {
 
     private final SlaPolicyComponent slaPolicyComponent;
@@ -33,6 +37,7 @@ public class SlaPolicyController extends AbstractBaseController {
         this.slaPolicyComponent = slaPolicyComponent;
     }
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @PostMapping("/query")
     @Operation(summary = "Query SLA policies (true paging; column filters and sort)")
     public ResponseEntity<ApiResponse<AdminListPage<SlaPolicyRow>>> queryPolicies(
@@ -40,6 +45,8 @@ public class SlaPolicyController extends AbstractBaseController {
         return handleRequest(() -> slaPolicyComponent.query(request));
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE,
+            owner = AdminOwner.FUNCTION_UNIT_CODE, ownerVariable = "functionUnitCode")
     @PutMapping("/{functionUnitCode}")
     @Operation(summary = "Set the SLA lead time and start recalculating open cases")
     public ResponseEntity<ApiResponse<SlaPolicyResponse>> updatePolicy(
@@ -50,6 +57,8 @@ public class SlaPolicyController extends AbstractBaseController {
         return handleRequest(() -> slaPolicyComponent.update(functionUnitCode, request, userId));
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE,
+            owner = AdminOwner.FUNCTION_UNIT_CODE, ownerVariable = "functionUnitCode")
     @PostMapping("/{functionUnitCode}/recalculate")
     @Operation(summary = "Re-run the due date recalculation for the current lead time")
     public ResponseEntity<ApiResponse<Map<String, String>>> recalculate(@PathVariable String functionUnitCode) {
@@ -58,18 +67,24 @@ public class SlaPolicyController extends AbstractBaseController {
         return handleRequest(() -> Map.of("jobId", slaPolicyComponent.recalculate(functionUnitCode, userId)));
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ,
+            owner = AdminOwner.FUNCTION_UNIT_CODE, ownerVariable = "functionUnitCode")
     @GetMapping("/{functionUnitCode}/history")
     @Operation(summary = "Lead time change history (latest 50)")
     public ResponseEntity<ApiResponse<List<SlaPolicyHistory>>> getHistory(@PathVariable String functionUnitCode) {
         return handleRequest(() -> slaPolicyComponent.history(functionUnitCode));
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ,
+            owner = AdminOwner.FUNCTION_UNIT_CODE, ownerVariable = "functionUnitCode")
     @GetMapping("/{functionUnitCode}/jobs")
     @Operation(summary = "Recalculation jobs (latest 20)")
     public ResponseEntity<ApiResponse<List<SlaRecalcJobResponse>>> getJobs(@PathVariable String functionUnitCode) {
         return handleRequest(() -> slaPolicyComponent.jobs(functionUnitCode));
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ,
+            owner = AdminOwner.FUNCTION_UNIT_CODE, ownerVariable = "functionUnitCode")
     @GetMapping("/{functionUnitCode}/jobs/{jobId}/items")
     @Operation(summary = "Cases a job updated, skipped or failed on (first 500)")
     public ResponseEntity<ApiResponse<List<SlaRecalcJobItemResponse>>> getJobItems(

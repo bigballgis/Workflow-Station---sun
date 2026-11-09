@@ -64,6 +64,44 @@ class ImportViewAccessValidatorTest {
     }
 
     @Test
+    void anIdWithoutACodeThatThisEnvironmentDoesNotHave_fails() {
+        when(roleRepository.existsById("role-elsewhere")).thenReturn(false);
+        String json = """
+                [{"viewName":"All","accessRules":[
+                  {"targetType":"ROLE","targetId":"role-elsewhere"}
+                ]}]
+                """;
+        assertThatThrownBy(() -> validator.remapAndValidate(json))
+                .isInstanceOf(AdminBusinessException.class)
+                .extracting(ex -> ((AdminBusinessException) ex).getErrorCode())
+                .isEqualTo(ImportViewAccessValidator.IMPORT_UNRESOLVED_CODE);
+    }
+
+    @Test
+    void anIdWithoutACodeThatThisEnvironmentHas_isKept() {
+        when(roleRepository.existsById("role-local")).thenReturn(true);
+        when(businessUnitRepository.existsById("bu-local")).thenReturn(true);
+        String json = """
+                [{"viewName":"All","accessRules":[
+                  {"targetType":"BUSINESS_UNIT","targetId":"bu-local"},
+                  {"targetType":"ROLE","targetId":"role-local"}
+                ]}]
+                """;
+        assertThat(validator.remapAndValidate(json)).contains("bu-local").contains("role-local");
+    }
+
+    @Test
+    void twoViewsOfOneName_fail() {
+        String json = """
+                [{"viewName":"All","accessRules":[]},{"viewName":"All","status":"DRAFT","accessRules":[]}]
+                """;
+        assertThatThrownBy(() -> validator.remapAndValidate(json))
+                .isInstanceOf(AdminBusinessException.class)
+                .extracting(ex -> ((AdminBusinessException) ex).getErrorCode())
+                .isEqualTo(ImportViewAccessValidator.VIEW_NAME_ERROR_CODE);
+    }
+
+    @Test
     void unpairedRoleWithoutBu_fails() {
         Role role = new Role();
         role.setId("role-local");

@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Action Definition Controller
@@ -20,6 +22,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/actions")
 @RequiredArgsConstructor
+@AdminAccess(AdminAudience.ADMIN_READ)
 public class ActionDefinitionController {
     
     private final ActionDefinitionRepository actionDefinitionRepository;

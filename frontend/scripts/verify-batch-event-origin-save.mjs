@@ -15,8 +15,9 @@ try {
   }
   const source = await api('GET', '/function-units/50022')
   assert.ok(source.tags.includes('batch-verification-synthetic'))
+  if (!process.env.FIXTURE_UNIT_ID) assert.ok(source.workspaceId, 'Source has no workspace for its clone')
   const unit = process.env.FIXTURE_UNIT_ID ? await api('GET', `/function-units/${process.env.FIXTURE_UNIT_ID}`)
-    : await api('POST', `/function-units/50022/clone?newName=${encodeURIComponent(`Batch event origin verification ${Date.now()}`)}`)
+    : await api('POST', `/function-units/50022/clone?newName=${encodeURIComponent(`Batch event origin verification ${Date.now()}`)}&targetGroupId=${encodeURIComponent(source.workspaceId)}`)
   assert.match(unit.name, /^Batch event origin verification /)
   console.log(JSON.stringify({ step: 'origin-clone', unitId: unit.id }))
   const base = `/function-units/${unit.id}`

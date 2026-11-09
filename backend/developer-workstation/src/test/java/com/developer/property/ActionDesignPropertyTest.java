@@ -35,7 +35,8 @@ public class ActionDesignPropertyTest {
         TableDefinitionRepository tableDefinitionRepository = mock(TableDefinitionRepository.class);
         ActionDesignComponent component = new ActionDesignComponentImpl(
                 repository, functionUnitRepository, formDefinitionRepository, tableDefinitionRepository,
-                mock(FormTableBindingRepository.class), i18nService);
+                mock(FormTableBindingRepository.class), i18nService,
+                mock(com.developer.security.WorkspaceRouteOwnership.class));
         
         assertThat(component).isNotNull();
         assertThat(actionType).isNotNull();

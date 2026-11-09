@@ -443,4 +443,31 @@ class FunctionUnitComponentImplTest {
         order.verify(functionUnitRepository).delete(functionUnit);
         verify(functionUnitRepository, never()).save(any(FunctionUnit.class));
     }
+
+    /** Tags offered for filtering are those of the units the user can see, by the same rule as the list (§6.2). */
+    @Test
+    void getAllTags_onlyCoversTheUnitsTheUserCanSee() {
+        when(functionUnitWorkspaceAccessService.visibleFunctionUnitIds()).thenReturn(java.util.Set.of(3L, 4L));
+        when(functionUnitRepository.findDistinctTagsByIdIn(java.util.Set.of(3L, 4L)))
+                .thenReturn(java.util.List.of("hr", "loans"));
+
+        assertEquals(java.util.List.of("hr", "loans"), functionUnitComponent.getAllTags());
+        verify(functionUnitRepository, never()).findAllDistinctTags();
+    }
+
+    @Test
+    void getAllTags_seeingNothingGivesNoTags() {
+        when(functionUnitWorkspaceAccessService.visibleFunctionUnitIds()).thenReturn(java.util.Set.of());
+
+        assertEquals(java.util.List.of(), functionUnitComponent.getAllTags());
+        verify(functionUnitRepository, never()).findAllDistinctTags();
+        verify(functionUnitRepository, never()).findDistinctTagsByIdIn(any());
+    }
+
+    @Test
+    void getAllTags_seeingEverythingGivesEveryTag() {
+        when(functionUnitRepository.findAllDistinctTags()).thenReturn(java.util.List.of("a", "b"));
+
+        assertEquals(java.util.List.of("a", "b"), functionUnitComponent.getAllTags());
+    }
 }

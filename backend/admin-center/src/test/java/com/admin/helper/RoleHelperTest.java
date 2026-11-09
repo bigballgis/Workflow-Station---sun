@@ -99,9 +99,9 @@ class RoleHelperTest {
     }
     
     @Test
-    @DisplayName("isBusinessRole(String): Should return true for BU_UNBOUNDED")
+    @DisplayName("isBusinessRole(String): BU_UNBOUNDED is no longer a role type (D-64)")
     void testIsBusinessRoleString_BuUnbounded() {
-        assertTrue(roleHelper.isBusinessRole("BU_UNBOUNDED"));
+        assertFalse(roleHelper.isBusinessRole("BU_UNBOUNDED"));
     }
     
     @Test
@@ -143,9 +143,9 @@ class RoleHelperTest {
     }
     
     @Test
-    @DisplayName("isBusinessRole(Role): Should return true for BU_UNBOUNDED role")
+    @DisplayName("isBusinessRole(Role): a legacy BU_UNBOUNDED row is not a business role (D-64)")
     void testIsBusinessRoleEntity_BuUnbounded() {
-        assertTrue(roleHelper.isBusinessRole(buUnboundedRole));
+        assertFalse(roleHelper.isBusinessRole(buUnboundedRole));
     }
     
     @Test
@@ -274,10 +274,9 @@ class RoleHelperTest {
     }
     
     @Test
-    @DisplayName("getRoleType: Should return BU_UNBOUNDED for BU_UNBOUNDED role")
+    @DisplayName("getRoleType: BU_UNBOUNDED is an unknown type (D-64)")
     void testGetRoleType_BuUnbounded() {
-        RoleType result = roleHelper.getRoleType(buUnboundedRole);
-        assertEquals(RoleType.BU_UNBOUNDED, result);
+        assertThrows(IllegalArgumentException.class, () -> roleHelper.getRoleType(buUnboundedRole));
     }
     
     @Test
@@ -331,9 +330,9 @@ class RoleHelperTest {
         
         List<Role> businessRoles = roleHelper.getBusinessRoles();
         
-        assertEquals(3, businessRoles.size());
+        assertEquals(2, businessRoles.size());
         assertTrue(businessRoles.contains(buBoundedRole));
-        assertTrue(businessRoles.contains(buUnboundedRole));
+        assertFalse(businessRoles.contains(buUnboundedRole));
         assertTrue(businessRoles.contains(customRole));
         assertFalse(businessRoles.contains(developerRole));
         assertFalse(businessRoles.contains(adminRole));
@@ -414,9 +413,9 @@ class RoleHelperTest {
     }
     
     @Test
-    @DisplayName("isValidRoleType: Should return true for BU_UNBOUNDED")
+    @DisplayName("isValidRoleType: BU_UNBOUNDED is no longer valid (D-64)")
     void testIsValidRoleType_BuUnbounded() {
-        assertTrue(roleHelper.isValidRoleType("BU_UNBOUNDED"));
+        assertFalse(roleHelper.isValidRoleType("BU_UNBOUNDED"));
     }
     
     @Test

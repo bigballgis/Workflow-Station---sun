@@ -74,10 +74,6 @@ public class SecurityConfig {
     @NotNull
     private String jwtSecretKey;
     
-    @Min(value = 300, message = "JWT expiration must be at least 5 minutes")
-    @Max(value = 86400, message = "JWT expiration cannot exceed 24 hours")
-    private int jwtExpirationSeconds = 3600;
-    
     // Configuration encryption settings
     private boolean enableConfigurationEncryption = true;
     private boolean enableConfigurationAuditLogging = true;
@@ -268,14 +264,6 @@ public class SecurityConfig {
     
     public void setJwtSecretKey(String jwtSecretKey) {
         this.jwtSecretKey = jwtSecretKey;
-    }
-    
-    public int getJwtExpirationSeconds() {
-        return jwtExpirationSeconds;
-    }
-    
-    public void setJwtExpirationSeconds(int jwtExpirationSeconds) {
-        this.jwtExpirationSeconds = jwtExpirationSeconds;
     }
     
     public boolean isEnableConfigurationEncryption() {

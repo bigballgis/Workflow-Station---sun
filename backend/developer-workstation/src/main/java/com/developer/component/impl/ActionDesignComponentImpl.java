@@ -14,6 +14,8 @@ import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.FieldDefinition;
 import com.developer.enums.BindingType;
@@ -48,6 +50,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FormTableBindingRepository formTableBindingRepository;
     private final I18nService i18nService;
+    private final WorkspaceRouteOwnership routeOwnership;
     
     @Override
     @Transactional
@@ -265,6 +268,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         if (formId == null) {
             return;
         }
+        routeOwnership.requireInUnit(Owned.FORM, formId, actionDefinition.getFunctionUnit().getId());
         
         FormDefinition form = formDefinitionRepository.findById(formId)
                 .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", formId));
@@ -290,6 +294,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         if (config == null) {
             return;
         }
+        requireEmailReferencesInUnit(action, config);
         if (config.get("postEmailRules") instanceof List<?> rules) {
             validatePostEmailRules(action, rules);
             return;
@@ -304,6 +309,26 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         }
         assertPostEmailTypeSupported(action);
         assertPostEmailFieldsComplete(postEmail);
+    }
+
+    /**
+     * The connection and template each send-email block names come from the body: they must be this unit's (§6.1,
+     * §6.2), whether the block is enabled or not.
+     */
+    private void requireEmailReferencesInUnit(ActionDefinition action, Map<String, Object> config) {
+        List<Object> blocks = new java.util.ArrayList<>();
+        if (config.get("postEmailRules") instanceof List<?> rules) {
+            blocks.addAll(rules);
+        }
+        blocks.add(config.get("postEmail"));
+        Long functionUnitId = action.getFunctionUnit().getId();
+        for (Object block : blocks) {
+            if (!(block instanceof Map<?, ?> email)) {
+                continue;
+            }
+            routeOwnership.requireEmailReferencesInUnit(email.get("connectionId"), email.get("emailTemplateId"),
+                    functionUnitId);
+        }
     }
 
     private void validatePostEmailRules(ActionDefinition action, List<?> rules) {

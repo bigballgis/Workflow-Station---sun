@@ -1,7 +1,6 @@
 package com.portal.controller;
 
 import com.platform.common.i18n.I18nService;
-import com.portal.client.AdminCenterClient;
 import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,11 +16,7 @@ import java.util.Map;
 
 /**
  * Permission Request Controller
- * Handles user permission requests for virtual groups and business units
- * 
- * Note: Business unit applications no longer require role selection.
- * Users first join virtual groups to get roles, then apply to business units
- * to activate BU-Bounded roles.
+ * Legacy entry points kept only to refuse: requests are made, listed and withdrawn through {@code /permissions}.
  */
 @Slf4j
 @RestController
@@ -30,7 +25,6 @@ import java.util.Map;
 @Tag(name = "Permission Requests", description = "User permission request operations")
 public class PermissionRequestController {
     
-    private final AdminCenterClient adminCenterClient;
     private final I18nService i18nService;
     
     @PostMapping("/virtual-group")
@@ -66,19 +60,6 @@ public class PermissionRequestController {
                 .body(ApiResponse.error("403", i18nService.getMessage("portal.use_permissions_center_api")));
     }
     
-    @GetMapping("/my")
-    @Operation(summary = "Get my requests", description = "Get current user's permission request history")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getMyRequests(
-            @CurrentUserId String userId,
-            @RequestParam(required = false) String status) {
-        log.info("Getting requests for user: {}, status: {}", userId, status);
-
-        return adminCenterClient.getUserPermissionRequests(userId, status)
-                .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
-    }
-    
     @GetMapping("/available-virtual-groups")
     @Operation(summary = "Get available virtual groups", description = "Get virtual groups that user can apply to join")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAvailableVirtualGroups(
@@ -86,33 +67,5 @@ public class PermissionRequestController {
         log.info("Blocked available virtual groups list for user {}", userId);
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("403", i18nService.getMessage("portal.virtual_group_not_in_portal")));
-    }
-    
-    @GetMapping("/applicable-business-units")
-    @Operation(summary = "Get applicable business units", 
-               description = "Get business units that user can apply to join. " +
-                           "Only returns business units associated with user's BU-Bounded roles.")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getApplicableBusinessUnits(
-            @CurrentUserId String userId) {
-        log.info("Getting applicable business units for user: {}", userId);
-
-        return adminCenterClient.getApplicableBusinessUnits(userId)
-                .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
-    }
-    
-    @GetMapping("/business-units/{businessUnitId}/activatable-roles")
-    @Operation(summary = "Get activatable roles", 
-               description = "Get BU-Bounded roles that will be activated when user joins this business unit")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getActivatableRoles(
-            @PathVariable String businessUnitId,
-            @CurrentUserId String userId) {
-        log.info("Getting activatable roles for user {} in business unit: {}", userId, businessUnitId);
-
-        return adminCenterClient.getActivatableRoles(businessUnitId, userId)
-                .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
     }
 }

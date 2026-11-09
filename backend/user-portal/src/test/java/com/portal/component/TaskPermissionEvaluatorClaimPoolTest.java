@@ -37,7 +37,8 @@ class TaskPermissionEvaluatorClaimPoolTest {
 
     private TaskPermissionEvaluator evaluator() {
         return new TaskPermissionEvaluator(
-                delegationRuleRepository, workflowEngineClient, workspaceTaskFilterComponent);
+                com.portal.testsupport.PortalEntryStubs.delegationRules(delegationRuleRepository), workflowEngineClient, workspaceTaskFilterComponent,
+                com.portal.testsupport.PortalEntryStubs.everyone());
     }
 
     @Test
@@ -133,6 +134,25 @@ class TaskPermissionEvaluatorClaimPoolTest {
     /**
      * @param assignee holder of the request; {@code null} means still free for the whole role
      */
+    @Test
+    @DisplayName("a list of named people (D-17): members open a held task only once the holder lost Portal entry")
+    void namedListMembersViewAHeldTaskOnlyAfterTheHolderLostEntry() {
+        TaskInfo task = TaskInfo.builder().taskId("t-list").bpmnAssigneeType("ASSIGNEE_FROM_VARIABLE")
+                .poolKind("PEOPLE").assignmentType("USER").assignee(ALICE).candidateUserIds(List.of(ALICE, BOB)).build();
+        com.platform.security.service.PortalEntryService entry =
+                org.mockito.Mockito.mock(com.platform.security.service.PortalEntryService.class);
+        TaskPermissionEvaluator evaluator = new TaskPermissionEvaluator(
+                com.portal.testsupport.PortalEntryStubs.delegationRules(delegationRuleRepository), workflowEngineClient,
+                workspaceTaskFilterComponent, entry);
+
+        org.mockito.Mockito.when(entry.hasPortalEntry(ALICE)).thenReturn(true);
+        assertThat(evaluator.canViewTaskForm(task, BOB, null)).isFalse();
+
+        org.mockito.Mockito.when(entry.hasPortalEntry(ALICE)).thenReturn(false);
+        assertThat(evaluator.canViewTaskForm(task, BOB, null)).isTrue();
+        assertThat(evaluator.canViewTaskForm(task, OUTSIDER, null)).isFalse();
+    }
+
     private static TaskInfo poolTask(String assignee) {
         return TaskInfo.builder()
                 .taskId("t-pool")

@@ -44,7 +44,7 @@ public class PrimaryKeyAllocationComponentImpl implements PrimaryKeyAllocationCo
         PkGenerationConfig config = toPkConfig(field.getPkGenerationJson());
         int count = request.getCount() != null && request.getCount() > 0 ? request.getCount() : 1;
         List<String> values = primaryKeyAllocationService.allocate(
-                request.getTableId(), request.getFieldName(), config, count, "");
+                request.getTableId(), request.getFieldName(), config, count, "", "up_pk_sequences");
         return AllocatePrimaryKeyResponse.builder().values(values).build();
     }
 

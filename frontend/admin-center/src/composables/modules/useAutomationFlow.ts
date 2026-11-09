@@ -12,6 +12,7 @@ import {
   type FlowExportConnection,
 } from '@/api/automationFlow'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+import { canWrite } from '@/utils/permission'
 import { formatDate } from '@/utils/format'
 
 const ACTIONS_COL_WIDTH = 140
@@ -286,13 +287,20 @@ export function useAutomationFlow() {
     }
   }
 
+  /**
+   * Import, enable / disable, transfer and delete are SYS_ADMIN's; Technical Leads (their teams and Public, D-48) and
+   * Auditors only read and export, so the import / transfer targets are not loaded for them.
+   */
+  const writable = computed(() => canWrite('automationFlows'))
+
   onMounted(() => {
     window.addEventListener('resize', syncViewportWidth)
-    void loadWorkspaces()
+    if (writable.value) void loadWorkspaces()
   })
   onBeforeUnmount(() => window.removeEventListener('resize', syncViewportWidth))
 
   return {
+    writable,
     loading,
     keyword,
     exportingId,

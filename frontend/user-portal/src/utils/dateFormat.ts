@@ -2,7 +2,7 @@ import dayjs from 'dayjs'
 
 /**
  * Format a date string (Beijing time) for display
- * Backend returns dates in Asia/Shanghai timezone
+ * Backend returns dates in Asia/Hong_Kong timezone
  * @param date - date string or Java LocalDateTime array
  * @param format - Output format (default: 'YYYY-MM-DD HH:mm')
  */

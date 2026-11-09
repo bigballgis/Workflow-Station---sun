@@ -118,6 +118,12 @@ export interface ChangeHistoryRecord {
   subTableName: string | null
   rowIdentifier: string | null
   concurrent: boolean
+  /**
+   * Why the system changed an assignment (operator `system`): POOL_MEMBERSHIP_LOST = FORCE_UNCLAIM
+   * release; ASSIGNEE_DEPARTED = MANAGER_REASSIGN from a departed holder to their manager;
+   * HOLDER_CHANGED = DELEGATION_ENDED, a single-task delegation ended with its holder (D-59).
+   */
+  reason?: string | null
 }
 
 // --- API functions ---

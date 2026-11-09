@@ -8,8 +8,8 @@ import com.developer.entity.FunctionUnit;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
-import com.developer.security.FormBindingWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.security.WorkspaceRouteOwnership;
 import com.developer.service.SubTableViewService;
 import com.developer.service.RelationViewService;
 import com.platform.common.dto.UserPrincipal;
@@ -17,6 +17,7 @@ import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,6 +27,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,6 +37,7 @@ class SubTableViewWorkspaceSecurityTest {
     private final SubTableViewService views = mock(SubTableViewService.class);
     private final RelationViewService relationViews = mock(RelationViewService.class);
     private final FormTableBindingRepository bindings = mock(FormTableBindingRepository.class);
+    private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private MockMvc mvc;
     private static final String BASE = "/api/forms/11/sub-table-views/19";
 
@@ -44,10 +47,13 @@ class SubTableViewWorkspaceSecurityTest {
         var unit = FunctionUnit.builder().id(7L).build();
         var form = FormDefinition.builder().id(11L).functionUnit(unit).build();
         var binding = FormTableBinding.builder().id(19L).form(form).build();
-        when(bindings.findByIdWithTable(19L)).thenReturn(Optional.of(binding));
         when(bindings.findById(19L)).thenReturn(Optional.of(binding));
+        // Binding 19 belongs to form 11 of unit 7; form 12 belongs to unit 8.
+        owner("SELECT form_id FROM dw_form_table_bindings WHERE id = ?", 19L, 11L);
+        owner("SELECT function_unit_id FROM dw_form_definitions WHERE id = ?", 11L, 7L);
+        owner("SELECT function_unit_id FROM dw_form_definitions WHERE id = ?", 12L, 8L);
         var interceptor = new FunctionUnitWorkspaceAccessInterceptor(access, mock(I18nService.class),
-                new FormBindingWorkspaceAccessService(bindings, access));
+                new WorkspaceRouteOwnership(jdbc));
         mvc = MockMvcBuilders.standaloneSetup(new SubTableViewController(views, bindings),
                         new RelationTableViewController(relationViews, bindings))
                 .addInterceptors(interceptor).build();
@@ -58,6 +64,10 @@ class SubTableViewWorkspaceSecurityTest {
 
     @AfterEach
     void clearAuthentication() { SecurityContextHolder.clearContext(); }
+
+    private void owner(String sql, Long id, Long owner) {
+        when(jdbc.queryForList(eq(sql), eq(Long.class), eq(id))).thenReturn(List.of(owner));
+    }
 
     private void perform(MockHttpServletRequestBuilder request, String path, int expected) throws Exception {
         mvc.perform(request.servletPath(path)).andExpect(status().is(expected));

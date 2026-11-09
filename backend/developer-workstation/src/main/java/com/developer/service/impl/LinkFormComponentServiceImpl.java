@@ -9,6 +9,8 @@ import com.developer.entity.LinkFormData;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.LinkFormComponentRepository;
 import com.developer.repository.LinkFormDataRepository;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.developer.service.LinkFormComponentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +33,7 @@ public class LinkFormComponentServiceImpl implements LinkFormComponentService {
     private final LinkFormDataRepository dataRepository;
     private final FormDefinitionRepository formRepository;
     private final ObjectMapper objectMapper;
+    private final WorkspaceRouteOwnership routeOwnership;
     
     @Override
     public List<LinkFormComponentResponse> getComponentsByFunctionUnit(Long functionUnitId) {
@@ -42,7 +45,8 @@ public class LinkFormComponentServiceImpl implements LinkFormComponentService {
     
     @Override
     @Transactional
-    public LinkFormDataResponse saveFormData(LinkFormDataRequest request) {
+    public LinkFormDataResponse saveFormData(Long functionUnitId, LinkFormDataRequest request) {
+        routeOwnership.requireInUnit(Owned.LINK_FORM_COMPONENT, request.getComponentId(), functionUnitId);
         String formDataJson = toJson(request.getFormData());
         
         Optional<LinkFormData> existing = dataRepository.findByComponentIdAndSubTableRowId(
@@ -67,7 +71,8 @@ public class LinkFormComponentServiceImpl implements LinkFormComponentService {
     }
     
     @Override
-    public LinkFormDataResponse getFormData(Long componentId, Long subTableRowId) {
+    public LinkFormDataResponse getFormData(Long functionUnitId, Long componentId, Long subTableRowId) {
+        routeOwnership.requireInUnit(Owned.LINK_FORM_COMPONENT, componentId, functionUnitId);
         return dataRepository.findByComponentIdAndSubTableRowId(componentId, subTableRowId)
                 .map(LinkFormDataResponse::fromEntity)
                 .orElse(null);

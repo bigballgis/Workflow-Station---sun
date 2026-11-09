@@ -26,7 +26,7 @@ public class FunctionUnitAccessService {
     private final FunctionUnitAccessRepository accessRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final RoleRepository roleRepository;
-    private final UserRoleRepository userRoleRepository;
+    private final UserRoleIdResolver userRoleIdResolver;
     
     /**
      * 获取功能单元的所有访问配置
@@ -239,16 +239,11 @@ public class FunctionUnitAccessService {
     }
     
     /**
-     * 获取业务角色列表（用于功能单元访问配置）
-     * 包括 BU_BOUNDED 和 BU_UNBOUNDED 类型
+     * 获取业务角色列表（用于功能单元访问配置）：BU_BOUNDED（D-14 / D-64）
      */
     @Transactional(readOnly = true)
     public List<Role> getBusinessRoles() {
-        List<Role> buBounded = roleRepository.findByType("BU_BOUNDED");
-        List<Role> buUnbounded = roleRepository.findByType("BU_UNBOUNDED");
-        List<Role> result = new ArrayList<>(buBounded);
-        result.addAll(buUnbounded);
-        return result;
+        return roleRepository.findByType("BU_BOUNDED");
     }
     
     /**
@@ -256,6 +251,6 @@ public class FunctionUnitAccessService {
      * 包括通过虚拟组分配的角色
      */
     private List<String> getUserAllRoleIds(String userId) {
-        return userRoleRepository.findAllRoleIdsByUserId(userId);
+        return userRoleIdResolver.allRoleIds(userId);
     }
 }

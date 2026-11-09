@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
-import { queryTodoTasks, batchUrgeTasks, type TaskInfo, type TodoTaskQueryRequest } from '@/api/task'
+import { queryTodoTasks, type TaskInfo, type TodoTaskQueryRequest } from '@/api/task'
 import { usePortalListGrid } from '@/composables/list/usePortalListGrid'
 import { useTaskClaimActions } from '@/composables/tasks/useTaskClaimActions'
 import {
@@ -78,13 +78,7 @@ export function useTodoTasksPage(
     defaultWidthOf: (field) => (field === 'assigneeName' ? CURRENT_ASSIGNEE_COL_WIDTH : undefined),
   })
 
-  const actionDialogVisible = ref(false)
-  const actionDialogTitle = ref('')
-  const currentAction = ref('')
-  const actionForm = reactive({
-    targetUserId: '',
-    reason: '',
-  })
+  const batchUrgeVisible = ref(false)
   const actingTaskId = ref<string | null>(null)
   const claimAllBusy = ref(false)
 
@@ -107,7 +101,7 @@ export function useTodoTasksPage(
     }
   }
 
-  const { claim, unclaim, forceUnclaim, reassign, claimAll, unclaimAll, claimSelected, unclaimSelected, prepareTodoOpen } =
+  const { claim, unclaim, forceUnclaim, reassign, takeOver, claimAll, unclaimAll, claimSelected, unclaimSelected, prepareTodoOpen } =
     useTaskClaimActions({
       reload: async () => {
         await Promise.all([loadTasks(), afterClaimChange()])
@@ -227,6 +221,10 @@ export function useTodoTasksPage(
     return forceUnclaim(task.taskId, task.assignmentType, task.assignee, task.assigneeName)
   }
 
+  function handleTakeOver(task: TaskInfo) {
+    return takeOver(task.taskId, task.assigneeName || task.assignee)
+  }
+
   const reassignDialogVisible = ref(false)
   const reassignTask = ref<TaskInfo | null>(null)
 
@@ -254,30 +252,7 @@ export function useTodoTasksPage(
     return preferenceStore.setAutoPreviewOnOpen(value === true)
   }
 
-  const handleBatchUrge = () => {
-    currentAction.value = 'batchUrge'
-    actionDialogTitle.value = t('task.batchUrge')
-    actionForm.reason = ''
-    actionDialogVisible.value = true
-  }
-
-  const submitAction = async () => {
-    try {
-      if (currentAction.value === 'batchUrge') {
-        const taskIds = selectedTasks.value.map((task) => task.taskId)
-        await batchUrgeTasks(taskIds, actionForm.reason)
-        ElMessage.success(t('common.success'))
-      }
-      actionDialogVisible.value = false
-      loadTasks()
-    } catch (error) {
-      const msg =
-        (error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
-        ?? (error as { message?: string })?.message
-        ?? t('common.error')
-      ElMessage.error(msg)
-    }
-  }
+  const selectedTaskIds = computed(() => selectedTasks.value.map((task) => task.taskId))
 
   const getPriorityLabel = (priority: string | number | undefined): string => {
     return t(`task.${taskPriorityBand(priority).toLowerCase()}`)
@@ -309,9 +284,8 @@ export function useTodoTasksPage(
     selectedHeldIds,
     filterForm,
     ...grid,
-    actionDialogVisible,
-    actionDialogTitle,
-    actionForm,
+    batchUrgeVisible,
+    selectedTaskIds,
     actingTaskId,
     claimAllBusy,
     loadTasks,
@@ -327,6 +301,7 @@ export function useTodoTasksPage(
     handleClaim,
     handleUnclaim,
     handleForceUnclaim,
+    handleTakeOver,
     handleReassign,
     confirmReassign,
     reassignDialogVisible,
@@ -337,8 +312,6 @@ export function useTodoTasksPage(
     handleUnclaimSelected,
     onAutoClaimChange,
     onAutoPreviewChange,
-    handleBatchUrge,
-    submitAction,
     getPriorityLabel,
     getPriorityClass,
   }

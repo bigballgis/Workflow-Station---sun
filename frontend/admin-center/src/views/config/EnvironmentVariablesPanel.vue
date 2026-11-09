@@ -2,6 +2,7 @@
   <div>
     <div class="env-toolbar">
       <el-button
+        v-if="writable"
         type="primary"
         @click="openCreate"
       >
@@ -46,6 +47,7 @@
         </template>
       </el-table-column>
       <el-table-column
+        v-if="writable"
         :label="t('common.actions')"
         width="140"
         fixed="right"
@@ -160,10 +162,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEnvironmentVariables } from '@/composables/modules/useEnvironmentVariables'
 import type { EnvironmentVariable } from '@/api/environment'
+import { canWrite } from '@/utils/permission'
 
 const { t } = useI18n()
 const {
@@ -171,13 +174,18 @@ const {
   load, openCreate, openEdit, save, remove,
 } = useEnvironmentVariables()
 
+/** Technical Leads and Auditors read the catalog without write entries (§8.2). */
+const writable = computed(() => canWrite('environmentVariables'))
+
 onMounted(() => {
   void load()
 })
 
 function valuePreview(row: EnvironmentVariable): string {
   if (row.valueKind === 'VAULT') {
-    return row.vaultSecretPath || ''
+    // Only SYS_ADMIN receives the path; everyone else gets "configured" (D-44).
+    if (row.vaultSecretPath) return row.vaultSecretPath
+    return row.vaultConfigured ? t('config.envVaultConfigured') : t('config.envVaultNotConfigured')
   }
   return row.currentValue?.trim() ? row.currentValue : (row.defaultValue || '')
 }

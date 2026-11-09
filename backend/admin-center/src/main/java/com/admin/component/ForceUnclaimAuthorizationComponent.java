@@ -5,7 +5,6 @@ import com.admin.repository.RoleRepository;
 import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.repository.UserRepository;
 import com.admin.service.ApproverService;
-import com.admin.service.UserPermissionService;
 import com.platform.security.entity.BusinessUnit;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.User;
@@ -24,15 +23,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Authoritative Claim Hold force-unclaim check: SYS_ADMIN, BU Approver, or UBR Leader.
+ * Authoritative Claim Hold force-unclaim check: BU Approver or UBR Leader. System Administrator gets no exception
+ * (platform access model D-05).
  */
 @Component
 @RequiredArgsConstructor
 public class ForceUnclaimAuthorizationComponent {
 
-    private static final String SYS_ADMIN = "SYS_ADMIN";
-
-    private final UserPermissionService userPermissionService;
     private final ApproverService approverService;
     private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private final BusinessUnitRepository businessUnitRepository;
@@ -61,8 +58,6 @@ public class ForceUnclaimAuthorizationComponent {
     }
 
     private Capability loadCapability(String userId) {
-        boolean sysAdmin = userPermissionService.getUserRolesForProfile(userId, "ADMIN").stream()
-                .anyMatch(role -> SYS_ADMIN.equals(role.getCode()));
         Set<String> approverBuIds = new LinkedHashSet<>(approverService.getApproverBusinessUnitIds(userId));
         Set<String> approverBuCodes = new LinkedHashSet<>();
         if (!approverBuIds.isEmpty()) {
@@ -73,7 +68,7 @@ public class ForceUnclaimAuthorizationComponent {
             }
         }
         List<LeaderUbr> leaders = loadLeaderUbrs(userId);
-        return new Capability(sysAdmin, approverBuIds, approverBuCodes, leaders);
+        return new Capability(approverBuIds, approverBuCodes, leaders);
     }
 
     private List<LeaderUbr> loadLeaderUbrs(String userId) {
@@ -142,12 +137,8 @@ public class ForceUnclaimAuthorizationComponent {
     public record ForceUnclaimItem(String taskId, String businessUnitId, List<String> roleIds) {
     }
 
-    private record Capability(boolean sysAdmin, Set<String> approverBuIds, Set<String> approverBuCodes,
-                              List<LeaderUbr> leaders) {
+    private record Capability(Set<String> approverBuIds, Set<String> approverBuCodes, List<LeaderUbr> leaders) {
         boolean allows(String taskBu, Collection<String> taskRoleIds) {
-            if (sysAdmin) {
-                return true;
-            }
             if (!StringUtils.hasText(taskBu)) {
                 return false;
             }

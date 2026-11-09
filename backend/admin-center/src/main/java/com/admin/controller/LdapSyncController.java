@@ -17,20 +17,25 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * LDAP 同步管理接口（仅 {@code ldap.enabled=true} 时暴露）。
  *
- * <p>权限：本服务 Spring 层 permitAll（由 Kong 做边缘认证），故此处显式做 {@code systemadmin} 校验
- * （SYS_ADMIN / SUPER_ADMIN / 权限 {@code system:admin}），与源系统「/ldap 前缀需 systemadmin」语义一致。</p>
+ * <p>权限：读接口（状态、同步记录）由 {@code @AdminAccess} 对 SYS_ADMIN、Technical Lead、AUDITOR 开放（D-51）；
+ * 触发同步的四个写接口仍只给 SYS_ADMIN，并保留显式的 {@code systemadmin} 校验。</p>
  *
- * <p>手动触发为异步执行（避免长同步阻塞 HTTP），返回「已受理」，进度经 {@code /status} 轮询。</p>
+ * <p>手动触发为异步执行（避免长同步阻塞 HTTP），返回「已受理」，进度经 {@code /status} 轮询。
+ * 另一次 LDAP 同步（启动、定时或手动）正在跑时回 409 {@code LDAP_SYNC_IN_PROGRESS}，不排队；
+ * 同步锁所在的 Redis 连不上时回 503 {@code LDAP_SYNC_LOCK_UNAVAILABLE}。</p>
  */
 @Slf4j
 @RestController
 @RequestMapping("/ldap-sync")
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "ldap", name = {"enabled", "sync-enabled"}, havingValue = "true")
+@AdminAccess(AdminAudience.SHARED_READ)
 public class LdapSyncController {
 
     private static final String ERR_FORBIDDEN = "FORBIDDEN";
@@ -74,11 +79,9 @@ public class LdapSyncController {
         return accepted("HERMES_AD_INCR");
     }
 
+    // Sync records are read by SYS_ADMIN, Technical Leads and Auditors (D-51); the class @AdminAccess admits them.
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<List<LdapSyncAuditView>>> status() {
-        if (!isSystemAdmin()) {
-            return ResponseEntity.status(403).body(ApiResponse.error(ERR_FORBIDDEN, "system:admin required"));
-        }
         return ResponseEntity.ok(ApiResponse.success(ldapSyncAuditService.recentAudits()));
     }
 
@@ -86,9 +89,6 @@ public class LdapSyncController {
     public ResponseEntity<ApiResponse<PageResult<LdapSyncAuditView>>> auditLogs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        if (!isSystemAdmin()) {
-            return ResponseEntity.status(403).body(ApiResponse.error(ERR_FORBIDDEN, "system:admin required"));
-        }
         return ResponseEntity.ok(ApiResponse.success(ldapSyncAuditService.auditPage(page, size)));
     }
 

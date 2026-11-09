@@ -1,5 +1,8 @@
 package com.workflow.component;
 
+import com.platform.security.service.LostEntryTaskPolicy.PoolKind;
+import com.platform.security.service.LostEntryTaskPolicy.TaskHolding;
+import com.platform.security.service.PortalEntryService;
 import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.response.TaskAssignmentResult;
 import com.workflow.entity.ExtendedTaskInfo;
@@ -21,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,6 +65,10 @@ class TaskClaimSupportReassignTest {
     private TaskOrphanRepairService taskOrphanRepairService;
     @Mock
     private UserPermissionService userPermissionService;
+    @Mock
+    private TaskHoldingResolver taskHoldingResolver;
+    @Mock
+    private PortalEntryService portalEntryService;
 
     @InjectMocks
     private TaskClaimSupport taskClaimSupport;
@@ -95,6 +103,51 @@ class TaskClaimSupportReassignTest {
                 .build();
         lenient().when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
                 .thenReturn(Optional.of(extended));
+        lenient().when(portalEntryService.hasPortalEntry(TARGET_ID)).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("once the holder lost Portal entry a pool member with entry may hand the task on (D-07)")
+    void poolMemberReassignsWhenHolderLostEntry() {
+        stubBpmnClaimPool();
+        stubCandidates(HOLDER_ID, TARGET_ID, ACTOR_ID);
+        when(adminCenterClient.canForceUnclaim(ACTOR_ID, TASK_ID, BUSINESS_UNIT_ID, List.of(ROLE_ID)))
+                .thenReturn(false);
+        when(taskHoldingResolver.mayTakeOverFromLostHolder(flowableTask, ACTOR_ID)).thenReturn(true);
+
+        TaskAssignmentResult result = taskClaimSupport.reassignClaim(TASK_ID, ACTOR_ID, TARGET_ID);
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(taskService).setAssignee(TASK_ID, TARGET_ID);
+    }
+
+    @Test
+    @DisplayName("a pool member takes a lost holder's task over by reassigning it to themselves")
+    void poolMemberTakesOverWhenHolderLostEntry() {
+        stubBpmnClaimPool();
+        stubCandidates(HOLDER_ID, ACTOR_ID);
+        when(taskHoldingResolver.mayTakeOverFromLostHolder(flowableTask, ACTOR_ID)).thenReturn(true);
+        when(portalEntryService.hasPortalEntry(ACTOR_ID)).thenReturn(true);
+
+        taskClaimSupport.reassignClaim(TASK_ID, ACTOR_ID, ACTOR_ID);
+
+        verify(taskService).setAssignee(TASK_ID, ACTOR_ID);
+        assertThat(extended.getClaimedBy()).isEqualTo(ACTOR_ID);
+    }
+
+    @Test
+    @DisplayName("a target without Portal entry is rejected, even for a Leader")
+    void targetWithoutPortalEntryRejected() {
+        stubBpmnClaimPool();
+        stubCandidates(HOLDER_ID, TARGET_ID);
+        when(adminCenterClient.canForceUnclaim(ACTOR_ID, TASK_ID, BUSINESS_UNIT_ID, List.of(ROLE_ID)))
+                .thenReturn(true);
+        when(portalEntryService.hasPortalEntry(TARGET_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> taskClaimSupport.reassignClaim(TASK_ID, ACTOR_ID, TARGET_ID))
+                .isInstanceOf(WorkflowValidationException.class)
+                .hasMessageContaining("no Portal access");
+        verify(taskService, never()).setAssignee(any(), any());
     }
 
     @Test
@@ -180,6 +233,7 @@ class TaskClaimSupportReassignTest {
         extended.setAssignmentTarget(HOLDER_ID);
         stubBpmnClaimPool();
         when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(List.of());
+        pool(PoolKind.NONE);
         when(adminCenterClient.canForceUnclaim(ACTOR_ID, TASK_ID, BUSINESS_UNIT_ID, List.of(ROLE_ID)))
                 .thenReturn(true);
 
@@ -189,7 +243,59 @@ class TaskClaimSupportReassignTest {
         verify(taskService, never()).setAssignee(any(), any());
     }
 
+    @Test
+    @DisplayName("a legacy virtual-group task without candidate users takes a group member as target")
+    void virtualGroupMemberIsATarget() {
+        stubBpmnClaimPool();
+        when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(List.of());
+        pool(PoolKind.MEMBERSHIP, HOLDER_ID, TARGET_ID);
+        when(taskHoldingResolver.mayTakeOverFromLostHolder(flowableTask, ACTOR_ID)).thenReturn(true);
+
+        taskClaimSupport.reassignClaim(TASK_ID, ACTOR_ID, TARGET_ID);
+
+        verify(taskService).setAssignee(TASK_ID, TARGET_ID);
+    }
+
+    @Test
+    @DisplayName("a new holder ends the previous holder's single-task delegation (D-59)")
+    void reassignEndsThePreviousHoldersDelegation() {
+        extended.delegateTask("deputy", HOLDER_ID, "leave");
+        stubBpmnClaimPool();
+        stubCandidates(HOLDER_ID, TARGET_ID);
+        when(adminCenterClient.canForceUnclaim(ACTOR_ID, TASK_ID, BUSINESS_UNIT_ID, List.of(ROLE_ID)))
+                .thenReturn(true);
+
+        taskClaimSupport.reassignClaim(TASK_ID, ACTOR_ID, TARGET_ID);
+
+        assertThat(extended.isDelegated()).isFalse();
+        assertThat(extended.getClaimedBy()).isEqualTo(TARGET_ID);
+    }
+
+    @Test
+    @DisplayName("an older BPMN pool names its BU in assigneeValue for the Leader / Approver rule too")
+    void leaderRuleReadsTheBuOfAnOlderBpmn() {
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "assigneeType")).thenReturn("BU_ROLE");
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "businessUnitId")).thenReturn(null);
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "assigneeValue")).thenReturn(BUSINESS_UNIT_ID);
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "roleIds")).thenReturn(ROLE_ID);
+        stubCandidates(HOLDER_ID, TARGET_ID);
+        when(adminCenterClient.canForceUnclaim(ACTOR_ID, TASK_ID, BUSINESS_UNIT_ID, List.of(ROLE_ID)))
+                .thenReturn(true);
+
+        taskClaimSupport.reassignClaim(TASK_ID, ACTOR_ID, TARGET_ID);
+
+        verify(taskService).setAssignee(TASK_ID, TARGET_ID);
+    }
+
     private void stubBpmnClaimPool() {
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "assigneeType")).thenReturn("BU_ROLE");
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "assigneeValue")).thenReturn(null);
         when(bpmnActionParser.getUserTaskExtensionPropertyValue(
                 PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "businessUnitId")).thenReturn(BUSINESS_UNIT_ID);
         when(bpmnActionParser.getUserTaskExtensionPropertyValue(
@@ -207,5 +313,12 @@ class TaskClaimSupportReassignTest {
             links.add(link);
         }
         when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(links);
+        pool(PoolKind.MEMBERSHIP, userIds);
+    }
+
+    /** The pool as {@link TaskHoldingResolver} reads it; the reassign target is checked against it. */
+    private void pool(PoolKind kind, String... members) {
+        lenient().when(taskHoldingResolver.resolve(flowableTask))
+                .thenReturn(new TaskHolding(HOLDER_ID, kind, new LinkedHashSet<>(List.of(members))));
     }
 }

@@ -7,9 +7,11 @@ import com.admin.dto.SlaPolicyUpdateRequest;
 import com.admin.dto.SlaRecalcJobItemResponse;
 import com.admin.dto.SlaRecalcJobResponse;
 import com.admin.dto.list.AdminListPage;
+import com.admin.entity.FunctionUnit;
 import com.admin.entity.SlaPolicy;
 import com.admin.entity.SlaPolicyHistory;
 import com.admin.list.ListQuerySupport;
+import com.admin.security.AdminTeamScope;
 import com.admin.list.SlaPolicyColumnSpec;
 import com.admin.repository.SlaPolicyHistoryRepository;
 import com.admin.repository.SlaPolicyRepository;
@@ -27,6 +29,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,22 +51,29 @@ public class SlaPolicyComponent {
     static final String DISPATCH_ERROR_CODE = "PORTAL_DISPATCH_FAILED";
 
     /**
-     * The Function Unit's SLA mapping lives on the table bound PRIMARY to its PROCESS form — the same
-     * resolution user-portal's SlaDueDateEnricher (and RequestIdEnricher) use at runtime.
+     * The Function Unit's SLA mapping, read from a released version: the {@code slaConfig} of the data table bound
+     * PRIMARY to the version's start form (PROCESS form in the TASK scene, {@link ProcessStartForm}). Callers
+     * restrict {@code fu} to active releases ({@link #appendActiveReleases}); the runtime design is never read.
      */
     static final String MAPPING_FROM = " " + """
-             FROM dw_function_units fu
+             FROM sys_function_units fu
              CROSS JOIN LATERAL (
-                 SELECT td.sla_config
-                 FROM dw_form_definitions fd
-                 INNER JOIN dw_form_table_bindings ftb
-                     ON ftb.form_id = fd.id AND ftb.binding_type = 'PRIMARY'
-                 INNER JOIN dw_table_definitions td ON td.id = ftb.table_id
-                 WHERE fd.function_unit_id = fu.id AND %s
-                 ORDER BY ftb.sort_order NULLS LAST, ftb.id
+                 SELECT dt.content_data::jsonb -> 'slaConfig' AS sla_config
+                 FROM sys_function_unit_contents f
+                 CROSS JOIN LATERAL jsonb_array_elements(CASE
+                     WHEN jsonb_typeof(f.content_data::jsonb -> 'tableBindings') = 'array'
+                     THEN f.content_data::jsonb -> 'tableBindings' ELSE '[]'::jsonb END) WITH ORDINALITY AS b(binding, pos)
+                 INNER JOIN sys_function_unit_contents dt
+                     ON dt.function_unit_id = f.function_unit_id AND dt.content_type = 'DATA_TABLE'
+                     AND dt.content_data::jsonb ->> 'tableId' = b.binding ->> 'tableId'
+                 WHERE f.function_unit_id = fu.id AND f.content_type = 'FORM'
+                   AND f.content_data::jsonb ->> 'formType' = 'PROCESS'
+                   AND COALESCE(f.content_data::jsonb ->> 'scene', 'TASK') = 'TASK'
+                   AND b.binding ->> 'bindingType' = 'PRIMARY'
+                 ORDER BY b.pos
                  LIMIT 1) m
              LEFT JOIN ac_sla_policies p ON p.function_unit_code = fu.code
-             WHERE m.sla_config IS NOT NULL""".formatted(ProcessStartForm.SQL_PREDICATE);
+             WHERE jsonb_typeof(m.sla_config) = 'object'""";
 
     private final SlaPolicyRepository policyRepository;
     private final SlaPolicyHistoryRepository historyRepository;
@@ -71,26 +81,51 @@ public class SlaPolicyComponent {
     private final JdbcTemplate jdbcTemplate;
     private final I18nService i18nService;
     private final TransactionTemplate txTemplate;
+    private final AdminTeamScope teamScope;
+    private final FunctionUnitLifecycleComponent lifecycle;
 
     public SlaPolicyComponent(SlaPolicyRepository policyRepository,
                               SlaPolicyHistoryRepository historyRepository,
                               PortalSlaRecalcClient portalClient,
                               JdbcTemplate jdbcTemplate,
                               I18nService i18nService,
-                              PlatformTransactionManager transactionManager) {
+                              PlatformTransactionManager transactionManager,
+                              AdminTeamScope teamScope,
+                              FunctionUnitLifecycleComponent lifecycle) {
         this.policyRepository = policyRepository;
         this.historyRepository = historyRepository;
         this.portalClient = portalClient;
         this.jdbcTemplate = jdbcTemplate;
         this.i18nService = i18nService;
         this.txTemplate = new TransactionTemplate(transactionManager);
+        this.teamScope = teamScope;
+        this.lifecycle = lifecycle;
+    }
+
+    /**
+     * Only a code's active release (the one new requests start on, {@code listLatestDeployedFunctionUnits}) has a
+     * mapping: a unit without one is not listed and cannot be configured.
+     */
+    private void appendActiveReleases(StringBuilder where, List<Object> params) {
+        List<String> ids = lifecycle.listLatestDeployedFunctionUnits().stream().map(FunctionUnit::getId).toList();
+        if (ids.isEmpty()) {
+            where.append(" AND 1 = 0");
+            return;
+        }
+        where.append(" AND fu.id IN (").append(String.join(",", Collections.nCopies(ids.size(), "?"))).append(")");
+        params.addAll(ids);
     }
 
     public AdminListPage<SlaPolicyRow> query(SlaPolicyListQueryRequest request) {
         long started = System.nanoTime();
         ListFilterSql filterSql = SlaPolicyColumnSpec.sql();
         List<Object> params = new ArrayList<>();
-        String where = MAPPING_FROM + filterSql.whereClause(request.filters(), params);
+        // A Technical Lead sees the units of the teams they lead: the code from this query, its team from the Admin
+        // catalog (D-46); each row says whether the caller may change it.
+        StringBuilder scope = new StringBuilder();
+        appendActiveReleases(scope, params);
+        AdminTeamScope.appendCodeFilter(scope, params, "fu.code", teamScope.visibleFunctionUnitCodes());
+        String where = MAPPING_FROM + scope + filterSql.whereClause(request.filters(), params);
 
         ResultSetExtractor<Long> countExtractor = rs -> rs.next() ? rs.getLong(1) : 0L;
         long total = ListQuerySupport.requireCount(
@@ -118,7 +153,8 @@ public class SlaPolicyComponent {
                         rs.getString("updated_by"),
                         rs.getString("updated_at"),
                         sep < 0 ? null : latest.substring(0, sep),
-                        sep < 0 ? null : latest.substring(sep + 1)));
+                        sep < 0 ? null : latest.substring(sep + 1),
+                        teamScope.mayManageFunctionUnit(rs.getString("code"))));
             }
             return rows;
         };
@@ -250,8 +286,10 @@ public class SlaPolicyComponent {
     }
 
     private void requireMapped(String functionUnitCode) {
+        String activeId = lifecycle.getActiveCatalogForPortalStart(functionUnitCode).map(FunctionUnit::getId)
+                .orElseThrow(() -> new ResourceNotFoundException("SLA mapping", functionUnitCode));
         Long mapped = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*)" + MAPPING_FROM + " AND fu.code = ?", Long.class, functionUnitCode);
+                "SELECT COUNT(*)" + MAPPING_FROM + " AND fu.id = ?", Long.class, activeId);
         if (mapped == null || mapped == 0) {
             throw new ResourceNotFoundException("SLA mapping", functionUnitCode);
         }

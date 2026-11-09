@@ -83,26 +83,6 @@ public interface UserRepository extends JpaRepository<User, String> {
     Page<User> findAllActive(Pageable pageable);
     
     /**
-     * Count active users who have SYS_ADMIN or AUDITOR.
-     * Note: platform-security {@code User} has no {@code userRoles}; use native SQL.
-     */
-    @Query(value = "SELECT COUNT(DISTINCT u.id) FROM sys_users u " +
-           "JOIN sys_user_roles ur ON u.id = ur.user_id " +
-           "JOIN sys_roles r ON ur.role_id = r.id " +
-           "WHERE (u.deleted = false OR u.deleted IS NULL) AND u.status = 'ACTIVE' AND r.code IN ('SYS_ADMIN', 'AUDITOR')",
-           nativeQuery = true)
-    long countActiveAdmins();
-    
-    /**
-     * Whether the user has SYS_ADMIN or AUDITOR.
-     */
-    @Query(value = "SELECT COUNT(*) > 0 FROM sys_user_roles ur " +
-           "JOIN sys_roles r ON ur.role_id = r.id " +
-           "WHERE ur.user_id = :userId AND r.code IN ('SYS_ADMIN', 'AUDITOR')",
-           nativeQuery = true)
-    boolean isUserAdmin(@Param("userId") String userId);
-    
-    /**
      * Find user by id.
      * Note: platform-security {@code User} has no {@code userRoles} relationship.
      */

@@ -28,7 +28,6 @@ public class EntityTypeConverter {
      * <p>Supported conversions:</p>
      * <ul>
      *   <li>"BU_BOUNDED" → RoleType.BU_BOUNDED</li>
-     *   <li>"BU_UNBOUNDED" → RoleType.BU_UNBOUNDED</li>
      *   <li>"ADMIN" → RoleType.ADMIN</li>
      *   <li>"AUDITOR" → RoleType.AUDITOR</li>
      *   <li>"DEVELOPER" → RoleType.DEVELOPER</li>
@@ -45,7 +44,6 @@ public class EntityTypeConverter {
         
         return switch (typeStr) {
             case "BU_BOUNDED" -> RoleType.BU_BOUNDED;
-            case "BU_UNBOUNDED" -> RoleType.BU_UNBOUNDED;
             case "DEVELOPER" -> RoleType.DEVELOPER;
             case "ADMIN" -> RoleType.ADMIN;
             case "AUDITOR" -> RoleType.AUDITOR;
@@ -62,7 +60,6 @@ public class EntityTypeConverter {
      * <p>Supported conversions:</p>
      * <ul>
      *   <li>RoleType.BU_BOUNDED → "BU_BOUNDED"</li>
-     *   <li>RoleType.BU_UNBOUNDED → "BU_UNBOUNDED"</li>
      *   <li>RoleType.ADMIN → "ADMIN"</li>
      *   <li>RoleType.AUDITOR → "AUDITOR"</li>
      *   <li>RoleType.DEVELOPER → "DEVELOPER"</li>
@@ -79,7 +76,6 @@ public class EntityTypeConverter {
         
         return switch (type) {
             case BU_BOUNDED -> "BU_BOUNDED";
-            case BU_UNBOUNDED -> "BU_UNBOUNDED";
             case DEVELOPER -> "DEVELOPER";
             case ADMIN -> "ADMIN";
             case AUDITOR -> "AUDITOR";

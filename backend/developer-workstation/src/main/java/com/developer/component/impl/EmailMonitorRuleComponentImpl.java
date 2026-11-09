@@ -14,6 +14,8 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.security.WorkspaceRouteOwnership;
+import com.developer.security.WorkspaceRouteOwnership.Owned;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,7 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
     private final FunctionUnitRepository functionUnitRepository;
     private final EmailExtractionAttachmentRulesValidator attachmentRulesValidator;
     private final I18nService i18nService;
+    private final WorkspaceRouteOwnership routeOwnership;
 
     @Override
     @Transactional(readOnly = true)
@@ -88,6 +91,7 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
                     i18nService.getMessage("email.monitor.name_conflict", request.getName()));
         }
         validateConnection(functionUnitId, request.getConnectionUid());
+        requireTargetsInUnit(functionUnitId, request);
 
         EmailMonitorRule rule = EmailMonitorRule.builder()
                 .ruleUid(UUID.randomUUID().toString())
@@ -110,6 +114,7 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
         rejectTemplatePollution(request);
         attachmentRulesValidator.validate(functionUnitId, request.getExtractionRules());
         validateConnection(functionUnitId, request.getConnectionUid());
+        requireTargetsInUnit(functionUnitId, request);
 
         applyTemplate(rule, request);
         EmailMonitorRule saved = emailMonitorRuleRepository.save(rule);
@@ -265,6 +270,32 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
         }
         if (request.getReviewOnMissing() != null) {
             rule.setReviewOnMissing(request.getReviewOnMissing());
+        }
+    }
+
+    /**
+     * The form and binding a template starts its process with come from the body: they must be a form of this unit
+     * and a binding of that form (§6.1, §6.2). A binding id that is not a number is a legacy reference that names no
+     * dw_form_table_bindings row; it is kept as it is, as import and clone keep it.
+     */
+    private void requireTargetsInUnit(Long functionUnitId, EmailMonitorRuleRequest request) {
+        routeOwnership.requireInUnit(Owned.FORM, request.getTargetFormId(), functionUnitId);
+        Long bindingId = numericOrNull(request.getTargetBindingId());
+        if (request.getTargetFormId() != null) {
+            routeOwnership.requireBindingOfForm(bindingId, request.getTargetFormId());
+        } else {
+            routeOwnership.requireInUnit(Owned.FORM_BINDING, bindingId, functionUnitId);
+        }
+    }
+
+    private static Long numericOrNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 

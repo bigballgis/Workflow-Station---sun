@@ -1,3 +1,4 @@
+import { fetchWithSessionRefresh } from '../auth/sessionRefresh'
 export interface FileTransferRow {
   storedName: string
   fileDescription: string | null
@@ -29,7 +30,7 @@ async function readJson<T>(response: Response): Promise<T> {
 
 export async function queryFileTransfers(storedNames: string[]): Promise<FileTransferRow[]> {
   if (storedNames.length === 0) return []
-  const response = await fetch(QUERY_URL, {
+  const response = await fetchWithSessionRefresh(QUERY_URL, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -42,7 +43,7 @@ export async function updateFileDescription(
   storedName: string,
   fileDescription: string,
 ): Promise<FileTransferRow> {
-  const response = await fetch(patchUrl(storedName), {
+  const response = await fetchWithSessionRefresh(patchUrl(storedName), {
     method: 'PATCH',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },

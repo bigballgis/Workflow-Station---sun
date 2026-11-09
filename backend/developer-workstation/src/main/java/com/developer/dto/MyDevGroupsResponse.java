@@ -14,16 +14,16 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MyDevGroupsResponse {
-    /** 可选择的团队（ADMIN 为全部活跃 CUSTOM 团队，其他用户为其所属团队；均排除内置 Public）。 */
+    /**
+     * 可选择的团队，均排除内置 Public：SYS_ADMIN / AUDITOR 为全部团队（含已停用），其他用户为其名单所在的有效团队。
+     * 每项带当前用户在该团队的名单与能否新建。
+     */
     private List<DevGroupOptionDTO> groups;
 
     /** 是否可查看全部功能单元（SYS_ADMIN / AUDITOR 为 true，可选择「全部团队」）。 */
     private boolean canSeeAllGroups;
     /** 内置 Public 组 id（用于在团队切换器中单独查看公共功能单元）。 */
     private String publicGroupId;
-
-    /**
-     * 用户实际加入的团队（不含 Public）。SYS_ADMIN 查看其它工作区时，写权限还要求具备对应能力角色。
-     */
-    private List<String> memberGroupIds;
+    /** 能否在 Public 新建、移入功能单元（只有 SYS_ADMIN，§6.2）。 */
+    private boolean canWritePublic;
 }

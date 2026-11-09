@@ -28,7 +28,7 @@ class JdbcPrimaryKeyAllocationServiceCustomFormatTest {
                 .resetPeriod("none")
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("2026-06-08-1000");
         assertThat(jdbc.deleteSqls).isNotEmpty();
         assertThat(jdbc.updateScopeType).isEqualTo("perTable");
@@ -48,7 +48,7 @@ class JdbcPrimaryKeyAllocationServiceCustomFormatTest {
                 .resetPeriod("none")
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("2026-07-08-1001");
         assertThat(jdbc.updateScopeType).isEqualTo("perTable");
     }
@@ -66,7 +66,7 @@ class JdbcPrimaryKeyAllocationServiceCustomFormatTest {
                 .resetPeriod("day")
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("2026-06-09-1000");
         assertThat(jdbc.deleteSqls).isEmpty();
         assertThat(jdbc.updateScopeType).isEqualTo("perDay");
@@ -86,7 +86,7 @@ class JdbcPrimaryKeyAllocationServiceCustomFormatTest {
                 .resetPeriod("month")
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("2026-07-08-1000");
         assertThat(jdbc.updateScopeType).isEqualTo("perMonth");
         assertThat(jdbc.updateScopeKey).isEqualTo("202607");
@@ -103,7 +103,7 @@ class JdbcPrimaryKeyAllocationServiceCustomFormatTest {
                 .resetPeriod("day")
                 .build();
 
-        assertThatThrownBy(() -> service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences"))
+        assertThatThrownBy(() -> service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Daily reset");
     }
@@ -120,7 +120,7 @@ class JdbcPrimaryKeyAllocationServiceCustomFormatTest {
                 .startValue(1000L)
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("2026-08-06-1000");
         assertThat(jdbc.updateScopeType).isEqualTo("perTable");
         assertThat(jdbc.deleteSqls).isNotEmpty();
@@ -138,9 +138,9 @@ class JdbcPrimaryKeyAllocationServiceCustomFormatTest {
                 .resetPeriod("none")
                 .build();
 
-        assertThat(service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences"))
+        assertThat(service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences"))
                 .containsExactly("2026-06-08-1000");
-        assertThat(service.allocate(99L, "order_no", config, 1, "x", "dw_pk_sequences"))
+        assertThat(service.allocate(99L, "order_no", config, 1, "x", "up_pk_sequences"))
                 .containsExactly("2026-06-08-1000");
     }
 
@@ -153,7 +153,7 @@ class JdbcPrimaryKeyAllocationServiceCustomFormatTest {
                 .format("{DATETIME:yyyy-MM-dd}")
                 .build();
 
-        assertThatThrownBy(() -> service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences"))
+        assertThatThrownBy(() -> service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("SEQNUM");
     }
@@ -172,7 +172,7 @@ class JdbcPrimaryKeyAllocationServiceCustomFormatTest {
                 .resetPeriod("day")
                 .build();
 
-        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "dw_pk_sequences");
+        List<String> ids = service.allocate(10L, "req_no", config, 1, "x", "up_pk_sequences");
         assertThat(ids).containsExactly("2026-06-09-1000");
         assertThat(jdbc.updateScopeType).isEqualTo("perDay");
         assertThat(jdbc.updateScopeKey).isEqualTo("20260609");

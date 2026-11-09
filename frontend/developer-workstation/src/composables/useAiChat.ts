@@ -5,6 +5,7 @@ import type {
 import { AI_CHAT_STREAM_URL } from '@/api/aiGeneration'
 import { getUser } from '@/api/auth'
 import { isAmTokenReauthCode, readAmToken, refreshAmToken } from '@/utils/amToken'
+import { fetchWithSessionRefresh } from '@platform-shared/auth/sessionRefresh'
 
 /** Draft data structure stored in localStorage */
 export interface AiGenerationDraft {
@@ -166,7 +167,7 @@ export function useAiChat() {
 
     try {
       const headers = getAuthHeaders()
-      const response = await fetch(AI_CHAT_STREAM_URL, {
+      const response = await fetchWithSessionRefresh(AI_CHAT_STREAM_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify(request),

@@ -63,6 +63,15 @@ public final class BuRolePoolTasks {
     }
 
     /**
+     * A task with a pool of any kind: a BU + Role pool, or what the engine reports as a list of named people or a
+     * legacy virtual group ({@code poolKind}, platform access model D-17). Release and reassign apply to these.
+     */
+    public static boolean hasPool(TaskInfo task) {
+        return isClaimPoolTask(task)
+                || (task != null && task.getPoolKind() != null && !"NONE".equals(task.getPoolKind()));
+    }
+
+    /**
      * Held tasks carry the claimer as Flowable assignee; an empty assignee means the request is
      * still free for anyone in the role.
      */

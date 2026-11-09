@@ -22,6 +22,12 @@ export interface FunctionUnit {
   createdAt: string
   updatedAt: string
   updatedBy?: string
+  /** Code of the owning team (DEVELOPER virtual group); absent for units imported before teams. */
+  teamCode?: string
+  /** Name of that team; absent when the team no longer exists. */
+  teamName?: string
+  /** Lists only: whether the user may change this unit (a team they lead, or SYS_ADMIN). */
+  canManage?: boolean
 }
 
 export interface Deployment {
@@ -71,6 +77,29 @@ export interface ImportRequest {
   fileName: string
   fileContent: string
   overwriteExisting?: boolean
+  /** Team the unit is imported into (required by the import dialog, platform access model §8.1). */
+  teamCode?: string
+}
+
+export type ImportTeamState = 'ACTIVE' | 'INACTIVE' | 'MISSING'
+
+export interface ImportTeamOption {
+  code: string
+  name: string
+  state: ImportTeamState
+}
+
+/** What the import dialog needs to know about a package before choosing its team. */
+export interface ImportPreview {
+  code: string
+  name: string
+  version: string
+  /** Team named in the package, with its state here; null for a package from before teams. */
+  packageTeam: ImportTeamOption | null
+  /** Team the unit already belongs to here (same code); null for a new unit or one without a team. */
+  currentTeam: ImportTeamOption | null
+  /** Teams the signed-in user may import into. */
+  selectableTeams: ImportTeamOption[]
 }
 
 export interface ImportResult {
@@ -236,6 +265,10 @@ export const functionUnitApi = {
   // 根据ID获取功能单元
   getById: (id: string) =>
     get<FunctionUnit>(`/function-units/${id}`),
+
+  // 导入前读包：包里的团队、本环境现有归属、可选团队
+  previewImport: (data: ImportRequest) =>
+    post<ImportPreview>('/function-units/import/preview', data),
 
   // 导入功能包
   import: (data: ImportRequest) =>

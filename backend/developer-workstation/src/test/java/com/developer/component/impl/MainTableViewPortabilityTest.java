@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +16,7 @@ import com.developer.enums.MainTableViewStatus;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.MainTableViewConfigRepository;
 import com.developer.util.MainTableViewAccessRulesValidator;
+import com.developer.util.MainTableViewNameValidator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
@@ -97,6 +100,73 @@ class MainTableViewPortabilityTest {
         assertThat(exported).doesNotContainKey("viewId");
         snapshot.remove("viewId");
         assertThat(snapshot).isEqualTo(exported);
+    }
+
+    /**
+     * The target environment remaps a rule only by its BU/Role code; a rule whose id has no code here
+     * would arrive pointing at nothing, so the export stops and names the rule. A same-database
+     * snapshot (rollback backup) keeps the id and must not be blocked.
+     */
+    @Test
+    void export_rejectsAnAccessRuleWhoseIdHasNoCodeHereButSnapshotKeepsIt() {
+        MainTableViewConfig view = MainTableViewConfig.builder().id(10L).mainTableId(20L)
+                .viewName("HMDC Case").status(MainTableViewStatus.PUBLISHED).viewFields(List.of()).build();
+        when(mainTableViewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(view));
+        when(jdbcTemplate.queryForList(anyString(), eq(10L))).thenReturn(List.of(
+                Map.of("target_type", "BUSINESS_UNIT", "target_id", "bu-deleted"),
+                Map.of("target_type", "ROLE", "target_id", "role-manager")));
+        when(jdbcTemplate.queryForObject(eq("SELECT code FROM sys_business_units WHERE id = ?"),
+                eq(String.class), eq("bu-deleted"))).thenThrow(new EmptyResultDataAccessException(1));
+        when(jdbcTemplate.queryForObject(eq("SELECT code FROM sys_roles WHERE id = ?"),
+                eq(String.class), eq("role-manager"))).thenReturn("MANAGER");
+
+        assertThatThrownBy(() -> portability.export(1L, Map.of(20L, "HMDC_Case")))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .hasMessageContaining("View 'HMDC Case'")
+                .hasMessageContaining("BUSINESS_UNIT id=bu-deleted")
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo(MainTableViewAccessRulesValidator.EXPORT_UNRESOLVED_CODE);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rules = (List<Map<String, Object>>) portability
+                .snapshot(1L, Map.of(20L, "HMDC_Case"), Map.of()).get(0).get("accessRules");
+        assertThat(rules.get(0)).containsEntry("targetId", "bu-deleted").doesNotContainKey("targetCode");
+    }
+
+    /** Portal and BI find a View by its name, so two Views of one unit may not share it in a package. */
+    @Test
+    void export_rejectsDuplicateViewNamesButSnapshotDoesNot() {
+        MainTableViewConfig a = MainTableViewConfig.builder().id(10L).mainTableId(20L)
+                .viewName("Cases").status(MainTableViewStatus.PUBLISHED).viewFields(List.of()).build();
+        MainTableViewConfig b = MainTableViewConfig.builder().id(11L).mainTableId(21L)
+                .viewName(" CASES").status(MainTableViewStatus.PUBLISHED).viewFields(List.of()).build();
+        when(mainTableViewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(a, b));
+
+        assertThatThrownBy(() -> portability.export(1L, Map.of(20L, "case", 21L, "line")))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo(MainTableViewNameValidator.DUPLICATE_CODE);
+        assertThat(portability.snapshot(1L, Map.of(20L, "case", 21L, "line"), Map.of())).hasSize(2);
+    }
+
+    /** Import and version rollback both replay through importAll; nothing is deleted before the check. */
+    @Test
+    void import_rejectsDuplicateViewNamesBeforeReplacingAnything() {
+        FunctionUnit fu = FunctionUnit.builder().id(99L).build();
+        Map<String, Object> first = new LinkedHashMap<>();
+        first.put("mainTableName", "HMDC_Case");
+        first.put("viewName", "Cases");
+        Map<String, Object> second = new LinkedHashMap<>();
+        second.put("mainTableName", "HMDC_Line");
+        second.put("viewName", "cases");
+
+        assertThatThrownBy(() -> portability.importAll(
+                List.of(first, second), fu, Map.of("HMDC_Case", 20L, "HMDC_Line", 21L)))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo(MainTableViewNameValidator.DUPLICATE_CODE);
+        verify(mainTableViewConfigRepository, never()).deleteByFunctionUnitId(any());
+        verify(mainTableViewConfigRepository, never()).save(any());
     }
 
     @Test

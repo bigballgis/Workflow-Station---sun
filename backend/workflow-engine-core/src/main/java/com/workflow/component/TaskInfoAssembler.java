@@ -368,11 +368,12 @@ public class TaskInfoAssembler {
             try {
                 bpmnAssigneeType = bpmnActionParser.getUserTaskExtensionPropertyValue(
                         processDefinitionId, task.getTaskDefinitionKey(), "assigneeType");
-                String rawBu = bpmnActionParser.getUserTaskExtensionPropertyValue(
-                        processDefinitionId, task.getTaskDefinitionKey(), "businessUnitId");
-                if (StringUtils.hasText(rawBu)) {
-                    bpmnBusinessUnitId = rawBu.trim();
-                }
+                bpmnBusinessUnitId = com.workflow.util.BpmnPoolBusinessUnit.resolve(
+                        com.workflow.enums.AssigneeType.fromCode(bpmnAssigneeType),
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(
+                                processDefinitionId, task.getTaskDefinitionKey(), "businessUnitId"),
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(
+                                processDefinitionId, task.getTaskDefinitionKey(), "assigneeValue"));
                 String rawRoleIds = bpmnActionParser.getUserTaskExtensionPropertyValue(
                         processDefinitionId, task.getTaskDefinitionKey(), "roleIds");
                 String rawRoleId = bpmnActionParser.getUserTaskExtensionPropertyValue(
@@ -414,7 +415,7 @@ public class TaskInfoAssembler {
         // MI 按角色分派信号（用于 portal workspace 可见性：role 分派只在切到该 role 的 workspace 可见）。
         // 从 ExtendedTaskInfo.extendedProperties 读 assigneeMode / roleCodes / businessUnitCode。
         String miAssigneeMode = null;
-        String miRoleCode = null;
+        List<String> miRoleCodes = null;
         String miBusinessUnitCode = null;
         Boolean delegatedFlag = null;
         String delegatedTo = null;
@@ -422,10 +423,14 @@ public class TaskInfoAssembler {
         String delegatedTargetType = null;
         String delegatedBuCode = null;
         String delegatedRoleCode = null;
+        boolean virtualGroupRow = false;
+        boolean delegable = false;
         try {
             ExtendedTaskInfo eti = extendedTaskInfoRepository
                     .findByTaskIdAndIsDeletedFalse(task.getId()).orElse(null);
+            delegable = com.workflow.util.TaskDelegability.isDelegable(task.getAssignee(), eti);
             if (eti != null) {
+                virtualGroupRow = eti.getAssignmentType() == AssignmentType.VIRTUAL_GROUP;
                 delegatedFlag = eti.isDelegated();
                 delegatedTo = eti.getDelegatedTo();
                 delegatedBy = eti.getDelegatedBy();
@@ -443,12 +448,7 @@ public class TaskInfoAssembler {
                     if (mode != null) {
                         miAssigneeMode = String.valueOf(mode).trim();
                     }
-                    Object rc = ext.get("roleCodes");
-                    if (rc instanceof List<?> rcList && !rcList.isEmpty()) {
-                        miRoleCode = String.valueOf(rcList.get(0)).trim();
-                    } else if (rc != null && !String.valueOf(rc).isBlank()) {
-                        miRoleCode = String.valueOf(rc).trim();
-                    }
+                    miRoleCodes = miRoleCodesOf(ext.get("roleCodes"));
                     Object bu = ext.get("businessUnitCode");
                     if (bu != null && !String.valueOf(bu).isBlank()) {
                         miBusinessUnitCode = String.valueOf(bu).trim();
@@ -476,9 +476,12 @@ public class TaskInfoAssembler {
             .bpmnBusinessUnitId(bpmnBusinessUnitId)
             .bpmnRoleIds(bpmnRoleIds)
             .miAssigneeMode(miAssigneeMode)
-            .miRoleCode(miRoleCode)
+            .miRoleCodes(miRoleCodes)
             .miBusinessUnitCode(miBusinessUnitCode)
+            .poolKind(com.workflow.util.TaskPoolKinds.of(bpmnAssigneeType, "role".equalsIgnoreCase(miAssigneeMode),
+                    virtualGroupRow || !candidateGroupIds.isEmpty(), !candidateUserIds.isEmpty()).name())
             .isDelegated(delegatedFlag)
+            .delegable(delegable)
             .delegatedTo(delegatedTo)
             .delegatedBy(delegatedBy)
             .delegatedTargetType(delegatedTargetType)
@@ -651,6 +654,24 @@ public class TaskInfoAssembler {
             return null;
         }
         return t;
+    }
+
+    /**
+     * Every role an MI row assigned by role names: {@code MultiInstanceTaskWriter} stores the row's roles as a list,
+     * and the row's pool is all of them (the Portal's workspace matching reads any one). Null when none is named.
+     */
+    static List<String> miRoleCodesOf(Object raw) {
+        List<String> codes = new ArrayList<>();
+        if (raw instanceof List<?> list) {
+            for (Object code : list) {
+                if (code != null && !String.valueOf(code).isBlank()) {
+                    codes.add(String.valueOf(code).trim());
+                }
+            }
+        } else if (raw != null && !String.valueOf(raw).isBlank()) {
+            codes.add(String.valueOf(raw).trim());
+        }
+        return codes.isEmpty() ? null : List.copyOf(codes);
     }
 
     private static String extractUserIdFromString(String raw) {

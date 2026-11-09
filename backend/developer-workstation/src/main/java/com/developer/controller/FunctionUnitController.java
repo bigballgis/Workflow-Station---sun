@@ -64,19 +64,11 @@ public class FunctionUnitController extends BaseController {
         });
     }
     
-    @GetMapping("/workspace-access")
-    @Operation(summary = "Whether the current user may enter the function unit workspace",
-            description = "True for DW capability roles or members of a team that owns at least one function unit (read-only baseline). "
-                    + "Intentionally not gated by @RequireDeveloperPermission so role-less team members can be admitted.")
-    public ResponseEntity<ApiResponse<Map<String, Boolean>>> workspaceAccess() {
-        return handleRequest(() -> Map.of("canView", functionUnitComponent.canAccessWorkspace()));
-    }
-
     @GetMapping("/my-dev-groups")
     @Operation(summary = "Current user's selectable dev teams (for the entry dialog / header switcher)",
-                description = "Returns selectable CUSTOM virtual groups (all active groups for ADMIN; otherwise the user's groups), "
-                    + "the ADMIN all-groups capability, and the Public group id. "
-                    + "Not gated by @RequireDeveloperPermission so role-less team members can resolve their teams.")
+                description = "Returns the teams (every team for SYS_ADMIN / AUDITOR; otherwise the user's active teams) with "
+                    + "the user's lists and create right per team, the all-groups capability, the Public group id and "
+                    + "whether the user writes Public.")
     public ResponseEntity<ApiResponse<com.developer.dto.MyDevGroupsResponse>> myDevGroups() {
         return handleRequest(functionUnitComponent::getMyDevGroups);
     }
@@ -128,8 +120,9 @@ public class FunctionUnitController extends BaseController {
     @RequireDeveloperPermission("FUNCTION_UNIT_CREATE")
     public ResponseEntity<ApiResponse<FunctionUnit>> clone(
             @PathVariable Long id,
-            @RequestParam String newName) {
-        return handleRequest(() -> functionUnitComponent.clone(id, newName));
+            @RequestParam String newName,
+            @RequestParam(required = false) String targetGroupId) {
+        return handleRequest(() -> functionUnitComponent.clone(id, newName, targetGroupId));
     }
     
     @GetMapping("/{id}/validate")

@@ -28,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * Activepieces 登录桥后端（per-user：谁进去就是谁）。
@@ -55,6 +57,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Activepieces Login Bridge", description = "Per-user login bridge endpoints for the AP gateway")
+@AdminAccess(AdminAudience.WORKSTATION)
 public class ServiceTaskTokenController {
 
     /** DW 前端传递「当前所选开发组」的请求头（与 DW 功能单元列表同一个头）。 */
@@ -176,6 +179,7 @@ public class ServiceTaskTokenController {
      * <p>方案 B：本页<b>不再要求平台 JWT</b>（鉴权已在 admin 域 {@code /launch} 完成、由 nonce 承载）。
      * 桥页本身不含任何机密；无有效 nonce 时 {@code /token} 会拒绝。桥关闭时 404。dev 与非生产 k8s 共用这一份。
      */
+    @AdminAccess(AdminAudience.PUBLIC)
     @GetMapping(value = "/bridge", produces = MediaType.TEXT_HTML_VALUE)
     @Operation(summary = "Serve the AP login bridge page",
             description = "Returns the client bridge HTML that exchanges a nonce (or, in same-origin dev, the "
@@ -212,6 +216,7 @@ public class ServiceTaskTokenController {
      * </ul>
      * 桥关闭时 404。
      */
+    @AdminAccess(AdminAudience.PUBLIC)
     @GetMapping("/token")
     @Operation(summary = "Resolve an AP session via nonce (cross-domain) or platform cookie (same-origin dev)",
             description = "With ?nonce= consumes the one-time session minted by /launch (no platform cookie "

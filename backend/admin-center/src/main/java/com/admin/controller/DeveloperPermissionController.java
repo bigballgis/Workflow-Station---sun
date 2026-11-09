@@ -12,6 +12,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 开发者权限控制器
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/developer-permissions")
 @RequiredArgsConstructor
 @Tag(name = "开发者权限", description = "开发者权限查询和管理接口")
+@AdminAccess(value = AdminAudience.ADMIN_READ, services = true)
 public class DeveloperPermissionController {
     
     private final DeveloperPermissionService permissionService;

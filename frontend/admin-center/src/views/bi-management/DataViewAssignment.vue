@@ -7,6 +7,7 @@
           <el-icon><Download /></el-icon>{{ t('common.export') }}
         </el-button>
         <el-button
+          v-if="writable"
           type="primary"
           @click="openCreate"
         >
@@ -33,7 +34,7 @@
         </el-form-item>
         <el-form-item :label="t('bi.dataViewAssignment.filterTarget')">
           <el-select
-            v-model="query.functionUnitId"
+            v-model="query.functionUnitCode"
             clearable
             filterable
             :placeholder="t('bi.dataViewAssignment.placeholderTarget')"
@@ -41,9 +42,9 @@
           >
             <el-option
               v-for="unit in functionUnits"
-              :key="unit.id"
+              :key="unit.code"
               :label="unit.name"
-              :value="unit.id"
+              :value="unit.code"
             />
           </el-select>
         </el-form-item>
@@ -119,7 +120,7 @@
                 </template>
                 <template v-else-if="col.field === 'tableDisplayName'">
                   <div class="table-name-cell">
-                    <span>{{ row.tableDisplayName || row.tableName || t('bi.dataViewAssignment.tableUnavailable', { id: row.tableId }) }}</span>
+                    <span>{{ row.tableDisplayName || row.tableName || t('bi.dataViewAssignment.tableUnavailable') }}</span>
                     <el-tag v-if="row.tableType" size="small" type="info">{{ t(`bi.dataViewAssignment.tableType${row.tableType}`) }}</el-tag>
                   </div>
                   <small v-if="row.tableDisplayName !== row.tableName" class="secondary-text">{{ row.tableName }}</small>
@@ -135,6 +136,7 @@
               </template>
             </el-table-column>
             <el-table-column
+              v-if="writable"
               :label="t('bi.dataViewAssignment.colActions')"
               :width="ACTIONS_COL_WIDTH"
               fixed="right"
@@ -144,7 +146,10 @@
                 {{ t('bi.dataViewAssignment.colActions') }}
               </template>
               <template #default="{ row }">
-                <div class="action-cell">
+                <div
+                  v-if="row.canEdit"
+                  class="action-cell"
+                >
                   <el-button
                     link
                     type="primary"
@@ -201,7 +206,7 @@ import { exportTableCsv } from '@platform-shared/list/tableExport'
 
 const { t } = useI18n()
 const {
-  loading, query, functionUnits, dialogVisible, dialogMode, editingRow,
+  writable, loading, query, functionUnits, dialogVisible, dialogMode, editingRow,
   load, search, reset, openCreate, openEdit, remove, initialize, ACTIONS_COL_WIDTH,
   displayColumns, displayRows, selectionColumnWidth, handleGridSelectionChange, gridSelectedRows,
   columnFilters, sort, filterDialog, pagination, activeFilterColumn, activeFilter,

@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 权限申请管理控制器（Admin Center）
@@ -27,6 +29,7 @@ import java.time.ZoneId;
 @RequestMapping("/permission-requests")
 @RequiredArgsConstructor
 @Tag(name = "权限申请管理", description = "权限申请记录的查询和管理")
+@AdminAccess(value = AdminAudience.ADMIN_READ, services = true)
 public class PermissionRequestAdminController {
     
     private final PermissionRequestService permissionRequestService;

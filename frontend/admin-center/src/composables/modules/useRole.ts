@@ -6,11 +6,12 @@
 
 import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { notifyError } from '@/utils/notify'
+import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import { roleApi, Role, type RoleType } from '@/api/role'
 import { useRoleStore } from '@/stores/role'
-import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { canWrite } from '@/utils/permission'
+import { confirmMessageWithReferences } from '@/composables/useReferenceNotice'
+import type { ReferenceNotice } from '@/types/referenceNotice'
 import type { RoleListTab } from '@/utils/roleList'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
@@ -20,8 +21,9 @@ export function useRole() {
   const { t } = useI18n()
   const roleStore = useRoleStore()
 
-  const canWriteRole = hasPermission(PERMISSIONS.ROLE_WRITE)
-  const canDeleteRole = hasPermission(PERMISSIONS.ROLE_DELETE)
+  // Business (Custom) roles: every Technical Lead (§8.3, D-12); System roles are changed by nobody (AC-13).
+  const canWriteRole = canWrite('roles')
+  const canDeleteRole = canWrite('roles')
 
   const loading = ref(false)
   const activeTab = ref<RoleListTab>('CUSTOM')
@@ -31,6 +33,8 @@ export function useRole() {
   const formDialogVisible = ref(false)
   const membersDialogVisible = ref(false)
   const currentRole = ref<Role | null>(null)
+  /** Where the role being edited is used; the edit dialog shows it (§8.3, notice only). */
+  const currentReferences = ref<ReferenceNotice | null>(null)
 
   const grid = useAdminListGrid<Role>({
     storageKey: 'admin-list-layout:roles',
@@ -78,10 +82,13 @@ export function useRole() {
 
   const showCreateDialog = () => {
     currentRole.value = null
+    currentReferences.value = null
     formDialogVisible.value = true
   }
 
-  const showEditDialog = (role: Role) => {
+  const showEditDialog = async (role: Role) => {
+    // A failed load is reported by the request layer; the dialog then stays closed.
+    currentReferences.value = await roleApi.getReferences(role.id)
     currentRole.value = role
     formDialogVisible.value = true
   }
@@ -92,9 +99,11 @@ export function useRole() {
   }
 
   const handleDelete = async (role: Role) => {
-    await ElMessageBox.confirm(t('role.confirmDeleteRole'), t('user.hint'), { type: 'warning' })
+    const references = await roleApi.getReferences(role.id)
+    await notifyConfirm(confirmMessageWithReferences(t('role.confirmDeleteRole'), references), t('user.hint'),
+      { type: 'warning' })
     await roleStore.deleteRole(role.id)
-    ElMessage.success(t('common.success'))
+    notifySuccess(t('common.success'))
     await fetchRoles()
   }
 
@@ -107,6 +116,7 @@ export function useRole() {
     formDialogVisible,
     membersDialogVisible,
     currentRole,
+    currentReferences,
     fetchRoles,
     handleSearch,
     handleReset,

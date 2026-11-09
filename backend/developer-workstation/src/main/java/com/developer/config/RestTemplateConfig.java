@@ -1,10 +1,12 @@
 package com.developer.config;
 
+import com.platform.security.client.ServiceTokenRequestInterceptor;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
@@ -21,6 +23,12 @@ import java.time.Duration;
  */
 @Configuration
 public class RestTemplateConfig {
+
+    @Value("${admin-center.url}")
+    private String adminCenterUrl;
+
+    @Value("${service.internal-token}")
+    private String serviceInternalToken;
 
     @Bean
     public CircuitBreakerRegistry circuitBreakerRegistry(MeterRegistry meterRegistry) {
@@ -45,6 +53,10 @@ public class RestTemplateConfig {
         RestTemplate restTemplate = new RestTemplate(factory);
         CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("dw-outbound-http");
         restTemplate.getInterceptors().add(circuitBreakerInterceptor(breaker));
+        // Admin Center authorizes every endpoint: calls to it go out as service calls for the current user.
+        restTemplate.getInterceptors().add(new ServiceTokenRequestInterceptor(adminCenterUrl, serviceInternalToken));
+        // ... and answers in the caller's language.
+        restTemplate.getInterceptors().add(new RequestLocaleForwardingInterceptor());
         return restTemplate;
     }
 

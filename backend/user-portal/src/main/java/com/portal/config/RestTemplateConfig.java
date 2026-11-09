@@ -1,5 +1,6 @@
 package com.portal.config;
 
+import com.platform.security.client.ServiceTokenRequestInterceptor;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -32,6 +33,12 @@ public class RestTemplateConfig {
     @Value("${portal.http.read-timeout-ms:600000}")
     private int readTimeoutMs;
 
+    @Value("${admin-center.url}")
+    private String adminCenterUrl;
+
+    @Value("${service.internal-token}")
+    private String serviceInternalToken;
+
     @Bean
     public CircuitBreakerRegistry circuitBreakerRegistry(MeterRegistry meterRegistry) {
         CircuitBreakerConfig config = CircuitBreakerConfig.custom()
@@ -57,6 +64,8 @@ public class RestTemplateConfig {
         RestTemplate restTemplate = new RestTemplate(factory);
         CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("portal-outbound-http");
         restTemplate.getInterceptors().add(circuitBreakerInterceptor(breaker));
+        // Admin Center authorizes every endpoint: calls to it go out as service calls for the current user.
+        restTemplate.getInterceptors().add(new ServiceTokenRequestInterceptor(adminCenterUrl, serviceInternalToken));
         return restTemplate;
     }
 

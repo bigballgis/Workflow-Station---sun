@@ -35,7 +35,7 @@ public final class SystemAuditFieldFiller {
     public static final String UPDATED_AT = SystemAuditFields.UPDATED_AT;
     public static final String UPDATED_BY = SystemAuditFields.UPDATED_BY;
 
-    private static final ZoneId AUDIT_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId AUDIT_ZONE = ZoneId.of("Asia/Hong_Kong");
     private static final DateTimeFormatter AUDIT_TS_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private SystemAuditFieldFiller() {

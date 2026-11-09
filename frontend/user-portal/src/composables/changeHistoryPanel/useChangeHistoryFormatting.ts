@@ -10,16 +10,18 @@ import {
 } from '@/utils/sensitiveMaskLookup'
 import { isStoredFileUrl } from '@/components/subTableAddDialogHelpers/fileColumns'
 import { fileDisplayText } from '@/utils/mainTableViewCsvExport'
+import {
+  ASSIGNMENT_REASON_KEYS,
+  ASSIGNMENT_TYPE_LABEL_KEYS,
+  ASSIGNMENT_TYPE_TAGS,
+  SYSTEM_OPERATOR_ID,
+  assignmentFieldKey,
+  isAssignmentChangeType,
+} from './assignmentChangeLabels'
 
 type TranslateFn = ReturnType<typeof useI18n>['t']
 
 export const HISTORY_VALUE_MAX_LENGTH = 240
-
-const ASSIGNMENT_CHANGE_TYPES = new Set(['CLAIM', 'UNCLAIM', 'FORCE_UNCLAIM', 'REASSIGN'])
-
-function isAssignmentChangeType(changeType: string | undefined): boolean {
-  return !!changeType && ASSIGNMENT_CHANGE_TYPES.has(changeType)
-}
 
 /** 批次表头解析后的展示字段集合 */
 export interface BatchHeaderFields {
@@ -63,6 +65,7 @@ export function useChangeHistoryFormatting(
 
   function resolveOperator(row: ChangeHistoryRecord): string {
     const n = row.userName?.trim()
+    if (row.userId === SYSTEM_OPERATOR_ID && (!n || n === SYSTEM_OPERATOR_ID)) return t('changeHistory.systemOperator')
     if (n) return n
     return row.userId
   }
@@ -115,7 +118,9 @@ export function useChangeHistoryFormatting(
       return t('changeHistory.processInitiation')
     }
     if (isAssignmentChangeType(row.changeType) || row.fieldName === 'claimed_by') {
-      return t('changeHistory.claimedBy')
+      const reasonKey = row.reason ? ASSIGNMENT_REASON_KEYS[row.reason] : undefined
+      const field = t(assignmentFieldKey(row.fieldName))
+      return reasonKey ? `${field} · ${t(reasonKey)}` : field
     }
     // Notes carry a fixed backend field name ("Record Note"); localise it here and keep the
     // row id suffix so a sub-table-row (RECORD scope) note points at its own row.
@@ -242,6 +247,8 @@ export function useChangeHistoryFormatting(
   }
 
   function getChangeTypeLabel(changeType: string): string {
+    const assignmentKey = ASSIGNMENT_TYPE_LABEL_KEYS[changeType]
+    if (assignmentKey) return t(assignmentKey)
     const map: Record<string, string> = {
       FIELD_UPDATE: t('changeHistory.fieldUpdate'),
       SUB_TABLE_ROW_ADD: t('changeHistory.subTableRowAdd'),
@@ -251,10 +258,6 @@ export function useChangeHistoryFormatting(
       RECORD_NOTE_ADD: t('changeHistory.recordNoteAdd'),
       RECORD_NOTE_UPDATE: t('changeHistory.recordNoteUpdate'),
       RECORD_NOTE_DELETE: t('changeHistory.recordNoteDelete'),
-      CLAIM: t('changeHistory.claim'),
-      UNCLAIM: t('changeHistory.unclaim'),
-      FORCE_UNCLAIM: t('changeHistory.forceUnclaim'),
-      REASSIGN: t('changeHistory.reassign'),
     }
     return map[changeType] || changeType
   }
@@ -269,12 +272,8 @@ export function useChangeHistoryFormatting(
       RECORD_NOTE_ADD: 'success',
       RECORD_NOTE_UPDATE: 'warning',
       RECORD_NOTE_DELETE: 'danger',
-      CLAIM: 'success',
-      UNCLAIM: 'warning',
-      FORCE_UNCLAIM: 'danger',
-      REASSIGN: 'warning',
     }
-    return map[changeType] || 'info'
+    return map[changeType] || ASSIGNMENT_TYPE_TAGS[changeType] || 'info'
   }
 
   return {

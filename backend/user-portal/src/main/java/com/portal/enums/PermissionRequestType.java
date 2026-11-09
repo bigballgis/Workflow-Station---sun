@@ -4,7 +4,7 @@ package com.portal.enums;
  * Permission request type enum
  */
 public enum PermissionRequestType {
-    /** Role assignment request - apply for a business role in an organization unit */
+    /** Legacy role assignment request: can no longer be created; a pending one has no approver and only its applicant can withdraw it */
     ROLE_ASSIGNMENT,
     /** Virtual group join request - apply to join a virtual group */
     VIRTUAL_GROUP_JOIN,
@@ -18,13 +18,13 @@ public enum PermissionRequestType {
     BUSINESS_UNIT_EXIT,
     
     // ========== Deprecated types below ==========
-    /** @deprecated Use ROLE_ASSIGNMENT instead */
+    /** @deprecated Legacy type, kept so old requests stay readable */
     @Deprecated
     FUNCTION,
-    /** @deprecated Use ROLE_ASSIGNMENT instead */
+    /** @deprecated Legacy type, kept so old requests stay readable */
     @Deprecated
     DATA,
-    /** @deprecated Use ROLE_ASSIGNMENT instead */
+    /** @deprecated Legacy type, kept so old requests stay readable; nothing creates it and no approver can act on it */
     @Deprecated
     TEMPORARY
 }

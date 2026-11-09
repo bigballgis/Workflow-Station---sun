@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.platform.common.dto.UserPrincipal;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.RecordNoteDtos.AttachmentInfo;
 import com.portal.dto.RecordNoteDtos.NoteDetail;
@@ -10,6 +11,7 @@ import com.portal.enums.ChangeType;
 import com.portal.service.RecordNoteService;
 import com.portal.service.UserDisplayNameResolver;
 import com.portal.util.RecordNoteAuditSummary;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -78,6 +82,11 @@ class RecordNoteAuditTest {
         instance.setFunctionUnitCode("FU_DEMO");
     }
 
+    @AfterEach
+    void clearSession() {
+        SecurityContextHolder.clearContext();
+    }
+
     private NoteTarget tableTarget() {
         return NoteTarget.builder()
                 .targetType(RecordNote.TARGET_TABLE)
@@ -129,7 +138,7 @@ class RecordNoteAuditTest {
         when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
         // Writing a note needs an audit grant on the active role; these tests are about where the
         // audit row is anchored, so the writer simply holds one.
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(eq("u1"), any())).thenReturn(true);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(eq("u1"), any())).thenReturn(true);
         when(recordNoteService.createComment(any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_COMMENT)
                         .bodyText("Hello reviewer").build());
@@ -146,7 +155,7 @@ class RecordNoteAuditTest {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(eq("u1"), any())).thenReturn(true);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(eq("u1"), any())).thenReturn(true);
         // Row-id targets carry no resolvable instance, so note access adds no gate of its own.
         MockMultipartFile file = new MockMultipartFile(
                 "files", "report.pdf", "application/pdf", "x".getBytes(StandardCharsets.UTF_8));
@@ -170,8 +179,6 @@ class RecordNoteAuditTest {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(false);
-        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
-
         assertThatThrownBy(() ->
                 component.createComment("u1", rowTarget(), null, "<p>hi</p>", List.of(), List.of(), INSTANCE_ID, null))
                 .isInstanceOf(RecordNoteService.RecordNoteException.class)
@@ -191,9 +198,7 @@ class RecordNoteAuditTest {
     void rowScopeNotesAreReadableByAParticipantWithoutFunctionUnitRoleAccess() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
-        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
-        when(recordNoteService.list(any(), eq(0), eq(5), eq("u1"))).thenReturn(null);
+        when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);        when(recordNoteService.list(any(), eq(0), eq(5), eq("u1"))).thenReturn(null);
 
         component.list("u1", rowTarget(), 0, 5, INSTANCE_ID);
 
@@ -211,8 +216,6 @@ class RecordNoteAuditTest {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(false);
-        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
-
         assertThatThrownBy(() -> component.list("u1", rowTarget(), 0, 5, INSTANCE_ID))
                 .isInstanceOf(RecordNoteService.RecordNoteException.class)
                 .hasMessageContaining("not a participant");
@@ -224,8 +227,6 @@ class RecordNoteAuditTest {
     @Test
     void rowScopeNotesRejectWhenNoHostingInstanceIsSupplied() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
-        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
-
         assertThatThrownBy(() -> component.list("u1", rowTarget(), 0, 5, null))
                 .isInstanceOf(RecordNoteService.RecordNoteException.class)
                 .hasMessageContaining("Cannot resolve the request");
@@ -238,8 +239,6 @@ class RecordNoteAuditTest {
     void rowScopeNotesRejectAnUnknownClaimedInstance() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail("no-such-instance")).thenReturn(null);
-        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
-
         assertThatThrownBy(() -> component.list("u1", rowTarget(), 0, 5, "no-such-instance"))
                 .isInstanceOf(RecordNoteService.RecordNoteException.class)
                 .hasMessageContaining("Cannot resolve the request");
@@ -252,8 +251,6 @@ class RecordNoteAuditTest {
     void instanceScopeNotesStillRejectNonParticipants() {
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(false);
-        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
-
         assertThatThrownBy(() -> component.list("u1", tableTarget(), 0, 5, null))
                 .isInstanceOf(RecordNoteService.RecordNoteException.class)
                 .hasMessageContaining("not a participant");
@@ -267,9 +264,7 @@ class RecordNoteAuditTest {
         NoteTarget draft = NoteTarget.builder()
                 .targetType(RecordNote.TARGET_TABLE).targetId("draft-abc")
                 .tableKind("DW").tableId("42").functionUnitId("fu-7").build();
-        when(processComponent.getProcessDetail("draft-abc")).thenReturn(null);
-        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
-        when(recordNoteService.list(any(), eq(0), eq(5), eq("u1"))).thenReturn(null);
+        when(processComponent.getProcessDetail("draft-abc")).thenReturn(null);        when(recordNoteService.list(any(), eq(0), eq(5), eq("u1"))).thenReturn(null);
 
         component.list("u1", draft, 0, 5, null);
 
@@ -318,6 +313,47 @@ class RecordNoteAuditTest {
         verify(changeHistoryComponent, never()).recordNoteChange(any(), any(), any(), any(), any(), any());
     }
 
+    /**
+     * Platform access model D-05: a System Administrator who is neither participant nor auditor of
+     * the request reads none of its notes.
+     */
+    @Test
+    void systemAdministratorWithoutAccessToTheRequestReadsNoNotes() {
+        signInSystemAdministrator();
+        when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
+        when(processComponent.canAuditProcessDetail(eq("admin"), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> component.list("admin", tableTarget(), 0, 5, null))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("not a participant");
+
+        verify(recordNoteService, never()).list(any(), anyInt(), anyInt(), anyString());
+    }
+
+    /** D-05: the archive download and draft adoption need access to the request, admin or not. */
+    @Test
+    void systemAdministratorWithoutAccessCannotDownloadTheArchiveOrAdoptDrafts() {
+        signInSystemAdministrator();
+        when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
+        when(processComponent.canAccessProcessDetail(eq("admin"), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> component.requireArchiveAccess("admin", INSTANCE_ID))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("not a participant");
+        assertThatThrownBy(() -> component.adoptDraftNotes("admin", "draft-abc", INSTANCE_ID))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("not a participant");
+
+        verify(recordNoteSubmissions, never()).adopt(any(), any(), any());
+    }
+
+    private static void signInSystemAdministrator() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                UserPrincipal.builder().userId("admin").username("admin")
+                        .roles(List.of("SYS_ADMIN")).superAdmin(true).build(),
+                null, List.of()));
+    }
+
     /** A system administrator gets no exemption from immutability either. */
     @Test
     void deleteIsRefusedEvenForSystemAdministrator() {
@@ -334,7 +370,7 @@ class RecordNoteAuditTest {
     void inlineImageUploadsAreNotAuditedSeparately() {
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
-        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(eq("u1"), any())).thenReturn(true);
+        when(functionUnitAccessComponent.canAuditFunctionUnit(eq("u1"), any())).thenReturn(true);
         MockMultipartFile img = new MockMultipartFile(
                 "file", "shot.png", "image/png", "x".getBytes(StandardCharsets.UTF_8));
         when(recordNoteService.createAttachment(any(), any(), anyBoolean(), anyString(), any()))

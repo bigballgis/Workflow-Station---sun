@@ -8,6 +8,7 @@ import com.admin.repository.BusinessUnitRoleRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserBusinessUnitRepository;
 import com.admin.repository.UserBusinessUnitRoleRepository;
+import com.admin.service.ClaimPoolResyncService;
 import com.admin.util.EntityTypeConverter;
 import com.platform.common.audit.Audited;
 import com.platform.security.entity.Role;
@@ -18,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -32,6 +34,7 @@ public class UserBusinessUnitRoleManagerComponent {
     private final UserBusinessUnitRepository userBusinessUnitRepository;
     private final RoleRepository roleRepository;
     private final BusinessUnitRoleRepository businessUnitRoleRepository;
+    private final ClaimPoolResyncService claimPoolResyncService;
 
     @Transactional
     @Audited(action = "UBR_ASSIGN", resourceType = "USER_BUSINESS_UNIT_ROLE", resourceId = "#userId")
@@ -60,10 +63,12 @@ public class UserBusinessUnitRoleManagerComponent {
                 .createdBy(by)
                 .build();
         userBusinessUnitRoleRepository.save(assignment);
+        claimPoolResyncService.ubrChanged(businessUnitId, List.of(roleId));
         log.info("UBR assigned: userId={}, businessUnitId={}, roleId={}, membershipType={}, by={}",
                 userId, businessUnitId, roleId, tier, by);
     }
 
+    /** A tier change (MEMBER / LEADER) keeps the claim pool as it is: a pool is every holder of the BU + Role. */
     private void updateMembershipType(UserBusinessUnitRole row, String tier, String userId,
                                       String businessUnitId, String roleId, String operatedBy) {
         String current = UbrMembershipType.normalize(row.getMembershipType());
@@ -109,6 +114,7 @@ public class UserBusinessUnitRoleManagerComponent {
         }
         userBusinessUnitRoleRepository.delete(existing.get());
         userBusinessUnitRoleRepository.flush();
+        claimPoolResyncService.ubrChanged(businessUnitId, List.of(roleId));
         log.info("UBR removed: userId={}, businessUnitId={}, roleId={}, by={}",
                 userId, businessUnitId, roleId, operatedBy);
         leaveBusinessUnitIfNoRolesRemain(userId, businessUnitId, operatedBy);

@@ -6,12 +6,14 @@
           <el-icon><Download /></el-icon>{{ t('common.export') }}
         </el-button>
         <el-button
+          v-if="writable"
           type="success"
           @click="showCreateDialog"
         >
           <el-icon><Plus /></el-icon>{{ t('bi.rbac.createMapping') }}
         </el-button>
         <el-button
+          v-if="writable"
           type="primary"
           :loading="syncing"
           @click="handleSync"
@@ -57,10 +59,6 @@
             <el-option
               :label="t('role.buBounded')"
               value="BU_BOUNDED"
-            />
-            <el-option
-              :label="t('role.buUnbounded')"
-              value="BU_UNBOUNDED"
             />
           </el-select>
         </el-form-item>
@@ -161,6 +159,7 @@
               </template>
             </el-table-column>
             <el-table-column
+              v-if="writable"
               :label="t('bi.rbac.colActions')"
               :width="ACTIONS_COL_WIDTH"
               fixed="right"
@@ -286,6 +285,7 @@ const {
   clearFilter,
   applySort,
   clearSort,
+  writable,
 } = useBiRbac()
 
 function onSort(field: string, direction: 'ASC' | 'DESC') {

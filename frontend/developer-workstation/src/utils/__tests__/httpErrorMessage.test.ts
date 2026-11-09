@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isGatewayUpstreamDnsFailure,
+  pickBlobHttpErrorMessage,
   pickHttpErrorBodyMessage,
   pickHttpErrorCode,
   resolveUserFacingHttpMessage,
@@ -61,5 +62,23 @@ describe('httpErrorMessage', () => {
       "Computed field 'day' produces a number but the column is declared as VARCHAR.",
     )
     expect(pickHttpErrorCode(body)).toBe('COMPUTED_FIELD_TYPE_MISMATCH')
+  })
+
+  it('pickBlobHttpErrorMessage reads the business message out of a blob download error', async () => {
+    const body = {
+      success: false,
+      error: {
+        code: 'BIZ_VIEW_ACCESS_EXPORT_UNRESOLVED',
+        message: "View 'Cases': access rule ROLE id=r-1 does not match any role with a code in this environment",
+      },
+    }
+    const json = JSON.stringify(body)
+    // jsdom's Blob has no text(); every browser this app supports does.
+    const blob = Object.assign(new Blob([json], { type: 'application/json' }), { text: async () => json })
+    expect(await pickBlobHttpErrorMessage({ response: { status: 400, data: blob } })).toBe(
+      "View 'Cases': access rule ROLE id=r-1 does not match any role with a code in this environment",
+    )
+    expect(await pickBlobHttpErrorMessage({ response: { status: 400, data: body } })).toBe(body.error.message)
+    expect(await pickBlobHttpErrorMessage(new Error('Network Error'))).toBeUndefined()
   })
 })

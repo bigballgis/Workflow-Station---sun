@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import type { DevGroupOption } from '@/api/functionUnit'
 
 /**
  * Developer-workstation active "dev group (team)" context.
@@ -16,18 +17,18 @@ import { ref } from 'vue'
 
 const ACTIVE_GROUP_KEY = 'ws_dw_active_group'
 
-/** Teams the signed-in user belongs to (excluding Public). Filled from my-dev-groups. */
-const memberGroupIds = ref<string[]>([])
+/**
+ * The teams from my-dev-groups with the user's lists and create rights per team, and whether the user writes
+ * Public (System Administrators only). The backend decides both (platform access model §6.2).
+ */
+const myTeams = ref<DevGroupOption[]>([])
+const publicWritable = ref(false)
 
 /** Sentinel meaning "all teams" (no single-team filter). Used by global-view users. */
 export const ALL_GROUPS = '__ALL__'
 
 /** Built-in Public developer group. */
 export const PUBLIC_GROUP_ID = 'vg-dev-public'
-
-export function isPublicGroupSelected(): boolean {
-  return getActiveGroupRaw() === PUBLIC_GROUP_ID
-}
 
 /** Raw stored selection (group id, {@link ALL_GROUPS}, or null when unset). */
 export function getActiveGroupRaw(): string | null {
@@ -51,12 +52,16 @@ export function setActiveGroup(groupId: string): void {
 /** Clear the stored selection (e.g. on logout). */
 export function clearActiveGroup(): void {
   localStorage.removeItem(ACTIVE_GROUP_KEY)
-  memberGroupIds.value = []
+  myTeams.value = []
+  publicWritable.value = false
 }
 
-/** Remember the user's real team memberships (not the admin "all teams" catalog). */
-export function setMemberGroupIds(ids: readonly string[] | null | undefined): void {
-  memberGroupIds.value = (ids ?? []).filter((id) => id && id !== PUBLIC_GROUP_ID)
+/** Remember what my-dev-groups said about the user's teams and Public. */
+export function setMyDevGroups(groups: readonly DevGroupOption[] | null | undefined, canWritePublic: boolean): void {
+  myTeams.value = [...(groups ?? [])]
+  publicWritable.value = canWritePublic
 }
 
-export function getMemberGroupIds(): readonly string[] { return memberGroupIds.value }
+export function getMyTeams(): readonly DevGroupOption[] { return myTeams.value }
+
+export function canWritePublic(): boolean { return publicWritable.value }

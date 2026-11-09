@@ -367,18 +367,35 @@ public class ExtendedTaskInfo {
     }
 
     /**
-     * Claim task
+     * The task changes hands or its hold ends (D-59): a single-task delegation is its holder's own arrangement, so it
+     * ends unless {@code newHolder} is the current holder again (a repeated claim). {@code null}: back to the pool.
+     * Nobody gets it back by holding the task later, its delegator included. Returns the delegate it named, or null.
+     */
+    public String endDelegationUnlessSameHolder(String newHolder) {
+        if (!isDelegated() || (newHolder != null && newHolder.equals(getCurrentAssignee()))) {
+            return null;
+        }
+        String delegate = delegatedTo != null && !delegatedTo.isBlank()
+                ? delegatedTo : delegatedBuCode + " / " + delegatedRoleCode;
+        clearDelegation();
+        return delegate;
+    }
+
+    /**
+     * Claim task; a single-task delegation of the previous holder ends (D-59).
      */
     public void claimTask(String claimedBy) {
+        endDelegationUnlessSameHolder(claimedBy);
         this.claimedBy = claimedBy;
         this.claimedTime = LocalDateTime.now();
         updateStatus("CLAIMED", claimedBy);
     }
     
     /**
-     * Unclaim task
+     * Unclaim task; the holder's single-task delegation ends with the hold (D-59).
      */
     public void unclaimTask() {
+        endDelegationUnlessSameHolder(null);
         this.claimedBy = null;
         this.claimedTime = null;
         updateStatus("ASSIGNED", null);

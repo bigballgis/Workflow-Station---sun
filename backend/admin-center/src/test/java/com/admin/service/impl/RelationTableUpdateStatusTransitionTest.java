@@ -241,8 +241,9 @@ class RelationTableUpdateStatusTransitionTest {
         @DisplayName("改表名 → 状态变 UPDATED")
         void renamingTableFlipsToUpdated() {
             when(tableDefinitionRepository.existsByTableNameIgnoreCaseAndIdNot(any(), any())).thenReturn(false);
+            // No released function unit has a data table of the new name.
             when(jdbcTemplate.queryForObject(any(String.class), any(Class.class), any(Object[].class)))
-                    .thenReturn(0);
+                    .thenReturn(false);
 
             UpdateRelationTableRequest request = unchangedRequest();
             request.setTableName("rt_demo_renamed");

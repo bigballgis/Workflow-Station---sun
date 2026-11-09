@@ -17,9 +17,8 @@ class FunctionUnitContentComponentFormTypeTest {
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final FunctionUnitContentRepository contents = mock(FunctionUnitContentRepository.class);
     private final FunctionUnitLookup lookup = mock(FunctionUnitLookup.class);
-    private final FormTableBindingLoader liveBindings = mock(FormTableBindingLoader.class);
     private final FunctionUnitContentComponent component = new FunctionUnitContentComponent(
-            contents, jdbc, lookup, liveBindings, new ObjectMapper());
+            contents, jdbc, lookup, new ObjectMapper());
 
     private void snapshot(String type, String scene) {
         org.springframework.test.util.ReflectionTestUtils.setField(component, "catalogSnapshots",
@@ -49,7 +48,6 @@ class FunctionUnitContentComponentFormTypeTest {
         assertThat(form.getFormType()).isEqualTo("PROCESS");
         assertThat(form.getScene()).isEqualTo("REQUEST");
         assertThat(form.getTableBindings().get(0).getPrimaryKeyFields()).containsExactly("case_ref");
-        verifyNoInteractions(liveBindings);
     }
 
     @Test void detailFormAlsoUsesFrozenLayoutAndBindings() {
@@ -58,13 +56,11 @@ class FunctionUnitContentComponentFormTypeTest {
         assertThat(form.getFormType()).isEqualTo("DETAIL");
         assertThat(form.getData()).contains("rule");
         assertThat(form.getTableBindings().get(0).getTableId()).isEqualTo(23L);
-        verifyNoInteractions(liveBindings);
     }
 
     @Test void taskFormRetainsPublishedPermissionsWithoutDesignerTables() {
         snapshot("TASK", "TASK");
         var form = component.assembleFunctionUnitContent("v1").getForms().get(0);
         assertThat(form.getPublishedFieldPermissions()).containsEntry("amount", "READONLY");
-        verifyNoInteractions(liveBindings);
     }
 }

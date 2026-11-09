@@ -14,11 +14,12 @@ import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
 import com.portal.dto.SwitchWorkspaceRequest;
 import com.portal.repository.LoginAuditQueryRepository;
-import com.portal.service.PortalEntitlementService;
 import com.portal.service.PortalSessionIssuerService;
 import com.portal.service.PortalWorkspaceAuthService;
 import com.platform.security.repository.UserRepository;
+import com.platform.security.service.PortalEntryService;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.Cookie;
@@ -30,7 +31,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,7 +44,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -63,12 +62,11 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JdbcTemplate jdbcTemplate;
     private final UserRoleService userRoleService;
     private final I18nService i18nService;
     private final JwtTokenService jwtTokenService;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
-    private final PortalEntitlementService portalEntitlementService;
+    private final PortalEntryService portalEntryService;
     private final PortalSessionIssuerService portalSessionIssuerService;
     private final LoginAuditQueryRepository loginAuditQueryRepository;
     private final JwtProperties jwtProperties;
@@ -77,7 +75,7 @@ public class AuthController {
     @Value("${jwt.secret}")
     private String jwtSecret;
     
-    @Value("${jwt.expiration:86400000}")
+    @Value("${jwt.expiration}")
     private long jwtExpiration;
 
     @PostMapping("/login")
@@ -146,7 +144,7 @@ public class AuthController {
                 userRepository.save(user);
                 recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
             } else if (body != null
-                    && PortalEntitlementService.LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED.equals(body.getLoginErrorCode())) {
+                    && PortalSessionIssuerService.LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED.equals(body.getLoginErrorCode())) {
                 recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
                         body.getMessage() != null ? body.getMessage()
                                 : i18nService.getMessage("auth.portal_entitlement_denied"));
@@ -201,14 +199,18 @@ public class AuthController {
             if (!REFRESH_TYPE.equals(claims.get("type", String.class))) {
                 return ResponseEntity.status(401).build();
             }
-            if (!portalEntitlementService.hasEligibleVirtualGroupMembership(userId)) {
-                log.warn("Portal refresh denied: user {} has no eligible virtual group membership", userId);
+            if (!portalEntryService.hasPortalEntry(userId)) {
+                log.warn("Portal refresh denied: user {} has no Portal entry", userId);
                 return ResponseEntity.status(401).build();
             }
             String activeBu = claims.get(CLAIM_ACTIVE_BUSINESS_UNIT_ID, String.class);
             String activeRoleId = claims.get(CLAIM_ACTIVE_ROLE_ID, String.class);
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
+            if (!isAccountUsable(user)) {
+                log.warn("Portal refresh denied: user {} is not active (status={})", userId, user.getStatus());
+                return ResponseEntity.status(401).build();
+            }
             List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
             String[] resolved = resolveActiveWorkspaceClaims(wctx, activeBu, activeRoleId);
             activeBu = resolved[0];
@@ -223,8 +225,8 @@ public class AuthController {
             LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
             String newAccessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
             String newRefreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
-            setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), newAccessToken, (int)(jwtExpiration / 1000));
-            setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), newRefreshToken, 7 * 24 * 60 * 60);
+            setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), newAccessToken, jwtProperties.getSessionCookieMaxAgeSeconds());
+            setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), newRefreshToken, jwtProperties.getSessionCookieMaxAgeSeconds());
             return ResponseEntity.ok(Map.of(
                     "accessToken", newAccessToken,
                     "refreshToken", newRefreshToken,
@@ -245,7 +247,7 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
         try {
-            Claims claims = parseToken(token);
+            Claims claims = parsePortalSessionToken(token);
             String userId = claims.getSubject();
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
@@ -270,7 +272,7 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
         try {
-            Claims claims = parseToken(token);
+            Claims claims = parsePortalSessionToken(token);
             String userId = claims.getSubject();
             User user = userRepository.findById(userId).orElse(null);
             if (user == null || user.getAvatar() == null || user.getAvatar().length == 0) {
@@ -295,7 +297,7 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
         try {
-            Claims claims = parseToken(token);
+            Claims claims = parsePortalSessionToken(token);
             String userId = claims.getSubject();
             String activeBu = claims.get(CLAIM_ACTIVE_BUSINESS_UNIT_ID, String.class);
             String activeRoleId = claims.get(CLAIM_ACTIVE_ROLE_ID, String.class);
@@ -327,7 +329,7 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
         try {
-            Claims claims = parseToken(token);
+            Claims claims = parsePortalSessionToken(token);
             String userId = claims.getSubject();
             List<Map<String, String>> out = portalWorkspaceAuthService.listWorkspaceContexts(userId).stream()
                     .map(r -> {
@@ -357,17 +359,23 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
         try {
-            Claims claims = parseToken(token);
+            Claims claims = parsePortalSessionToken(token);
             String userId = claims.getSubject();
-            if (!portalEntitlementService.hasEligibleVirtualGroupMembership(userId)) {
+            if (!portalEntryService.hasPortalEntry(userId)) {
                 return ResponseEntity.status(403).build();
             }
             if (!portalWorkspaceAuthService.hasContext(userId, body.getBusinessUnitId(), body.getRoleId())) {
                 return ResponseEntity.status(403).build();
             }
-            jwtTokenService.blacklistToken(token);
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
+            if (!isAccountUsable(user)) {
+                log.warn("Portal switch-workspace denied: user {} is not active (status={})", userId, user.getStatus());
+                return ResponseEntity.status(401).build();
+            }
+            jwtTokenService.blacklistToken(token);
+            // A role granted since sign-in must count at once in the workspace just switched to.
+            functionUnitAccessComponent.clearUserRolesCache(userId);
             String activeBu = body.getBusinessUnitId();
             String activeRoleId = body.getRoleId();
             List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
@@ -375,8 +383,8 @@ public class AuthController {
             LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
             String accessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
             String refreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
-            setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtExpiration / 1000));
-            setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
+            setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), accessToken, jwtProperties.getSessionCookieMaxAgeSeconds());
+            setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), refreshToken, jwtProperties.getSessionCookieMaxAgeSeconds());
             return ResponseEntity.ok(LoginResponse.builder()
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
@@ -396,7 +404,7 @@ public class AuthController {
             return ResponseEntity.ok(false);
         }
         try {
-            parseToken(token);
+            parsePortalSessionToken(token);
             return ResponseEntity.ok(true);
         } catch (Exception e) {
             return ResponseEntity.ok(false);
@@ -444,9 +452,14 @@ public class AuthController {
         return builder.signWith(getSigningKey()).compact();
     }
 
+    /** Same rule as login: a locked or non-ACTIVE account gets no new token. */
+    private static boolean isAccountUsable(User user) {
+        return user.isActive() && !user.isLocked();
+    }
+
     private String generateRefreshToken(String userId, String activeBusinessUnitId, String activeRoleId, String portalAccessMode) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + 604800000);
+        Date expiry = new Date(now.getTime() + jwtProperties.getRefreshExpirationMs());
 
         var builder = Jwts.builder()
                 .issuer("platform")
@@ -508,22 +521,9 @@ public class AuthController {
                     .map(UserEffectiveRole::getRoleCode)
                     .distinct()
                     .collect(Collectors.toList());
-            if (roles.isEmpty()) {
-                roles = new ArrayList<>(getRolesForUserLegacy(userId));
-            }
             List<String> permissions = new ArrayList<>(userRoleService.getPermissionsForUser(userId));
-            if (permissions.isEmpty()) {
-                permissions = new ArrayList<>(getPermissionsForRoles(roles));
-            }
             return new LoginBundle(roles, permissions, buildRolesWithSources(effectiveAll), null, null);
         }
-
-        List<String> unboundedCodes = effectiveAll.stream()
-                .filter(r -> "BU_UNBOUNDED".equals(r.getRoleType()))
-                .map(UserEffectiveRole::getRoleCode)
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
 
         PortalWorkspaceAuthService.WorkspaceContextRow row = wctx.stream()
                 .filter(r -> activeBusinessUnitId != null && activeBusinessUnitId.equals(r.getBusinessUnitId())
@@ -535,11 +535,8 @@ public class AuthController {
         if (row.getRoleCode() != null && !row.getRoleCode().isBlank()) {
             roles.add(row.getRoleCode());
         }
-        roles.addAll(unboundedCodes);
-        roles = roles.stream().distinct().collect(Collectors.toList());
 
         LinkedHashSet<String> perms = new LinkedHashSet<>(portalWorkspaceAuthService.permissionsForRoleId(activeRoleId));
-        perms.addAll(userRoleService.getPermissionsForRoleCodes(unboundedCodes));
 
         return new LoginBundle(new ArrayList<>(roles), new ArrayList<>(perms), buildRolesWithSources(effectiveAll),
                 row.getBusinessUnitName(), row.getRoleName());
@@ -568,7 +565,6 @@ public class AuthController {
                 .workspaceSwitcherVisible(workspaceSwitcherVisible)
                 .portalAccessMode(portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)
                 .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
-                .systemAdministrator(functionUnitAccessComponent.isSystemAdministrator(user.getId()))
                 .build();
     }
 
@@ -606,6 +602,23 @@ public class AuthController {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    /**
+     * Claims of an access token this Portal issued: signed and unexpired, not logged out, not a refresh token, and
+     * carrying the Portal access mode. A Developer Workstation or Admin Center token never opens a Portal session
+     * (platform access model §7.1).
+     */
+    private Claims parsePortalSessionToken(String token) {
+        if (jwtTokenService.isBlacklisted(token)) {
+            throw new JwtException("Token has been revoked");
+        }
+        Claims claims = parseToken(token);
+        String accessMode = claims.get(CLAIM_PORTAL_ACCESS_MODE, String.class);
+        if (REFRESH_TYPE.equals(claims.get("type", String.class)) || accessMode == null || accessMode.isBlank()) {
+            throw new JwtException("Not a Portal session token");
+        }
+        return claims;
     }
 
     /**
@@ -656,32 +669,6 @@ public class AuthController {
             keyBytes = Arrays.copyOf(keyBytes, 32);
         }
         return Keys.hmacShaKeyFor(keyBytes);
-    }
-
-    private List<String> getRolesForUserLegacy(String userId) {
-        try {
-            return jdbcTemplate.queryForList(
-                    "SELECT r.code FROM sys_role_assignments ra " +
-                    "JOIN sys_roles r ON ra.role_id = r.id " +
-                    "WHERE ra.target_type = 'USER' AND ra.target_id = ? AND r.status = 'ACTIVE' " +
-                    "AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
-                    "AND (ra.valid_to IS NULL OR ra.valid_to >= NOW())",
-                    String.class, userId);
-        } catch (Exception e) {
-            return List.of("USER");
-        }
-    }
-
-    private List<String> getPermissionsForRoles(List<String> roles) {
-        List<String> permissions = new ArrayList<>();
-        for (String role : roles) {
-            switch (role) {
-                case "MANAGER" -> permissions.addAll(List.of("task:read", "task:write", "task:approve", "team:manage"));
-                case "USER" -> permissions.addAll(List.of("task:read", "task:write", "process:start"));
-                default -> permissions.add("basic:access");
-            }
-        }
-        return permissions.stream().distinct().toList();
     }
 
     private String getClientIpAddress(HttpServletRequest request) {

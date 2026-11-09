@@ -1,6 +1,7 @@
 package com.portal.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.dto.UserPrincipal;
 import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
@@ -13,7 +14,7 @@ import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
-import com.portal.repository.UserBusinessUnitRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +24,8 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
@@ -53,9 +56,6 @@ class PortalMainTableViewImportTest {
     private FunctionUnitAccessComponent functionUnitAccessComponent;
 
     @Mock
-    private UserBusinessUnitRepository userBusinessUnitRepository;
-
-    @Mock
     private MainTableViewInvolvementScope involvementScope;
 
     @Mock
@@ -77,8 +77,12 @@ class PortalMainTableViewImportTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        MainTableViewAccessResolver accessResolver = new MainTableViewAccessResolver(
-                functionUnitAccessComponent, userBusinessUnitRepository);
+        MainTableViewAccessResolver accessResolver = new MainTableViewAccessResolver();
+        // The importer works in the workspace the view grants (BU + Role), like any user.
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                UserPrincipal.builder().userId(USER_ID).username(USER_ID)
+                        .activeBusinessUnitId("bu-1").activeRoleId("role-1").build(),
+                null, List.of()));
         com.portal.service.UserDisplayNameResolver names =
                 Mockito.mock(com.portal.service.UserDisplayNameResolver.class);
         service = new PortalMainTableViewServiceImpl(
@@ -95,8 +99,12 @@ class PortalMainTableViewImportTest {
                 names);
         when(functionUnitAccessComponent.canAccessFunctionUnit(USER_ID, FU_CODE)).thenReturn(true);
         when(functionUnitAccessComponent.isFunctionUnitEnabled(FU_CODE)).thenReturn(true);
-        when(functionUnitAccessComponent.isSystemAdministrator(USER_ID)).thenReturn(true);
         stubPublishedView();
+    }
+
+    @AfterEach
+    void clearSession() {
+        SecurityContextHolder.clearContext();
     }
 
     @SuppressWarnings("unchecked")
@@ -113,7 +121,9 @@ class PortalMainTableViewImportTest {
                         "restrict_to_involved_users", false)));
 
         when(jdbcTemplate.queryForList(contains("dw_main_table_view_access"), eq(VIEW_ID)))
-                .thenReturn(List.of());
+                .thenReturn(List.of(
+                        Map.of("target_type", "BUSINESS_UNIT", "target_id", "bu-1"),
+                        Map.of("target_type", "ROLE", "target_id", "role-1")));
 
         when(jdbcTemplate.query(contains("dw_main_table_view_fields"), any(RowMapper.class), eq(VIEW_ID)))
                 .thenAnswer(invocation -> {

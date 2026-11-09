@@ -4,7 +4,6 @@ import com.platform.common.functionunit.CatalogSnapshotReader;
 import com.platform.common.functionunit.FunctionUnitVersionException;
 import com.platform.common.i18n.I18nService;
 import com.workflow.client.AdminCenterClient;
-import com.workflow.client.DeveloperWorkstationEmailTemplateClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -24,7 +23,7 @@ class ConfiguredEmailVersionContextTest {
     private final ConfiguredEmailSender sender = sender();
 
     private ConfiguredEmailSender sender() {
-        var sender = new ConfiguredEmailSender(admin, mock(DeveloperWorkstationEmailTemplateClient.class),
+        var sender = new ConfiguredEmailSender(admin,
                 mock(EmailAttachmentResolver.class), mock(EmailSenderService.class),
                 mock(TextEnvironmentInterpolator.class), mock(I18nService.class));
         ReflectionTestUtils.setField(sender, "pinnedReleaseLookup", new com.workflow.component.PinnedReleaseLookup(jdbc));

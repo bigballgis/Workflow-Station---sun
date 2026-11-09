@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    :title="'Access Config - ' + (tableName || '')"
+    :title="`${t('form.titleAccessConfig')} - ${tableName || ''}`"
     width="720px"
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -11,14 +11,15 @@
         :closable="false"
         style="flex: 1; margin-right: 12px;"
       >
-        Configure which roles can access this table in User Portal.
+        {{ t('relationTable.access.hint') }}
       </el-alert>
       <el-button
+        v-if="!readOnly"
         type="primary"
         size="small"
         @click="openAddDialog"
       >
-        <el-icon><Plus /></el-icon>Add Role
+        <el-icon><Plus /></el-icon>{{ t('relationTable.access.addRole') }}
       </el-button>
     </div>
 
@@ -26,10 +27,10 @@
       v-loading="loading"
       :data="accessList"
       stripe
-      empty-text="No access configured"
+      :empty-text="t('relationTable.access.empty')"
     >
       <el-table-column
-        label="Role"
+        :label="t('form.labelRole')"
         min-width="180"
       >
         <template #default="{ row }">
@@ -37,7 +38,7 @@
         </template>
       </el-table-column>
       <el-table-column
-        label="Type"
+        :label="t('form.labelType')"
         width="130"
       >
         <template #default="{ row }">
@@ -50,7 +51,7 @@
         </template>
       </el-table-column>
       <el-table-column
-        label="Permission"
+        :label="t('relationTable.access.permission')"
         width="160"
       >
         <template #default="{ row }">
@@ -58,14 +59,15 @@
             v-model="row.permissionLevel"
             size="small"
             style="width: 100%;"
+            :disabled="readOnly"
             @change="handlePermissionLevelChange(row)"
           >
             <el-option
-              label="Read & Write"
+              :label="t('relationTable.access.readWrite')"
               value="READ_WRITE"
             />
             <el-option
-              label="Readonly"
+              :label="t('relationTable.access.readOnly')"
               value="READONLY"
             />
           </el-select>
@@ -73,7 +75,7 @@
       </el-table-column>
       <el-table-column
         prop="createdAt"
-        label="Created At"
+        :label="t('form.labelCreatedAt')"
         width="170"
       >
         <template #default="{ row }">
@@ -82,11 +84,12 @@
       </el-table-column>
       <el-table-column
         prop="createdBy"
-        label="Created By"
+        :label="t('form.labelCreatedBy')"
         width="120"
       />
       <el-table-column
-        label="Actions"
+        v-if="!readOnly"
+        :label="t('common.actions')"
         width="80"
         align="center"
       >
@@ -97,7 +100,7 @@
             size="small"
             @click="handleRemove(row)"
           >
-            Delete
+            {{ t('common.delete') }}
           </el-button>
         </template>
       </el-table-column>
@@ -105,14 +108,14 @@
 
     <template #footer>
       <el-button @click="emit('update:modelValue', false)">
-        Close
+        {{ t('common.close') }}
       </el-button>
     </template>
 
     <!-- Add Role Sub-Dialog -->
     <el-dialog
       v-model="showAddRole"
-      title="Add Role Access"
+      :title="t('form.titleAddRoleAccess')"
       width="560px"
       append-to-body
       @closed="resetAddForm"
@@ -122,13 +125,13 @@
         label-position="left"
         style="margin-bottom: 4px;"
       >
-        <el-form-item label="Permission">
+        <el-form-item :label="t('relationTable.access.permission')">
           <el-radio-group v-model="selectedPermissionLevel">
             <el-radio value="READ_WRITE">
-              Read &amp; Write
+              {{ t('relationTable.access.readWrite') }}
             </el-radio>
             <el-radio value="READONLY">
-              Readonly
+              {{ t('relationTable.access.readOnly') }}
             </el-radio>
           </el-radio-group>
         </el-form-item>
@@ -140,11 +143,11 @@
       >
         <!-- Tab 1: BU cascade + BU roles -->
         <el-tab-pane
-          label="BU Role"
+          :label="t('form.labelBuRole')"
           name="bu"
         >
           <p class="tab-hint">
-            Select a Business Unit, then choose one or more of its bound roles.
+            {{ t('relationTable.access.buHint') }}
           </p>
           <el-form
             label-width="auto"
@@ -152,7 +155,7 @@
             style="margin-top: 8px;"
           >
             <el-form-item
-              label="Business Unit"
+              :label="t('form.labelBusinessUnit')"
               required
             >
               <el-cascader
@@ -161,13 +164,13 @@
                 :props="buCascaderProps"
                 filterable
                 clearable
-                placeholder="Select BU"
+                :placeholder="t('form.placeholderSelectBu')"
                 style="width: 100%;"
                 @change="handleBuChange"
               />
             </el-form-item>
             <el-form-item
-              label="BU Role"
+              :label="t('form.labelBuRole')"
               required
             >
               <el-select
@@ -176,7 +179,7 @@
                 collapse-tags
                 collapse-tags-tooltip
                 filterable
-                placeholder="Select one or more roles"
+                :placeholder="t('relationTable.access.selectRoles')"
                 style="width: 100%;"
                 :loading="buRolesLoading"
                 :disabled="!selectedBuId"
@@ -194,11 +197,11 @@
 
         <!-- Tab 2: System / Unbounded roles -->
         <el-tab-pane
-          label="System Role"
+          :label="t('form.labelSystemRole')"
           name="system"
         >
           <p class="tab-hint">
-            All available system roles are pre-selected. Uncheck any you do not want to grant.
+            {{ t('relationTable.access.systemHint') }}
           </p>
           <div
             v-loading="rolesLoading"
@@ -206,7 +209,7 @@
           >
             <el-empty
               v-if="!rolesLoading && availableSystemRoles.length === 0"
-              description="All system roles already have access"
+              :description="t('relationTable.access.allSystemRolesGranted')"
               :image-size="40"
             />
             <el-checkbox-group
@@ -236,14 +239,14 @@
 
       <template #footer>
         <el-button @click="showAddRole = false">
-          Cancel
+          {{ t('common.cancel') }}
         </el-button>
         <el-button
           type="primary"
           :loading="adding"
           @click="handleAddRole"
         >
-          Confirm
+          {{ t('common.confirm') }}
         </el-button>
       </template>
     </el-dialog>
@@ -252,11 +255,19 @@
 
 <script setup lang="ts">
 import { watch, toRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
 import { useRelationTableAccessConfig } from '@/composables/modules/useRelationTableAccessConfig'
 
-const props = defineProps<{ modelValue: boolean; tableId?: number; tableName?: string }>()
+const props = defineProps<{
+  modelValue: boolean
+  tableId?: number
+  tableName?: string
+  /** A table the user may not change (D-47): grants are shown, not changed. */
+  readOnly?: boolean
+}>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
+const { t } = useI18n()
 
 const {
   loading, accessList, rolesLoading,

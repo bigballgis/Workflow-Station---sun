@@ -33,7 +33,7 @@ class ApiRestfulProperties {
             "/api/v1/admin/business-units",
             "/api/v1/admin/business-units/{id}",
             "/api/v1/admin/roles",
-            "/api/v1/admin/roles/{id}/permissions"
+            "/api/v1/admin/roles/{id}/holders"
         );
         Arbitrary<String> methods = Arbitraries.of("GET", "POST", "PUT", "DELETE");
         

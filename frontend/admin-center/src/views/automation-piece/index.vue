@@ -9,6 +9,7 @@
           <el-icon><Refresh /></el-icon>{{ t('common.refresh') }}
         </el-button>
         <el-upload
+          v-if="writable"
           :show-file-list="false"
           :auto-upload="false"
           accept=".tgz,.tar.gz"
@@ -196,6 +197,7 @@
                 <el-switch
                   v-else-if="col.field === 'disabled'"
                   :model-value="!row.disabled"
+                  :disabled="!writable"
                   :loading="togglingKey === row.name"
                   @change="(val: string | number | boolean) => handleToggle(row, val as boolean)"
                 />
@@ -226,6 +228,7 @@
                     {{ t('automationPiece.export') }}
                   </el-button>
                   <el-button
+                    v-if="writable"
                     link
                     type="danger"
                     size="small"
@@ -261,18 +264,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Download, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { formatDate } from '@/utils/format'
 import { useAutomationPiece } from '@/composables/modules/useAutomationPiece'
+import { canWrite } from '@/utils/permission'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
 import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 const { t } = useI18n()
+/** Import, enable / disable and delete are SYS_ADMIN's; Technical Leads and Auditors read and export (D-21). */
+const writable = computed(() => canWrite('automationPieces'))
 
 const {
   loading,

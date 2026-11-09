@@ -16,6 +16,8 @@ type BannerTask = {
   claimedByCurrentUser?: boolean
   canForceUnclaim?: boolean
   canReassign?: boolean
+  canTakeOver?: boolean
+  assigneeLostPortalEntry?: boolean
   assignee?: string
   assigneeName?: string
 }
@@ -39,6 +41,26 @@ describe('TaskClaimBanner', () => {
   it('stays out of the way for tasks that are not BU Role pool rows', () => {
     const w = mountBanner({ claimPoolTask: false, assignee: 'alice' })
     expect(w.find('[data-test="task-claim-banner"]').exists()).toBe(false)
+  })
+
+  it('shows the lost-entry flag and all three actions on a list of named people (D-17)', async () => {
+    const w = mountBanner({
+      claimPoolTask: false,
+      assignee: 'alice',
+      assigneeName: 'Alice',
+      assigneeLostPortalEntry: true,
+      canForceUnclaim: true,
+      canTakeOver: true,
+      canReassign: true,
+    })
+
+    expect(w.find('[data-test="task-claim-banner"]').exists()).toBe(true)
+    expect(w.find('[data-test="task-claim-banner-lost-entry"]').exists()).toBe(true)
+    expect(w.find('[data-test="task-force-unclaim-btn"]').exists()).toBe(true)
+    expect(w.find('[data-test="task-take-over-btn"]').exists()).toBe(true)
+    expect(w.find('[data-test="task-reassign-btn"]').exists()).toBe(true)
+    await w.find('[data-test="task-force-unclaim-btn"]').trigger('click')
+    expect(w.emitted('force-unclaim')).toHaveLength(1)
   })
 
   it('offers Claim while the request is still free', () => {
@@ -110,5 +132,33 @@ describe('TaskClaimBanner', () => {
     })
     await w.find('[data-test="task-reassign-btn"]').trigger('click')
     expect(w.emitted('reassign')).toHaveLength(1)
+  })
+
+  it('flags a holder who lost Portal entry and offers Take over to a pool member with entry', async () => {
+    const w = mountBanner({
+      claimPoolTask: true,
+      assignee: 'alice',
+      assigneeName: 'Alice Chen',
+      assigneeLostPortalEntry: true,
+      canTakeOver: true,
+      canForceUnclaim: true,
+      canReassign: true,
+    })
+
+    expect(w.find('[data-test="task-claim-banner-title"]').text()).toBe('task.claimHeldByOther:Alice Chen')
+    expect(w.find('[data-test="task-claim-banner-lost-entry"]').text()).toBe('task.assigneeLostPortalEntry')
+    expect(w.find('[data-test="task-claim-banner"]').text()).toContain('task.takeOverHint')
+    // The banner has room for every option the server granted.
+    expect(w.find('[data-test="task-force-unclaim-btn"]').exists()).toBe(true)
+    expect(w.find('[data-test="task-reassign-btn"]').exists()).toBe(true)
+    await w.find('[data-test="task-take-over-btn"]').trigger('click')
+    expect(w.emitted('take-over')).toHaveLength(1)
+  })
+
+  it('neither flags the holder nor offers Take over while the holder has Portal entry', () => {
+    const w = mountBanner({ claimPoolTask: true, assignee: 'alice', canForceUnclaim: true })
+
+    expect(w.find('[data-test="task-claim-banner-lost-entry"]').exists()).toBe(false)
+    expect(w.find('[data-test="task-take-over-btn"]').exists()).toBe(false)
   })
 })

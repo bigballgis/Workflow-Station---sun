@@ -18,7 +18,7 @@ import enLocale from '@form-create/designer/locale/en.js'
 import App from './App.vue'
 import router from './router'
 import i18n from './i18n'
-import { setUploadAuthRefresher } from '@platform-shared/upload/uploadAuthRefresh'
+import { setSessionRefresher } from '@platform-shared/auth/sessionRefresh'
 import { refreshToken } from '@/api/auth'
 import './styles/index.scss'
 import './styles/designer-validate-panel.scss'
@@ -58,6 +58,9 @@ import formCreateFactory from '@form-create/element-ui'
 // Force set HTML lang attribute to English
 document.documentElement.lang = 'en'
 
+// Before app.use(router): the first navigation's API calls may already need a refresh.
+setSessionRefresher(() => refreshToken())
+
 const app = createApp(App)
 
 // Register Element Plus icons
@@ -69,14 +72,6 @@ app.use(createPinia())
 app.use(router)
 app.use(ElementPlus)
 app.use(i18n)
-setUploadAuthRefresher(async () => {
-  try {
-    await refreshToken()
-    return true
-  } catch {
-    return false
-  }
-})
 // Set form-create designer to English locale
 FcDesigner.useLocale(enLocale)
 app.use(FcDesigner)

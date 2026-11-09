@@ -61,8 +61,7 @@ public final class BiRbacColumnSpec {
                 new ListColumnMeta.Option("AUDITOR", "role.auditorRole"),
                 new ListColumnMeta.Option("DEVELOPER", "role.developerRole"),
                 new ListColumnMeta.Option("BUSINESS", "role.businessRole"),
-                new ListColumnMeta.Option("BU_BOUNDED", "role.buBounded"),
-                new ListColumnMeta.Option("BU_UNBOUNDED", "role.buUnbounded")
+                new ListColumnMeta.Option("BU_BOUNDED", "role.buBounded")
         );
     }
 }

@@ -7,6 +7,7 @@ import com.portal.dto.TaskInfo;
 import com.portal.exception.PortalException;
 import com.portal.repository.BusinessUnitRepository;
 import com.portal.service.PortalWorkspaceAuthService;
+import com.portal.util.BuRolePoolTasks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -45,6 +46,12 @@ public class WorkspaceTaskFilterComponent {
     /**
      * Workspace BU filter applies to role-pool tasks only. Direct assignee/candidate tasks must remain visible
      * (e.g. rollback fallback assigned user-dev while BPMN still marks BU_ROLE + another BU id).
+     *
+     * <p>A claim-pool task whose pool names its role (a BPMN BU + Role node, an MI row assigned by role) shows only
+     * in the workspace of that pool, held or not (platform access model D-36). When the user holds that pool's pair
+     * in none of their workspaces — e.g. orphan repair assigned the task to them directly, or the row was transferred
+     * across business units — the task falls back to the identity rules below, so it is never stranded out of every
+     * workspace.</p>
      */
     public List<TaskInfo> filterFixedBuRoleTasksForActiveWorkspace(List<TaskInfo> tasks, String userId) {
         Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
@@ -55,26 +62,30 @@ public class WorkspaceTaskFilterComponent {
         // The JWT activeBusinessUnitId is a BU *id*, but BPMN businessUnitId is now a *code*
         // (code-based assignment). Convert id -> code so FIXED_BU_ROLE pool tasks aren't all hidden.
         String activeBu = resolveActiveBusinessUnitCode(normalizeBuId(activeBuOpt.get()));
-        // MI「按角色分派」任务是 workspace-scoped：仅当用户当前切换到的 role 恰是该任务分派的 role 时才可见。
-        // 先把 JWT active roleId 反查成 roleCode（单人角色也走 setAssignee，但仍算 role 分派，不能靠 assignee 放行）。
-        String activeRoleCode = resolveActiveRoleCode(userId);
+        List<WorkspacePair> held = heldPairs(userId);
+        WorkspacePair active = activePair(normalizeBuId(activeBuOpt.get()), held);
         List<TaskInfo> out = new ArrayList<>();
         for (TaskInfo t : tasks) {
             if (t == null) {
                 continue;
             }
-            // MI role-scoped gate（优先于 assignee/candidate 放行）：
-            // role 分派任务只在“切到该 role 的 workspace”时出现；active role 不匹配则隐藏，
-            // 即便当前用户是该任务的 assignee/candidate（单持有者角色也遵循此规则）。
-            if (isMiRoleScopedTask(t)) {
-                if (activeRoleCode != null && activeRoleCode.equalsIgnoreCase(t.getMiRoleCode().trim())) {
+            PoolPair pool = PoolPair.of(t);
+            if (pool != null) {
+                if (pool.matches(active)) {
                     out.add(t);
+                    continue;
                 }
-                continue;
+                if (held.stream().anyMatch(pool::matches)) {
+                    continue; // this pool belongs to another of the user's workspaces
+                }
             }
             if (isDirectAssigneeForPortalUser(t, userId, portalUsername)
                     || isCandidateForPortalUser(t, userId, portalUsername)) {
                 out.add(t);
+                continue;
+            }
+            // An MI row assigned by role shows through its pool or through the user's own identity on it, nothing else.
+            if (isMiRoleScopedTask(t)) {
                 continue;
             }
             if (!isWorkspaceScopedBuPoolSemantics(t)) {
@@ -94,17 +105,74 @@ public class WorkspaceTaskFilterComponent {
     }
 
     /**
-     * MI「按角色分派」任务（引擎从 ExtendedTaskInfo 透出 {@code miAssigneeMode=role} + {@code miRoleCode}）。
+     * MI「按角色分派」任务（引擎从 ExtendedTaskInfo 透出 {@code miAssigneeMode=role} + {@code miRoleCodes}）。
      * 这类任务是 workspace-scoped：仅在用户切到该 role 的 workspace 时可见（区别于「按人分派」任务全 workspace 可见）。
      */
     private static boolean isMiRoleScopedTask(TaskInfo t) {
         return t != null
                 && "role".equalsIgnoreCase(t.getMiAssigneeMode() == null ? null : t.getMiAssigneeMode().trim())
-                && t.getMiRoleCode() != null && !t.getMiRoleCode().isBlank();
+                && t.getMiRoleCodes() != null && !t.getMiRoleCodes().isEmpty();
+    }
+
+    /** One BU + Role the user holds; pools name the BU and role by id or by code, depending on when they were deployed. */
+    private record WorkspacePair(String buId, String buCode, String roleId, String roleCode) {}
+
+    /** The BU + Role a claim-pool task belongs to, as its BPMN node or its MI row names them; null when no role is named. */
+    private record PoolPair(String businessUnit, List<String> roles) {
+
+        static PoolPair of(TaskInfo t) {
+            if (isMiRoleScopedTask(t)) {
+                // A row assigned to several roles is the pool of all of them: any one held in the workspace matches.
+                return new PoolPair(blankToNull(t.getMiBusinessUnitCode()), t.getMiRoleCodes());
+            }
+            if (!BuRolePoolTasks.isClaimPoolAssigneeType(t.getBpmnAssigneeType())
+                    || t.getBpmnRoleIds() == null || t.getBpmnRoleIds().isEmpty()) {
+                return null;
+            }
+            return new PoolPair(blankToNull(t.getBpmnBusinessUnitId()), t.getBpmnRoleIds());
+        }
+
+        /** A pool without a named BU (MI rows without a BU field) matches on the role alone. */
+        boolean matches(WorkspacePair p) {
+            boolean bu = businessUnit == null || same(businessUnit, p.buId()) || same(businessUnit, p.buCode());
+            return bu && roles.stream().anyMatch(r -> same(r, p.roleId()) || same(r, p.roleCode()));
+        }
+
+        private static boolean same(String a, String b) {
+            return a != null && b != null && a.trim().equalsIgnoreCase(b.trim());
+        }
+    }
+
+    private List<WorkspacePair> heldPairs(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return List.of();
+        }
+        List<WorkspacePair> pairs = new ArrayList<>();
+        for (PortalWorkspaceAuthService.WorkspaceContextRow row : portalWorkspaceAuthService.listWorkspaceContexts(userId)) {
+            String buId = normalizeBuId(row.getBusinessUnitId());
+            pairs.add(new WorkspacePair(buId, resolveActiveBusinessUnitCode(buId),
+                    blankToNull(row.getRoleId()), blankToNull(row.getRoleCode())));
+        }
+        return pairs;
+    }
+
+    /** The session's workspace; its codes come from the matching UBR row (none left means a stale session). */
+    private WorkspacePair activePair(String activeBuId, List<WorkspacePair> held) {
+        String activeRoleId = SecurityContextUtils.getCurrentActiveRoleId().map(String::trim).orElse(null);
+        for (WorkspacePair p : held) {
+            if (activeBuId.equals(p.buId()) && activeRoleId != null && activeRoleId.equals(p.roleId())) {
+                return p;
+            }
+        }
+        return new WorkspacePair(activeBuId, resolveActiveBusinessUnitCode(activeBuId), activeRoleId, null);
+    }
+
+    private static String blankToNull(String raw) {
+        return raw == null || raw.isBlank() ? null : raw.trim();
     }
 
     /**
-     * 把 JWT active roleId 反查成 role code，用于和任务的 {@code miRoleCode} 比对。
+     * 把 JWT active roleId 反查成 role code，用于和 BU + Role 组合（委托目标等）比对。
      * 走 {@link PortalWorkspaceAuthService#listWorkspaceContexts}（用户的 UBR 上下文，含 roleId↔roleCode）。
      * 无 active role 或查不到对应 code 时返回 null（此时所有 MI role 任务都不匹配 → 一律隐藏，符合“未切到该 role 不可见”）。
      */

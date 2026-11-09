@@ -1,6 +1,7 @@
 package com.admin.list;
 
 import com.admin.enums.FunctionUnitStatus;
+import com.admin.repository.FunctionUnitRepository;
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
 import com.platform.common.list.ListFilterSql;
@@ -33,10 +34,20 @@ public final class FunctionUnitColumnSpec {
             THEN split_part(fu.version, '.', 3)::int ELSE 0 END DESC\
             """;
 
+    /**
+     * Team of a unit's code: the latest imported version row's team (platform access model §8.1), shown by name, or
+     * by code once the team no longer exists. Used to filter and sort the catalog by team.
+     */
+    static final String TEAM_SQL = "(SELECT COALESCE(vg.name, latest.team_code) FROM"
+            + " (SELECT team_code FROM sys_function_units t WHERE t.code = fu.code"
+            + " ORDER BY " + FunctionUnitRepository.LATEST_IMPORT_ORDER + " LIMIT 1) latest"
+            + " LEFT JOIN sys_virtual_groups vg ON vg.code = latest.team_code AND vg.type = 'DEVELOPER')";
+
     public static List<ListColumnMeta> columns() {
         return List.of(
                 ListColumnMeta.of("name", "common.name", Kind.TEXT),
                 ListColumnMeta.of("code", "common.code", Kind.TEXT),
+                ListColumnMeta.of("team", "functionUnit.team", Kind.TEXT),
                 ListColumnMeta.of("version", "functionUnit.version", Kind.TEXT),
                 ListColumnMeta.withOptions("status", "common.status", Kind.ENUM, statusOptions(false)),
                 ListColumnMeta.of("enabled", "common.enable", Kind.BOOLEAN),
@@ -49,6 +60,7 @@ public final class FunctionUnitColumnSpec {
                 ListColumnMeta.of("name", "common.name", Kind.TEXT),
                 ListColumnMeta.of("code", "common.code", Kind.TEXT),
                 ListColumnMeta.of("version", "functionUnit.version", Kind.TEXT),
+                ListColumnMeta.of("team", "functionUnit.team", Kind.TEXT),
                 ListColumnMeta.withOptions("status", "common.status", Kind.ENUM, statusOptions(true)),
                 ListColumnMeta.of("updatedAt", "common.updateTime", Kind.DATETIME),
                 ListColumnMeta.of("updatedBy", "common.updatedBy", Kind.USER)
@@ -88,6 +100,7 @@ public final class FunctionUnitColumnSpec {
         return switch (field) {
             case "name" -> "fu.name";
             case "code" -> "fu.code";
+            case "team" -> TEAM_SQL;
             case "version" -> "fu.version";
             case "status" -> "fu.status";
             case "enabled" -> "fu.enabled::text";

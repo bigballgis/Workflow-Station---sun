@@ -185,6 +185,10 @@ public class EmailSenderService {
             part.setFileName(attachment.name());
             part.setDataHandler(new DataHandler(new ByteArrayDataSource(decodeContent(attachment.content()),
                     "application/octet-stream")));
+            // An attachment is delivered byte for byte. Left to JavaMail, an all-ASCII file is sent 7bit and SMTP turns
+            // its bare LF line ends into CRLF (WP11b-4); base64 carries any content unchanged. Set after the data
+            // handler, which clears the transfer encoding.
+            part.setHeader("Content-Transfer-Encoding", "base64");
             multipart.addBodyPart(part);
         }
     }

@@ -81,7 +81,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { functionUnitApi, type DevGroupOption } from '@/api/functionUnit'
-import { ALL_GROUPS, getActiveGroupRaw, setActiveGroup, setMemberGroupIds } from '@/utils/devGroupContext'
+import { ALL_GROUPS, getActiveGroupRaw, setActiveGroup, setMyDevGroups } from '@/utils/devGroupContext'
 import { confirmUnsavedDesignerBeforeReload } from '@/composables/useUnsavedDesignerNavigation'
 
 const { t } = useI18n()
@@ -103,10 +103,16 @@ function formatOptionLabel(opt: DevGroupOption): string {
   return `${opt.name} (${t('devGroup.inactive')})`
 }
 
+// A disabled team is listed only to users who see every team (SYS_ADMIN / AUDITOR): they open it to see its
+// function units and move them elsewhere (platform access model D-09). Members never get it from the backend.
+function canOpen(opt: DevGroupOption): boolean {
+  return canSeeAll.value || isGroupActive(opt)
+}
+
 function isOptionDisabled(opt: DevGroupOption): boolean {
   if (opt.id === currentId.value) return true
   if (opt.id === ALL_GROUPS || opt.id === publicGroupId.value) return false
-  return !isGroupActive(opt)
+  return !canOpen(opt)
 }
 
 // Options shown in the header switcher: "All groups" (admin only), Public, and the user's teams.
@@ -167,19 +173,19 @@ async function resolveContext() {
     groups.value = res?.data?.groups ?? []
     canSeeAll.value = res?.data?.canSeeAllGroups === true
     publicGroupId.value = res?.data?.publicGroupId || null
-    setMemberGroupIds(res?.data?.memberGroupIds)
+    setMyDevGroups(groups.value, res?.data?.canWritePublic === true)
   } catch {
     groups.value = []
     canSeeAll.value = false
     publicGroupId.value = null
-    setMemberGroupIds([])
+    setMyDevGroups([], false)
     emit('ready')
     return
   }
 
   const stored = getActiveGroupRaw()
-  // Only ACTIVE teams (plus All/Public) are valid as the current workspace.
-  const validIds = new Set<string>(activeGroups.value.map(g => g.id))
+  // Teams the user may open (plus All/Public) are valid as the current workspace.
+  const validIds = new Set<string>(groups.value.filter(canOpen).map(g => g.id))
   if (canSeeAll.value) validIds.add(ALL_GROUPS)
   if (publicGroupId.value) validIds.add(publicGroupId.value)
 

@@ -28,12 +28,19 @@ public class VirtualGroupMemberInfo {
     private String businessUnitName;
     private String role;
     private Instant joinedAt;
+
+    /** MEMBER, or a team's DEVELOPER / TECH_LEAD list. */
+    private String listType;
+
+    /** Where this membership comes from: AD, MANUAL or both. */
+    private java.util.List<String> sources;
     
     public static VirtualGroupMemberInfo fromEntity(VirtualGroupMember member, com.platform.security.entity.VirtualGroup virtualGroup, com.platform.security.entity.User user) {
         VirtualGroupMemberInfo info = VirtualGroupMemberInfo.builder()
                 .id(member.getId())
                 .groupId(virtualGroup != null ? virtualGroup.getId() : member.getGroupId())
                 .userId(member.getUserId())
+                .listType(member.getListType())
                 .role("MEMBER") // 默认为成员，暂无角色字段
                 .joinedAt(member.getJoinedAt() != null ? member.getJoinedAt().atZone(java.time.ZoneId.systemDefault()).toInstant() : null)
                 .build();

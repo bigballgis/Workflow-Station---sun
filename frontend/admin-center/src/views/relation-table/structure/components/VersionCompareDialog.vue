@@ -1,17 +1,17 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    :title="'Version Compare - ' + (tableName || '')"
+    :title="`${t('form.titleVersionCompare')} - ${tableName || ''}`"
     width="950px"
     @update:model-value="emit('update:modelValue', $event)"
     @opened="init"
   >
     <div style="display: flex; gap: 16px; margin-bottom: 16px;">
       <div style="flex: 1;">
-        <span style="margin-right: 8px;">From:</span>
+        <span style="margin-right: 8px;">{{ t('form.labelFrom') }}:</span>
         <el-select
           v-model="leftVersion"
-          placeholder="Select version"
+          :placeholder="t('form.placeholderSelectVersion')"
           style="width: 200px;"
           @change="computeDiff"
         >
@@ -24,10 +24,10 @@
         </el-select>
       </div>
       <div style="flex: 1;">
-        <span style="margin-right: 8px;">To:</span>
+        <span style="margin-right: 8px;">{{ t('form.labelTo') }}:</span>
         <el-select
           v-model="rightVersion"
-          placeholder="Select version"
+          :placeholder="t('form.placeholderSelectVersion')"
           style="width: 200px;"
           @change="computeDiff"
         >
@@ -45,16 +45,16 @@
       v-loading="loading"
       :data="diffRows"
       stripe
-      empty-text="Select two versions to compare"
+      :empty-text="t('relationTable.compare.empty')"
       border
     >
       <el-table-column
-        label="Field Name"
+        :label="t('form.labelFieldName')"
         prop="fieldName"
         width="160"
       />
       <el-table-column
-        label="Change"
+        :label="t('form.labelChange')"
         width="100"
         align="center"
       >
@@ -64,33 +64,33 @@
             type="success"
             size="small"
           >
-            Added
+            {{ t('relationTable.compare.added') }}
           </el-tag>
           <el-tag
             v-else-if="row.change === 'removed'"
             type="danger"
             size="small"
           >
-            Removed
+            {{ t('relationTable.compare.removed') }}
           </el-tag>
           <el-tag
             v-else-if="row.change === 'modified'"
             type="warning"
             size="small"
           >
-            Modified
+            {{ t('relationTable.compare.modified') }}
           </el-tag>
           <el-tag
             v-else
             type="info"
             size="small"
           >
-            Unchanged
+            {{ t('relationTable.compare.unchanged') }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column
-        label="From"
+        :label="t('form.labelFrom')"
         min-width="300"
       >
         <template #default="{ row }">
@@ -99,9 +99,9 @@
             :style="row.change === 'removed' ? 'color: #F56C6C;' : ''"
           >
             {{ row.left.dataType }}{{ row.left.length ? '(' + row.left.length + ')' : '' }}
-            {{ row.left.nullable ? ', nullable' : ', NOT NULL' }}
+            {{ row.left.nullable ? ', ' + t('relationTable.compare.nullable') : ', NOT NULL' }}
             {{ row.left.isPrimaryKey ? ', PK' : '' }}
-            {{ row.left.defaultValue ? ', default=' + row.left.defaultValue : '' }}
+            {{ row.left.defaultValue ? ', ' + t('relationTable.compare.defaultValue', { value: row.left.defaultValue }) : '' }}
             {{ row.left.displayName ? ' — ' + row.left.displayName : '' }}
           </span>
           <span
@@ -111,7 +111,7 @@
         </template>
       </el-table-column>
       <el-table-column
-        label="To"
+        :label="t('form.labelTo')"
         min-width="300"
       >
         <template #default="{ row }">
@@ -120,9 +120,9 @@
             :style="row.change === 'added' ? 'color: #67C23A;' : ''"
           >
             {{ row.right.dataType }}{{ row.right.length ? '(' + row.right.length + ')' : '' }}
-            {{ row.right.nullable ? ', nullable' : ', NOT NULL' }}
+            {{ row.right.nullable ? ', ' + t('relationTable.compare.nullable') : ', NOT NULL' }}
             {{ row.right.isPrimaryKey ? ', PK' : '' }}
-            {{ row.right.defaultValue ? ', default=' + row.right.defaultValue : '' }}
+            {{ row.right.defaultValue ? ', ' + t('relationTable.compare.defaultValue', { value: row.right.defaultValue }) : '' }}
             {{ row.right.displayName ? ' — ' + row.right.displayName : '' }}
           </span>
           <span
@@ -135,7 +135,7 @@
 
     <template #footer>
       <el-button @click="emit('update:modelValue', false)">
-        Close
+        {{ t('common.close') }}
       </el-button>
     </template>
   </el-dialog>
@@ -143,6 +143,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   relationTableStructureApi,
   type RelationTableVersionResponse
@@ -177,6 +178,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
 }>()
 
+const { t } = useI18n()
 const loading = ref(false)
 const versions = ref<RelationTableVersionResponse[]>([])
 const leftVersion = ref<number | null>(null)

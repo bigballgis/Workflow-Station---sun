@@ -113,7 +113,6 @@ class PortalMainTableViewSelectDisplayTest {
         when(accessResolver.canUserSeeView(any(), any())).thenReturn(true);
         when(functionUnitAccessComponent.canAccessFunctionUnit(any(), any())).thenReturn(true);
         when(functionUnitAccessComponent.isFunctionUnitEnabled(any())).thenReturn(true);
-        when(functionUnitAccessComponent.isSystemAdministrator(any())).thenReturn(true);
         when(rowQueryComponent.query(any())).thenReturn(new MainTableViewRowQueryComponent.Page(
                 List.of(ProcessInstance.builder()
                         .id("pi-1")

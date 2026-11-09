@@ -1,5 +1,6 @@
 package com.workflow.component;
 
+import com.platform.security.service.PortalEntryService;
 import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.response.TaskAssignmentResult;
 import com.workflow.entity.ExtendedTaskInfo;
@@ -64,6 +65,10 @@ class TaskActionServiceForceUnclaimTest {
     private TaskOrphanRepairService taskOrphanRepairService;
     @Mock
     private UserPermissionService userPermissionService;
+    @Mock
+    private TaskHoldingResolver taskHoldingResolver;
+    @Mock
+    private PortalEntryService portalEntryService;
 
     @InjectMocks
     private TaskClaimSupport taskClaimSupport;
@@ -127,6 +132,20 @@ class TaskActionServiceForceUnclaimTest {
     }
 
     @Test
+    @DisplayName("Once the holder lost Portal entry, a pool member with entry may release the task (D-07)")
+    void poolMemberReleasesTaskOfHolderWhoLostEntry() {
+        stubBpmnClaimPool(BUSINESS_UNIT_ID, ROLE_ID);
+        when(adminCenterClient.canForceUnclaim(ACTOR_ID, TASK_ID, BUSINESS_UNIT_ID, List.of(ROLE_ID)))
+                .thenReturn(false);
+        when(taskHoldingResolver.mayTakeOverFromLostHolder(any(), eq(ACTOR_ID))).thenReturn(true);
+
+        TaskAssignmentResult result = taskClaimSupport.unclaimTask(TASK_ID, ACTOR_ID);
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(taskService).unclaim(TASK_ID);
+    }
+
+    @Test
     @DisplayName("Admin-center evaluate failure is fail-closed (client returns false → reject)")
     void adminCenterFailureFailsClosed() {
         stubBpmnClaimPool(BUSINESS_UNIT_ID, ROLE_ID);
@@ -146,6 +165,38 @@ class TaskActionServiceForceUnclaimTest {
         verify(taskService).unclaim(TASK_ID);
         verify(taskOrphanRepairService).restoreBuRoleClaimPool(any());
         verify(adminCenterClient, never()).canForceUnclaim(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("D-59: the holder unclaiming a claimed row ends its single-task delegation")
+    void holderUnclaimEndsTheDelegationOfAClaimedRow() {
+        ExtendedTaskInfo row = ExtendedTaskInfo.builder().taskId(TASK_ID).processInstanceId(PROCESS_INSTANCE_ID)
+                .assignmentType(AssignmentType.CANDIDATE_USERS).assignmentTarget(HOLDER_ID)
+                .claimedBy(HOLDER_ID).status("CLAIMED").isDeleted(false).build();
+        row.delegateTask("deputy", HOLDER_ID, "leave");
+        when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID)).thenReturn(Optional.of(row));
+
+        assertThat(taskClaimSupport.unclaimTask(TASK_ID, HOLDER_ID).isSuccess()).isTrue();
+
+        assertThat(row.isDelegated()).isFalse();
+        assertThat(row.getClaimedBy()).isNull();
+        verify(extendedTaskInfoRepository).save(row);
+    }
+
+    @Test
+    @DisplayName("D-59: releasing a held task whose row is not claimed still ends the delegation and saves it")
+    void releaseEndsTheDelegationOfARowThatIsNotClaimed() {
+        ExtendedTaskInfo row = ExtendedTaskInfo.builder().taskId(TASK_ID).processInstanceId(PROCESS_INSTANCE_ID)
+                .assignmentType(AssignmentType.USER).assignmentTarget(HOLDER_ID)
+                .status("ASSIGNED").isDeleted(false).build();
+        row.delegateTask("deputy", HOLDER_ID, "leave");
+        when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID)).thenReturn(Optional.of(row));
+
+        assertThat(taskClaimSupport.unclaimTask(TASK_ID, HOLDER_ID).isSuccess()).isTrue();
+
+        assertThat(row.isDelegated()).isFalse();
+        verify(extendedTaskInfoRepository).save(row);
+        verify(taskService).unclaim(TASK_ID);
     }
 
     @Test
@@ -181,6 +232,10 @@ class TaskActionServiceForceUnclaimTest {
     @Test
     @DisplayName("Missing BPMN BU falls back to process variable before evaluate")
     void missingBpmnBuUsesProcessVariable() {
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "assigneeType")).thenReturn("BU_ROLE");
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "assigneeValue")).thenReturn(null);
         when(bpmnActionParser.getUserTaskExtensionPropertyValue(
                 PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "businessUnitId")).thenReturn(" ");
         when(bpmnActionParser.getUserTaskExtensionPropertyValue(
@@ -197,6 +252,10 @@ class TaskActionServiceForceUnclaimTest {
     }
 
     private void stubBpmnClaimPool(String businessUnitId, String roleId) {
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "assigneeType")).thenReturn("BU_ROLE");
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "assigneeValue")).thenReturn(null);
         when(bpmnActionParser.getUserTaskExtensionPropertyValue(
                 PROCESS_DEFINITION_ID, TASK_DEFINITION_KEY, "businessUnitId")).thenReturn(businessUnitId);
         when(bpmnActionParser.getUserTaskExtensionPropertyValue(

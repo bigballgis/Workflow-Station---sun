@@ -69,7 +69,7 @@ sequenceDiagram
     WE-->>UP: result; UP updates up_process_instance variables
 
     Note over WE: PROCESS_COMPLETED (after COMMIT)
-    WE->>UP: async POST /api/portal/processes/{id}/complete<br/>+X-Internal-Service-Token (ProcessCompletionListener.java:73)
+    WE->>UP: async POST /api/portal/processes/{id}/complete<br/>+X-Service-Token = service.internal-token (ProcessCompletionListener)
     UP->>UP: up_process_instance → COMPLETED, lastActivityName
 
     UPF->>UP: History views

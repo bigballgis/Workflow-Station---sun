@@ -168,8 +168,14 @@ public class ApproverService {
     private void validateTargetExists(ApproverTargetType targetType, String targetId) {
         switch (targetType) {
             case VIRTUAL_GROUP:
-                if (!virtualGroupRepository.existsById(targetId)) {
-                    throw new VirtualGroupNotFoundException(targetId);
+                String groupType = virtualGroupRepository.findById(targetId)
+                        .orElseThrow(() -> new VirtualGroupNotFoundException(targetId))
+                        .getType();
+                // Approvers admit people to Portal access groups only; SYSTEM groups and team lists are kept by
+                // System Administrators (platform access model §5.2, §5.3, §5.5).
+                if (!"CUSTOM".equals(groupType)) {
+                    throw new AdminBusinessException("APPROVER_CUSTOM_GROUP_ONLY",
+                            i18nService.getMessage("admin.approver.custom_group_only"));
                 }
                 break;
             case BUSINESS_UNIT:

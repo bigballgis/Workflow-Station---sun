@@ -52,10 +52,6 @@
             value="BU_BOUNDED"
           />
           <el-option
-            :label="t('role.buUnbounded')"
-            value="BU_UNBOUNDED"
-          />
-          <el-option
             :label="t('role.adminRole')"
             value="ADMIN"
           />
@@ -241,6 +237,7 @@
     <RoleFormDialog
       v-model="formDialogVisible"
       :role="currentRole"
+      :references="currentReferences"
       @success="fetchRoles"
     />
     <RoleMembersDialog
@@ -276,6 +273,7 @@ const {
   formDialogVisible,
   membersDialogVisible,
   currentRole,
+  currentReferences,
   fetchRoles,
   handleSearch,
   handleReset,

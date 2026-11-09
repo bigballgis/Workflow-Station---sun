@@ -67,6 +67,19 @@ public class RelationTableFunctionUnitResolver {
                 .collect(Collectors.toMap(FunctionUnit::getId, Function.identity()));
     }
 
+    /** The code of every linked unit, a null for a link whose catalog row is gone; empty for a Common table. */
+    public List<String> linkedCodes(List<RelationTableFunctionUnit> links, Map<String, FunctionUnit> functionUnitsById) {
+        if (links == null || links.isEmpty()) {
+            return List.of();
+        }
+        List<String> codes = new java.util.ArrayList<>(links.size());
+        for (RelationTableFunctionUnit link : links) {
+            FunctionUnit unit = functionUnitsById.get(link.getFunctionUnitId());
+            codes.add(unit == null ? null : unit.getCode());
+        }
+        return codes;
+    }
+
     public List<FunctionUnit> resolve(List<RelationTableFunctionUnit> links, Map<String, FunctionUnit> functionUnitsById) {
         if (links == null || links.isEmpty()) {
             return List.of();

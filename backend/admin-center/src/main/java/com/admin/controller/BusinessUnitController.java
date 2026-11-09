@@ -1,5 +1,6 @@
 package com.admin.controller;
 
+import com.admin.component.BusinessUnitReferenceFinder;
 import com.admin.component.OrganizationManagerComponent;
 import com.admin.dto.request.BusinessUnitCreateRequest;
 import com.admin.dto.request.BusinessUnitMoveRequest;
@@ -7,6 +8,9 @@ import com.admin.dto.request.BusinessUnitUpdateRequest;
 import com.admin.dto.response.BusinessUnitResult;
 import com.admin.dto.response.BusinessUnitTree;
 import com.admin.dto.response.PageResult;
+import com.admin.dto.response.ReferenceNotice;
+import com.admin.exception.BusinessUnitNotFoundException;
+import com.admin.repository.BusinessUnitRepository;
 import com.admin.dto.response.UserInfo;
 import com.admin.repository.UserRepository;
 import com.admin.service.UserBusinessUnitService;
@@ -21,6 +25,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 业务单元控制器（原组织架构控制器）
@@ -29,11 +35,14 @@ import java.util.Map;
 @RequestMapping("/business-units")
 @RequiredArgsConstructor
 @Tag(name = "业务单元管理", description = "业务单元的创建、查询、更新、删除等操作")
+@AdminAccess(value = AdminAudience.WORKSTATION, services = true)
 public class BusinessUnitController {
     
     private final OrganizationManagerComponent organizationManager;
     private final UserRepository userRepository;
     private final UserBusinessUnitService userBusinessUnitService;
+    private final BusinessUnitRepository businessUnitRepository;
+    private final BusinessUnitReferenceFinder businessUnitReferenceFinder;
     
     @GetMapping
     @Operation(summary = "获取业务单元列表", description = "获取业务单元平铺列表，可按 parentId 或 status 筛选")
@@ -51,6 +60,7 @@ public class BusinessUnitController {
         return ResponseEntity.ok(tree);
     }
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PostMapping
     @Operation(summary = "创建业务单元", description = "创建新业务单元")
     public ResponseEntity<BusinessUnitResult> createBusinessUnit(
@@ -66,6 +76,7 @@ public class BusinessUnitController {
         return ResponseEntity.ok(unit);
     }
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PutMapping("/{unitId}")
     @Operation(summary = "更新业务单元信息", description = "更新业务单元的基本信息")
     public ResponseEntity<Void> updateBusinessUnit(
@@ -75,6 +86,7 @@ public class BusinessUnitController {
         return ResponseEntity.ok().build();
     }
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @PutMapping("/{unitId}/move")
     @Operation(summary = "移动业务单元", description = "调整业务单元的层级位置")
     public ResponseEntity<Void> moveBusinessUnit(
@@ -84,6 +96,7 @@ public class BusinessUnitController {
         return ResponseEntity.ok().build();
     }
     
+    @AdminAccess(AdminAudience.LEAD_WRITE)
     @DeleteMapping("/{unitId}")
     @Operation(summary = "删除业务单元", description = "删除指定业务单元（需要先移除子业务单元和成员）")
     public ResponseEntity<Void> deleteBusinessUnit(@PathVariable String unitId) {
@@ -91,6 +104,15 @@ public class BusinessUnitController {
         return ResponseEntity.ok().build();
     }
     
+    /** Function units and other places that use the unit, shown before it is changed or deleted (§8.3). */
+    @AdminAccess(AdminAudience.LEAD_WRITE)
+    @GetMapping("/{unitId}/references")
+    @Operation(summary = "Where the business unit is used (notice before change or delete)")
+    public ResponseEntity<ReferenceNotice> getBusinessUnitReferences(@PathVariable String unitId) {
+        return ResponseEntity.ok(businessUnitReferenceFinder.findForNotice(businessUnitRepository.findById(unitId)
+                .orElseThrow(() -> new BusinessUnitNotFoundException(unitId))));
+    }
+
     @GetMapping("/{unitId}/children")
     @Operation(summary = "获取子业务单元", description = "获取指定业务单元的直接子业务单元")
     public ResponseEntity<List<BusinessUnitTree>> getChildBusinessUnits(@PathVariable String unitId) {
@@ -126,6 +148,7 @@ public class BusinessUnitController {
         return ResponseEntity.ok(results);
     }
     
+    @AdminAccess(value = AdminAudience.SYS_ADMIN, services = true)
     @PostMapping("/{unitId}/members")
     @Operation(summary = "添加成员", description = "将用户添加到业务单元")
     public ResponseEntity<Map<String, Object>> addMember(
@@ -136,6 +159,8 @@ public class BusinessUnitController {
         return ResponseEntity.ok(Map.of("success", true));
     }
     
+    // No backend caller since the portal stopped removing whole-unit members (WP2): SYS_ADMIN only.
+    @AdminAccess(AdminAudience.SYS_ADMIN)
     @DeleteMapping("/{unitId}/members/{userId}")
     @Operation(summary = "移除成员", description = "从业务单元移除用户")
     public ResponseEntity<Void> removeMember(

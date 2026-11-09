@@ -82,8 +82,18 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
         String[] requiredPermissions = annotation.value();
         RequireDeveloperPermission.Mode mode = annotation.mode();
         
-        boolean hasPermission = checkPermissions(userId, requiredPermissions, mode);
-        
+        boolean hasPermission;
+        try {
+            hasPermission = checkPermissions(userId, requiredPermissions, mode);
+        } catch (DeveloperPermissionUnavailableException e) {
+            log.error("Developer permissions unavailable for user {}: {}", userId, e.getMessage());
+            response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"error\":\"PERMISSIONS_UNAVAILABLE\",\"message\":\""
+                    + i18nService.getMessage("auth.permissions_unavailable") + "\"}");
+            return false;
+        }
+
         if (!hasPermission) {
             log.warn("User {} does not have required permissions: {}", userId, Arrays.toString(requiredPermissions));
             response.setStatus(HttpStatus.FORBIDDEN.value());

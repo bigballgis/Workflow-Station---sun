@@ -30,5 +30,10 @@ public class ChangeHistoryRecord {
     private String changeType;
     private String subTableName;
     private String rowIdentifier;
+    /**
+     * Why the assignment changed: {@code POOL_MEMBERSHIP_LOST}, {@code ASSIGNEE_DEPARTED} (system), or
+     * {@code HOLDER_CHANGED} on a {@code DELEGATION_ENDED} row (user or system); null otherwise.
+     */
+    private String reason;
     private boolean concurrent;
 }

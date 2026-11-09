@@ -121,7 +121,7 @@ public class VirtualGroupHelper {
         }
         
         log.debug("Getting member count for virtual group: {}", virtualGroupId);
-        return memberRepository.countByGroupId(virtualGroupId);
+        return memberRepository.countDistinctUsersByGroupId(virtualGroupId);
     }
     
     /**

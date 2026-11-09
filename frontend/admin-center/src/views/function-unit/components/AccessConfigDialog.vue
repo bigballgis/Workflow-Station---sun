@@ -31,6 +31,7 @@
         </template>
       </el-alert>
       <el-button
+        v-if="!readOnly"
         type="primary"
         size="small"
         @click="openAddDialog"
@@ -81,6 +82,7 @@
         width="120"
       />
       <el-table-column
+        v-if="!readOnly"
         label="Actions"
         width="80"
         align="center"
@@ -231,7 +233,13 @@ import { Plus } from '@element-plus/icons-vue'
 import { roleTypeDisplayLabel } from '@/utils/format'
 import { useFunctionUnitAccessConfig } from '@/composables/modules/useFunctionUnitAccessConfig'
 
-const props = defineProps<{ modelValue: boolean; functionUnitId?: string; functionUnitName?: string }>()
+const props = defineProps<{
+  modelValue: boolean
+  functionUnitId?: string
+  functionUnitName?: string
+  /** A unit of a team the user does not lead (or an Auditor): grants are shown, not changed. */
+  readOnly?: boolean
+}>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const {

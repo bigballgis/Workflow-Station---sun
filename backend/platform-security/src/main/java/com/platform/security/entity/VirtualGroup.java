@@ -28,7 +28,13 @@ import java.util.Set;
 @AllArgsConstructor
 @EqualsAndHashCode(of = "id")
 public class VirtualGroup {
-    
+
+    /** Id of Public, the reserved team without lists (platform access model §6.4). */
+    public static final String PUBLIC_TEAM_ID = "vg-dev-public";
+
+    /** Code of System Administrators, the SYSTEM group whose fixed binding grants SYS_ADMIN (§5.2). */
+    public static final String SYSTEM_ADMINISTRATORS_CODE = "SYSTEM_ADMINISTRATORS";
+
     @Id
     @Column(length = 64)
     private String id;
@@ -53,10 +59,16 @@ public class VirtualGroup {
     private String ruleExpression;
     
     /**
-     * AD Group name for Active Directory integration
+     * AD group synced into the members (SYSTEM / CUSTOM) or into the Developer list (DEVELOPER team).
      */
     @Column(name = "ad_group", length = 100)
     private String adGroup;
+
+    /**
+     * DEVELOPER teams only: AD group synced into the Technical Lead list.
+     */
+    @Column(name = "tech_lead_ad_group", length = 100)
+    private String techLeadAdGroup;
     
     @Column(nullable = false, length = 20)
     @Builder.Default
@@ -88,5 +100,15 @@ public class VirtualGroup {
      */
     public boolean isSystem() {
         return "SYSTEM".equals(type);
+    }
+
+    /** Public, the reserved team without lists. */
+    public boolean isPublicTeam() {
+        return PUBLIC_TEAM_ID.equals(id);
+    }
+
+    /** System Administrators, which must always keep an active member. */
+    public boolean isSystemAdministrators() {
+        return "SYSTEM".equals(type) && SYSTEM_ADMINISTRATORS_CODE.equals(code);
     }
 }

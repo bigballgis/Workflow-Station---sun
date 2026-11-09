@@ -17,14 +17,14 @@ spring:
     show-sql: true
 
 jwt:
-  secret: ${JWT_SECRET:dev-256-bit-secret-key-for-jwt-signing-development-environment-only}
+  secret: ${JWT_SECRET}
 
 platform:
   security:
     jwt:
-      secret: ${JWT_SECRET:dev-256-bit-secret-key-for-jwt-signing-development-environment-only}
+      secret: ${JWT_SECRET}
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:dev-32-byte-aes-256-secret-key!!}
+    secret-key: ${ENCRYPTION_SECRET_KEY}
 
 logging:
   level:

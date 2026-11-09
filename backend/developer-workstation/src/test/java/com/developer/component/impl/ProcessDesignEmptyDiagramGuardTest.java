@@ -8,6 +8,7 @@ import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.developer.security.WorkspaceRouteOwnership;
 import com.developer.util.XmlEncodingUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -83,6 +84,9 @@ class ProcessDesignEmptyDiagramGuardTest {
     @Mock
     private ActionDefinitionRepository actionDefinitionRepository;
 
+    @Mock
+    private WorkspaceRouteOwnership routeOwnership;
+
     private ProcessDesignComponentImpl component;
 
     @BeforeEach
@@ -104,6 +108,8 @@ class ProcessDesignEmptyDiagramGuardTest {
                 new ProcessSimulationHelper(tableDefinitionRepository),
                 new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null),
                 null,
+                null,
+                new ProcessBpmnEmailReferenceGuard(routeOwnership, null),
                 null);
     }
 

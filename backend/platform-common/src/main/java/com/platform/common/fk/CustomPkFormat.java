@@ -12,7 +12,7 @@ import java.util.Random;
 
 /**
  * Custom PK template: {@code {DATETIME:pattern}}, {@code {SEQNUM:n}}, {@code {RANDSTRING:n}}.
- * {@code DATETIME} uses Asia/Shanghai (same zone as table audit fields).
+ * {@code DATETIME} uses Asia/Hong_Kong (same zone as table audit fields).
  * {@code SEQNUM} may reset daily or monthly when {@code resetPeriod} is set.
  */
 public final class CustomPkFormat {

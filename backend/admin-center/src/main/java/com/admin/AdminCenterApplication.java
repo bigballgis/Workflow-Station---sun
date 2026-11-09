@@ -31,7 +31,7 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),
         // 排除platform-security中不需要的服务（它们依赖platform-security自己的repository和config）
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.service\\.impl\\.(?!UserRoleServiceImpl|JwtTokenServiceImpl).*"),
-        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.config\\.(?!JwtProperties).*"),
+        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.config\\.(?!JwtProperties|RequiredConnectionSecrets).*"),
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.controller\\..*"),
         // 排除 AuditAspect，由 PlatformCommonConfiguration 通过 @Bean 创建
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.platform.common.audit.AuditAspect.class)
@@ -47,7 +47,7 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
 public class AdminCenterApplication {
 
     public static void main(String[] args) {
-        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Hong_Kong"));
         SpringApplication.run(AdminCenterApplication.class, args);
     }
 }

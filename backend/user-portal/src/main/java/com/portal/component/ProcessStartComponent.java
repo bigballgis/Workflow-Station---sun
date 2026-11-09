@@ -612,12 +612,17 @@ public class ProcessStartComponent {
         outcome.initiatorTaskDefKeyForHistory = taskDefKey != null ? taskDefKey.toString() : null;
         log.info("Auto-completing first task: {} for process: {}", taskId, flowableProcessInstanceId);
 
-        // Claim task first (set assignee)
-        Optional<Map<String, Object>> claimResult = workflowEngineClient.claimTask(taskId, userId);
-        if (claimResult.isPresent()) {
-            log.info("First task claimed successfully: {} by user: {}", taskId, userId);
-        } else {
-            log.warn("Failed to claim first task: {}, trying to complete anyway", taskId);
+        // Claim task first (set assignee); completing is tried even when the engine refuses the claim.
+        try {
+            Optional<Map<String, Object>> claimResult = workflowEngineClient.claimTask(taskId, userId);
+            if (claimResult.isPresent()) {
+                log.info("First task claimed successfully: {} by user: {}", taskId, userId);
+            } else {
+                log.warn("Failed to claim first task: {}, trying to complete anyway", taskId);
+            }
+        } catch (PortalException e) {
+            log.warn("Engine refused to claim first task {} ({}): {}; trying to complete anyway",
+                    taskId, e.getCode(), e.getMessage());
         }
 
         Object firstTaskDefKeyObj = firstTask.get("taskDefinitionKey");

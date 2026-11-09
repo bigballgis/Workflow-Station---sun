@@ -41,7 +41,6 @@ public class FunctionUnitContentComponent {
     private final FunctionUnitContentRepository contentRepository;
     private final JdbcTemplate jdbcTemplate;
     private final FunctionUnitLookup functionUnitLookup;
-    private final FormTableBindingLoader bindingLoader;
     private final ObjectMapper objectMapper;
 
     @org.springframework.beans.factory.annotation.Autowired

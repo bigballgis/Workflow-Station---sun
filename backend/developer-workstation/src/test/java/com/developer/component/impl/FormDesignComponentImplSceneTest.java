@@ -58,6 +58,7 @@ class FormDesignComponentImplSceneTest {
     @Mock private SubTableViewService subTableViewService;
     @Mock private FormTableBindingUniquenessGuard formTableBindingUniquenessGuard;
     @Mock private OwnerFieldFormReconciler ownerFieldFormReconciler;
+    @Mock private com.developer.security.WorkspaceRouteOwnership routeOwnership;
 
     @InjectMocks private FormDesignComponentImpl component;
 

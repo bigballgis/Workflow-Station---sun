@@ -3,6 +3,7 @@ package com.developer.service.impl;
 import com.developer.exception.AiGenerationException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.security.SsrfGuardedHttpClient;
 import com.platform.common.security.SsrfProtection;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +14,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.ClientHttpResponse;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.ResponseErrorHandler;
@@ -21,6 +21,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -95,11 +96,11 @@ public class AiGatewayClient {
 
     @PostConstruct
     void init() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         int timeoutMs = timeoutSeconds * 1000;
-        factory.setConnectTimeout(timeoutMs);
-        factory.setReadTimeout(timeoutMs);
-        this.restTemplate = new RestTemplate(factory);
+        // Every connection resolves the gateway host through the SSRF check and connects to the checked addresses:
+        // the start-up validation below is not undone by a later DNS answer (rebinding).
+        this.restTemplate = new RestTemplate(SsrfGuardedHttpClient.requestFactory(
+                allowedHosts(), Duration.ofMillis(timeoutMs), Duration.ofMillis(timeoutMs)));
         // 4xx/5xx 的响应体要交给 AiResponseParser 提取 gateway 的错误文案，
         // 所以这里不让 RestTemplate 自己抛——状态码原样带出去，由 parser 显式失败。
         this.restTemplate.setErrorHandler(new ResponseErrorHandler() {

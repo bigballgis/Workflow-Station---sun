@@ -54,8 +54,6 @@ public class LoginResponse {
          */
         private String portalAccessMode;
         private boolean hasAvatar;
-        /** True when the user holds SYS_ADMIN. Not part of the portal session role list. */
-        private boolean systemAdministrator;
     }
 
     @Data

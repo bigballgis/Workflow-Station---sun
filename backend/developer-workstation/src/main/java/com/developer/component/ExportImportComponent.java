@@ -19,9 +19,10 @@ public interface ExportImportComponent {
      * 同名不存在 → 新建；同名已存在 → 加一个版本（快照现有内容后替换为导入包内容）。
      * @param file ZIP文件
      * @param changeLog 同名加版本时写入版本记录的变更说明，可空
+     * @param targetGroupId 新功能单元的 Workspace，只用于不带团队的旧包，可空
      * @return 导入结果
      */
-    Map<String, Object> importFunctionUnit(MultipartFile file, String changeLog);
+    Map<String, Object> importFunctionUnit(MultipartFile file, String changeLog, String targetGroupId);
     
     /**
      * 验证导入包

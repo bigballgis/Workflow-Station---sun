@@ -1,3 +1,4 @@
+import type { ReferenceNotice } from '@/types/referenceNotice'
 import { get, post, put, del } from './request'
 import type { Role } from './role'
 
@@ -85,6 +86,9 @@ export const businessUnitApi = {
   
   // 删除业务单元
   delete: (id: string) => del<void>(`/business-units/${id}`),
+
+  /** Function units and other places that use the business unit; shown before a change or delete (notice only). */
+  getReferences: (id: string) => get<ReferenceNotice>(`/business-units/${id}/references`),
   
   // 获取业务单元成员
   getMembers: (id: string, params?: { page?: number; size?: number }) => 

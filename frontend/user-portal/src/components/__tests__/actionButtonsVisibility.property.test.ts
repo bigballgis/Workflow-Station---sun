@@ -43,7 +43,7 @@ function checkRoleAccess(allowedRoles: string[] | undefined, userRoles: string[]
     allowedRoles && allowedRoles.length > 0
       ? JSON.stringify({ allowedRoles })
       : '{}'
-  return isActionVisibleForSession(configJson, userRoles, false)
+  return isActionVisibleForSession(configJson, userRoles)
 }
 
 function isActionVisible(

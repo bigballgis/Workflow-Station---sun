@@ -48,8 +48,10 @@
 	Target PostgreSQL schema for init-scripts. When omitted, the script tries to parse
 	`currentSchema` from `SPRING_DATASOURCE_URL`; otherwise defaults to `public`.
 .PARAMETER IncludeDemoData
-	When used together with -InitializeDatabase, also run the destructive demo seed steps
-	from init-database.ps1. By default IKP initialization skips demo data.
+	When used together with -InitializeDatabase, initialize like the Docker dev init instead (init-database.ps1
+	without -SkipDemoData): demo function units, E2E users and developer as the initial System Administrator.
+	By default IKP initialization is the k8s init (deploy/k8s/init-data): no demo data, admin as the initial
+	System Administrator.
 .PARAMETER ForceDatabaseInitialization
 	Run init-database.ps1 even if the marker table already exists in the target schema.
 .EXAMPLE

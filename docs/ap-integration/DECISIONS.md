@@ -732,6 +732,7 @@ connection 预检按目标 workspace 查（AP 的 `app_connection` 是 per-proje
 ① **FR-B15 反转**（FR-B23）——flow 既已按 workspace 隔离，当初把 Automation 排除在只读兜底之外的
 理由（会看到全平台 flow）不复存在；无能力角色的团队成员现在可只读进入，只读由 AP 侧的
 `Viewer` 角色强制（实测直接打 AP API 写入返回 403 PERMISSION_DENIED）。
+（2026-11 平台访问模型 D-20 取代这一条的角色口径：团队只认 Technical Lead / Developer 两份名单，名单外的人不是团队成员、不能进入；只读进入只给 AUDITOR，见 [平台访问模型 PRD](../design/platform-access-model-requirements.md) §6.1。）
 ② **跨 workspace 转让**（FR-B24）——保留 flowId（已部署 BPMN 存的是解析后的 flowId）。AP 0.88 的
 `FlowOperationType` 没有跨 project 迁移，故归属字段直写 AP 表（唯一一处直写，已登记进
 `deploy/contracts/ap-schema-contract.json`），触发器仍走 AP API：停用 → 改归属 → 重新启用。

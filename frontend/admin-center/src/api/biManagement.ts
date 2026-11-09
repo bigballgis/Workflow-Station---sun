@@ -49,36 +49,35 @@ export interface DataViewAssignmentResponse {
   id: string
   dashboardId: string
   dashboardTitle: string
-  functionUnitId: number
   functionUnitCode: string
   functionUnitName: string
-  tableId: number
+  /** The table the View lists in the unit's active release; null while that release has no such View. */
   tableName: string | null
   tableDisplayName: string | null
   tableType: 'MAIN' | 'SUB' | null
-  viewId: number | null
+  /** Unique within the function unit; null only for an unresolved legacy binding. */
   viewName: string | null
   viewAvailable: boolean
   enabled: boolean
   createdAt: string
   updatedAt: string
+  /** Whether the user may change it: its unit is of a team they lead, or SYS_ADMIN (AC-32). */
+  canEdit?: boolean
 }
 
+/** A function unit whose active release publishes at least one View. */
 export interface DataViewFunctionUnitOption {
-  id: number
   code: string
   name: string
 }
 
 export interface DataViewTableOption {
-  id: number
-  functionUnitId: number
   tableName: string
   tableDisplayName: string
   tableType: 'MAIN' | 'SUB'
 }
 
-export interface DataViewOption { id: number; viewName: string }
+export interface DataViewOption { viewName: string }
 
 export interface SyncResultResponse {
   created: number
@@ -141,19 +140,18 @@ export interface DashboardAssignmentCreateRequest {
   enabled?: boolean
 }
 
+/** A View is named by its function unit code and View name. */
 export interface DataViewAssignmentRequest {
   dashboardId: string
-  functionUnitId: number
-  tableId: number
-  viewId: number
+  functionUnitCode: string
+  viewName: string
   enabled?: boolean
 }
 
 export interface DataViewAssignmentBatchRequest {
   dashboardIds: string[]
-  functionUnitId: number
-  tableId: number
-  viewId: number
+  functionUnitCode: string
+  viewName: string
   enabled?: boolean
 }
 
@@ -175,7 +173,8 @@ export interface RoleOptionResponse {
 
 export interface GuestTokenRequest {
   dashboardId: string
-  dataViewId?: number
+  dataViewFunctionUnitCode?: string
+  dataViewName?: string
 }
 
 // ==================== Paginated Response ====================
@@ -230,7 +229,7 @@ export interface DataViewAssignmentListQuery {
   page: number
   size: number
   dashboardTitle?: string
-  functionUnitId?: number
+  functionUnitCode?: string
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
@@ -334,9 +333,9 @@ export const biManagementApi = {
       page?: number
       size?: number
       dashboardTitle?: string
-      functionUnitId?: number
+      functionUnitCode?: string
       enabled?: boolean
-      viewId?: number
+      viewName?: string
     }) => get<PageResponse<DataViewAssignmentResponse>>(DATA_VIEW_ASSIGNMENT_BASE, { params }),
 
     update: (id: string, data: DataViewAssignmentRequest) =>
@@ -348,15 +347,17 @@ export const biManagementApi = {
     setEnabled: (id: string, enabled: boolean) =>
       put<{ data: DataViewAssignmentResponse }>(`${DATA_VIEW_ASSIGNMENT_BASE}/${id}/enabled`, { enabled }).then(r => r.data),
 
-    listViews: (functionUnitId: number, tableId: number) =>
-      get<{ data: DataViewOption[] }>(`${DATA_VIEW_ASSIGNMENT_BASE}/function-units/${functionUnitId}/tables/${tableId}/views`).then(r => r.data),
+    listViews: (functionUnitCode: string, tableName: string) =>
+      get<{ data: DataViewOption[] }>(
+        `${DATA_VIEW_ASSIGNMENT_BASE}/function-units/${encodeURIComponent(functionUnitCode)}/tables/${encodeURIComponent(tableName)}/views`,
+      ).then(r => r.data),
 
     listFunctionUnits: () =>
       get<DataViewFunctionUnitOption[]>(`${DATA_VIEW_ASSIGNMENT_BASE}/function-units`),
 
-    listTables: (functionUnitId: number) =>
+    listTables: (functionUnitCode: string) =>
       get<DataViewTableOption[]>(
-        `${DATA_VIEW_ASSIGNMENT_BASE}/function-units/${functionUnitId}/tables`,
+        `${DATA_VIEW_ASSIGNMENT_BASE}/function-units/${encodeURIComponent(functionUnitCode)}/tables`,
       ),
   },
 

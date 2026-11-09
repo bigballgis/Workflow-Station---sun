@@ -38,6 +38,8 @@ class TaskReassignComponentTest {
     private ProcessInstanceSyncComponent processInstanceSyncComponent;
     @Mock
     private TaskAssignmentHistoryRecorder taskAssignmentHistoryRecorder;
+    @Mock
+    private com.platform.common.i18n.I18nService i18nService;
 
     private TaskReassignComponent component;
 
@@ -49,7 +51,8 @@ class TaskReassignComponentTest {
                 taskPermissionEvaluator,
                 claimForceUnclaimAnnotator,
                 processInstanceSyncComponent,
-                taskAssignmentHistoryRecorder);
+                taskAssignmentHistoryRecorder,
+                i18nService);
         when(workflowEngineClient.isAvailable()).thenReturn(true);
     }
 
@@ -66,7 +69,7 @@ class TaskReassignComponentTest {
         TaskInfo result = component.reassign("t1", "leader", "bob", "leader");
 
         assertThat(result.getAssignee()).isEqualTo("bob");
-        verify(taskAssignmentHistoryRecorder).record(before, "leader", ChangeType.REASSIGN, "bob");
+        verify(taskAssignmentHistoryRecorder).record(before, after, "leader", ChangeType.REASSIGN, "bob");
         verify(processInstanceSyncComponent).updateProcessInstanceAssignee(
                 eq("pi-1"), eq("bob"), any(), any(), isNull());
     }
@@ -107,7 +110,35 @@ class TaskReassignComponentTest {
 
         assertThatThrownBy(() -> component.reassign("t1", "leader", "bob", null))
                 .isInstanceOf(PortalException.class)
-                .hasMessageContaining("Only business-unit role requests");
+                .hasMessageContaining("Only pool tasks");
+    }
+
+    @Test
+    void aTargetOutsideThePoolMembersWithEntryIsRefused() {
+        TaskInfo before = pool("alice");
+        when(taskQueryComponent.getTaskById("t1")).thenReturn(Optional.of(before));
+        when(claimForceUnclaimAnnotator.canReassign(before, "leader")).thenReturn(true);
+        when(taskPermissionEvaluator.isHeldByUser(before, "carol", null)).thenReturn(false);
+        when(i18nService.getMessage("portal.reassign_target_not_allowed")).thenReturn("target not allowed");
+
+        assertThatThrownBy(() -> component.reassign("t1", "leader", "carol", null))
+                .isInstanceOf(PortalException.class)
+                .hasMessageContaining("target not allowed");
+        verify(workflowEngineClient, never()).reassignClaim(any(), any(), any());
+    }
+
+    @Test
+    void aListOfNamedPeopleCanBeTakenOverToo() {
+        TaskInfo before = TaskInfo.builder().taskId("t1").processInstanceId("pi-1").poolKind("PEOPLE")
+                .assignee("alice").candidateUserIds(List.of("alice", "me")).reassignTargetUserIds(List.of("me")).build();
+        when(taskQueryComponent.getTaskById("t1")).thenReturn(Optional.of(before), Optional.of(before));
+        when(claimForceUnclaimAnnotator.canReassign(before, "me")).thenReturn(true);
+        when(taskPermissionEvaluator.isHeldByUser(before, "me", null)).thenReturn(false);
+        when(workflowEngineClient.reassignClaim("t1", "me", "me")).thenReturn(Optional.of(Map.of("success", true)));
+
+        component.reassign("t1", "me", "me", "me");
+
+        verify(taskAssignmentHistoryRecorder).record(before, before, "me", ChangeType.REASSIGN, "me");
     }
 
     private static TaskInfo pool(String assignee) {
@@ -121,6 +152,7 @@ class TaskReassignComponentTest {
                 .bpmnAssigneeType("BU_ROLE")
                 .assignee(assignee)
                 .candidateUserIds(List.of("alice", "bob"))
+                .reassignTargetUserIds(List.of("bob"))
                 .variables(currentItem == null ? null : Map.of("_currentItem", currentItem))
                 .build();
     }

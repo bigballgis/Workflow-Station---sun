@@ -48,7 +48,19 @@ public class FunctionUnitResponse {
      * Missing/false must be treated as read-only by clients (fail-closed).
      */
     private boolean canModify;
-    
+
+    /**
+     * Whether the current user may delete, restore, clone or move this function unit, or import a new version of it:
+     * the workspace's Technical Lead or a System Administrator (platform access model §6.2). Missing/false is no.
+     */
+    private boolean canManage;
+
+    /** The workspace the function unit belongs to (its only dev group), its name, and its state. */
+    private String workspaceId;
+    private String workspaceName;
+    /** PUBLIC / ACTIVE / INACTIVE (team disabled) / MISSING (team deleted or not a team). */
+    private String workspaceStatus;
+
     /**
      * 图标信息内部类
      */

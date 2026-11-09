@@ -1,5 +1,6 @@
 package com.platform.security.property;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.UserPrincipal;
 import com.platform.security.config.JwtProperties;
 import com.platform.security.filter.JwtAuthenticationFilter;
@@ -58,7 +59,7 @@ class JwtFilterPreservationPropertyTest {
         when(mockRedisTemplate.hasKey(anyString())).thenReturn(false);
 
         this.jwtTokenService = new JwtTokenServiceImpl(jwtProperties, mockRedisTemplate);
-        this.jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenService, jwtProperties);
+        this.jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenService, jwtProperties, new ObjectMapper(), "");
     }
 
     /**

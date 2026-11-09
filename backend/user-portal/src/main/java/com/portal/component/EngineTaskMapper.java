@@ -175,8 +175,9 @@ final class EngineTaskMapper {
                 .bpmnBusinessUnitId(engineStringField(taskMap.get("bpmnBusinessUnitId")))
                 .bpmnRoleIds(parseStringIdList(taskMap.get("bpmnRoleIds")))
                 .miAssigneeMode(engineStringField(taskMap.get("miAssigneeMode")))
-                .miRoleCode(engineStringField(taskMap.get("miRoleCode")))
+                .miRoleCodes(parseStringIdList(taskMap.get("miRoleCodes")))
                 .miBusinessUnitCode(engineStringField(taskMap.get("miBusinessUnitCode")))
+                .poolKind(engineStringField(taskMap.get("poolKind")))
                 .assignmentTarget(assignmentTarget)
                 .assignee(currentAssignee)
                 .assigneeName(currentAssigneeName)
@@ -201,6 +202,7 @@ final class EngineTaskMapper {
                 .delegatedBuCode(engineStringField(taskMap.get("delegatedBuCode")))
                 .delegatedRoleCode(engineStringField(taskMap.get("delegatedRoleCode")))
                 .delegated(booleanField(taskMap.get("isDelegated")))
+                .delegable(Boolean.TRUE.equals(booleanField(taskMap.get("delegable"))))
                 .build();
     }
 

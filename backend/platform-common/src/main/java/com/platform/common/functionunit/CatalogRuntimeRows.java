@@ -32,7 +32,7 @@ public class CatalogRuntimeRows {
                        String actor) {
         if (processId == null || processId.isBlank()) throw new FunctionUnitVersionException("VERSION_RECOVERY_REQUIRED", processId);
         String rowId = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO dw_table_data_rows(runtime_table_id,process_instance_id,row_id,data,created_by,updated_by) "
+        jdbc.update("INSERT INTO up_table_data_rows(runtime_table_id,process_instance_id,row_id,data,created_by,updated_by) "
                         + "VALUES (?, ?, ?, ?::jsonb, ?, ?)",
                 tableId(catalogId, sourceId), processId, rowId, json(data), actor, actor);
         return rowId;
@@ -41,17 +41,20 @@ public class CatalogRuntimeRows {
     @Transactional
     public List<Map<String, Object>> rows(String catalogId, String sourceId, String processId) {
         migrateForProcess(catalogId, sourceId, processId);
-        return jdbc.queryForList("SELECT r.data::text AS data FROM dw_table_data_rows r "
+        return jdbc.queryForList("SELECT r.data::text AS data FROM up_table_data_rows r "
                         + "JOIN up_function_unit_runtime_tables t ON t.id=r.runtime_table_id "
                         + "WHERE t.catalog_id=? AND t.source_table_id=? AND r.process_instance_id=? "
                         + "AND r.status='ACTIVE' ORDER BY r.created_at,r.id", String.class,
                 catalogId, sourceId, processId).stream().map(snapshots::parse).toList();
     }
 
-    /** Exact snapshot bindings and persisted request ids are the only legacy association evidence. */
+    /**
+     * Exact snapshot bindings and persisted request ids are the only legacy association evidence.
+     * Called by Developer Workstation only, before it replaces a designer table.
+     */
     @Transactional
     public void preserveDesignerTable(long designerTableId) {
-        List<Map<String, Object>> rows = jdbc.queryForList("SELECT id,data::text AS data FROM dw_table_data_rows WHERE table_id=? FOR UPDATE", designerTableId);
+        List<Map<String, Object>> rows = jdbc.queryForList("SELECT id,data::text AS data FROM up_table_data_rows WHERE table_id=? FOR UPDATE", designerTableId);
         for (Map<String, Object> row : rows) {
             List<Association> matches = associations(String.valueOf(designerTableId), snapshots.parse(String.valueOf(row.get("data"))));
             if (matches.size() != 1) throw new FunctionUnitVersionException("VERSION_ROW_RECOVERY_REQUIRED", String.valueOf(row.get("id")));
@@ -59,6 +62,7 @@ public class CatalogRuntimeRows {
         }
     }
 
+    /** Called by Developer Workstation only: it reads its own designer tables. */
     @Transactional
     public void preserveDesignerFunctionUnit(long functionUnitId) {
         for (Long tableId : jdbc.queryForList("SELECT id FROM dw_table_definitions WHERE function_unit_id=?", Long.class, functionUnitId)) {
@@ -73,7 +77,7 @@ public class CatalogRuntimeRows {
         for (var binding : snapshots.bindings(catalogId)) {
             if (!"ACTION".equals(binding.get("bindingType")) || !sourceId.equals(String.valueOf(binding.get("tableId")))
                     || !(binding.get("foreignKeyField") instanceof String fk)) continue;
-            for (var row : jdbc.queryForList("SELECT id,data::text AS data FROM dw_table_data_rows "
+            for (var row : jdbc.queryForList("SELECT id,data::text AS data FROM up_table_data_rows "
                     + "WHERE table_id=? AND data->>? = ? FOR UPDATE", Long.valueOf(sourceId), fk, requestIds.get(0))) {
                 if (!seen.add(row.get("id"))) continue;
                 List<Association> matches = associations(sourceId, snapshots.parse(String.valueOf(row.get("data"))));
@@ -107,7 +111,7 @@ public class CatalogRuntimeRows {
     }
 
     private void move(Object rowId, String sourceId, Association association) {
-        jdbc.update("UPDATE dw_table_data_rows SET runtime_table_id=?,process_instance_id=?,table_id=NULL "
+        jdbc.update("UPDATE up_table_data_rows SET runtime_table_id=?,process_instance_id=?,table_id=NULL "
                         + "WHERE id=? AND table_id::text=?",
                 tableId(association.catalogId(), sourceId), association.processId(), rowId, sourceId);
     }

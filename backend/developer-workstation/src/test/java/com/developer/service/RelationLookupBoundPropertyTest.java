@@ -72,7 +72,8 @@ class RelationLookupBoundPropertyTest {
                 .thenReturn(List.of("table"));
 
         RelationLookupServiceImpl service = new RelationLookupServiceImpl(
-                lookupRepo, bindingRepo, viewConfigRepo, jdbcTemplate);
+                lookupRepo, bindingRepo, viewConfigRepo, jdbcTemplate,
+                mock(com.developer.security.WorkspaceRouteOwnership.class));
 
         // When
         List<BoundViewDTO> result = service.getBoundViews(scenario.formId);

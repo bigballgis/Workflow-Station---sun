@@ -71,8 +71,8 @@ import { userApi, type UserOption } from '@/api/user'
 
 const props = defineProps<{
   modelValue: boolean
-  candidateUserIds: string[]
-  currentHolderId?: string
+  /** TaskInfo.reassignTargetUserIds: pool members with Portal entry, holder already excluded by the server. */
+  targetUserIds: string[]
   submitting: boolean
 }>()
 
@@ -94,8 +94,7 @@ const visible = computed({
 async function loadCandidates(): Promise<void> {
   targetUserId.value = ''
   loading.value = true
-  const holder = (props.currentHolderId || '').trim()
-  const ids = [...new Set(props.candidateUserIds.filter((id) => id && id.trim() && id.trim() !== holder))]
+  const ids = [...new Set(props.targetUserIds.map((id) => id.trim()).filter((id) => id))]
   try {
     const resolved = await Promise.all(ids.map((id) => userApi.getUserSummary(id)))
     candidates.value = ids.map((id, index) => {

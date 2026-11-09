@@ -59,6 +59,10 @@ public class ProcessController {
     @org.springframework.context.annotation.Lazy
     private com.portal.component.PortalBatchPrimaryKeyAllocationComponent portalBatchPrimaryKeyAllocationComponent;
 
+    /** Shared first-party service token; the engine's completion callback must present it. */
+    @org.springframework.beans.factory.annotation.Value("${service.internal-token}")
+    private String serviceInternalToken;
+
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
     public ApiResponse<List<ProcessDefinitionInfo>> getDefinitions(
@@ -75,8 +79,7 @@ public class ProcessController {
             @CurrentUserId String userId,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword) {
-        String effectiveUserId = userId != null ? userId : "anonymous";
-        List<ProcessDefinitionInfo> definitions = processComponent.getAvailableProcessDefinitions(effectiveUserId, category, keyword);
+        List<ProcessDefinitionInfo> definitions = processComponent.getAvailableProcessDefinitions(userId, category, keyword);
         return ApiResponse.success(definitions);
     }
     
@@ -362,13 +365,7 @@ public class ProcessController {
      */
     @ExceptionHandler(PortalException.class)
     public ApiResponse<Void> handlePortalException(PortalException e, jakarta.servlet.http.HttpServletResponse response) {
-        int statusCode = switch (e.getCode()) {
-            case "404" -> HttpStatus.NOT_FOUND.value();
-            case "403" -> HttpStatus.FORBIDDEN.value();
-            case "400" -> HttpStatus.BAD_REQUEST.value();
-            default -> HttpStatus.INTERNAL_SERVER_ERROR.value();
-        };
-        response.setStatus(statusCode);
+        response.setStatus(com.portal.exception.PortalExceptionStatus.of(e));
         log.warn("Process PortalException code={} message={}", e.getCode(), e.getMessage());
         return ApiResponse.error(e.getCode(), e.getMessage());
     }
@@ -430,9 +427,6 @@ public class ProcessController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        if (userId == null || userId.isBlank()) {
-            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("Please login first before viewing your applications");
-        }
         int safePage = Math.max(0, page);
         int safeSize = size < 1 ? 20 : Math.min(size, 100);
         Page<ProcessInstanceInfo> result = processComponent.getMyApplications(userId, status, PageRequest.of(safePage, safeSize));
@@ -444,10 +438,6 @@ public class ProcessController {
     public ApiResponse<PortalListPage<ProcessInstanceInfo>> queryMyApplications(
             @CurrentUserId String userId,
             @RequestBody @Valid MyApplicationQueryRequest request) {
-        if (userId == null || userId.isBlank()) {
-            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
-                    "Please login first before viewing your applications");
-        }
         return ApiResponse.success(myApplicationListQueryComponent.query(userId, request));
     }
 
@@ -456,9 +446,6 @@ public class ProcessController {
     public ApiResponse<List<AuditFunctionUnitItem>> getAuditFunctionUnits(@CurrentUserId String userId) {
         // Empty is the normal answer for most users — the portal hides the audit
         // menu on an empty list, so this must not throw.
-        if (userId == null || userId.isBlank()) {
-            return ApiResponse.success(List.of());
-        }
         return ApiResponse.success(functionUnitAuditScopeComponent.listAuditableFunctionUnits(userId));
     }
 
@@ -470,10 +457,6 @@ public class ProcessController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        if (userId == null || userId.isBlank()) {
-            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
-                    "Please login first before reviewing requests");
-        }
         if (functionUnitCode == null || functionUnitCode.isBlank()) {
             return ApiResponse.error("400", "functionUnitCode is required");
         }
@@ -495,10 +478,6 @@ public class ProcessController {
             @CurrentUserId String userId,
             @RequestParam String functionUnitCode,
             @RequestBody @Valid MyApplicationQueryRequest request) {
-        if (userId == null || userId.isBlank()) {
-            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
-                    "Please login first before reviewing requests");
-        }
         if (functionUnitCode == null || functionUnitCode.isBlank()) {
             return ApiResponse.error("400", "functionUnitCode is required");
         }
@@ -514,14 +493,12 @@ public class ProcessController {
     public ApiResponse<ProcessInstanceInfo> getProcessDetail(
             @CurrentUserId String userId,
             @PathVariable String processId) {
-        if (userId == null || userId.isBlank()) {
-            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
-                    "Please login first before viewing process details");
-        }
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
         if (detail != null && !processComponent.canAuditProcessDetail(userId, detail)) {
             log.warn("User {} attempted to access process {} without detail access", userId, processId);
-            return ApiResponse.error("403", i18nService.getMessage("portal.process_detail_access_denied"));
+            // A real HTTP 403 (handlePortalException), as GET /tasks/{id}: the task page falls back to this read and
+            // handles the refusal itself.
+            throw new PortalException("403", i18nService.getMessage("portal.process_detail_access_denied"));
         }
         return ApiResponse.success(detail);
     }
@@ -531,10 +508,6 @@ public class ProcessController {
     public ApiResponse<List<CalledFunctionUnitInstance>> getCalledFunctionUnits(
             @CurrentUserId String userId,
             @PathVariable String processId) {
-        if (userId == null || userId.isBlank()) {
-            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
-                    "Please login first before viewing process details");
-        }
         // Gated by the CALLING request, deliberately: a sub-process is part of that request, so
         // whoever may open the request may see what it produced. This grants nothing beyond
         // reading — opening the called unit itself still goes through its own authorisation.
@@ -659,10 +632,6 @@ public class ProcessController {
     public ApiResponse<List<Map<String, Object>>> getProcessHistory(
             @CurrentUserId String userId,
             @PathVariable String processId) {
-        if (userId == null || userId.isBlank()) {
-            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
-                    "Please login first before viewing process history");
-        }
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
         if (detail != null && !processComponent.canAuditProcessDetail(userId, detail)) {
             log.warn("User {} attempted to access process history {} without detail access", userId, processId);
@@ -677,18 +646,29 @@ public class ProcessController {
     
     @PostMapping("/{processId}/complete")
     @Operation(summary = "流程完成通知", description = "由 workflow-engine 调用，通知流程已完成")
-    public ApiResponse<Void> processCompleted(
+    public org.springframework.http.ResponseEntity<ApiResponse<Void>> processCompleted(
             @PathVariable String processId,
-            @RequestHeader(value = "X-Internal-Service-Token", required = false) String serviceToken,
+            @RequestHeader(value = com.platform.common.constant.PlatformConstants.HEADER_SERVICE_TOKEN,
+                    required = false) String serviceToken,
             @RequestBody Map<String, Object> request) {
-        if (serviceToken == null || serviceToken.isBlank()) {
-            log.warn("processCompleted called without X-Internal-Service-Token for processId: {}", processId);
-            return ApiResponse.error("403", "Forbidden: missing internal service token");
+        if (!isServiceToken(serviceToken)) {
+            // A real 403 so the engine logs the failed callback instead of treating the body as success.
+            log.warn("processCompleted refused without a valid service token for processId: {}", processId);
+            return org.springframework.http.ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("PERM_ACCESS_DENIED", "Forbidden: valid service token required"));
         }
         log.debug("ProcessController.processCompleted called for processId: {}", processId);
         String lastActivityName = (String) request.get("lastActivityName");
         processComponent.markProcessAsCompleted(processId, lastActivityName);
-        return ApiResponse.success(null);
+        return org.springframework.http.ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    private boolean isServiceToken(String provided) {
+        return provided != null && !provided.isEmpty()
+                && serviceInternalToken != null && !serviceInternalToken.isBlank()
+                && java.security.MessageDigest.isEqual(
+                provided.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                serviceInternalToken.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }
 

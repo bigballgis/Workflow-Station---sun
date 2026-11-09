@@ -7,6 +7,7 @@ import { Plus, Delete, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import MainTableViewDesigner from './MainTableViewDesigner.vue'
 import { mainTableViewApi, type MainTableViewDefinition } from '@/api/mainTableView'
 import { functionUnitApi, type TableDefinition } from '@/api/functionUnit'
+import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
 const props = defineProps<{
   functionUnitId: number
@@ -111,19 +112,18 @@ watch(selectedViewId, loadSelectedView)
 async function handleAddView(table: TableDefinition) {
   if (!(await confirmLeave())) return
   const baseName = t('mainTableView.newViewName')
-  const existing = new Set(
-    views.value.filter(v => v.mainTableId === table.id).map(v => v.viewName),
-  )
+  // View names are unique across the whole function unit (case-insensitive), not per table.
+  const existing = new Set(views.value.map(v => v.viewName.trim().toLowerCase()))
   let name = baseName
   let i = 2
-  while (existing.has(name)) name = `${baseName} ${i++}`
+  while (existing.has(name.toLowerCase())) name = `${baseName} ${i++}`
   try {
     const res = await mainTableViewApi.create(props.functionUnitId, name, table.id)
     await loadViews()
     selectedViewId.value = res.data.id
     ElMessage.success(t('mainTableView.created'))
   } catch (e: any) {
-    ElMessage.error(e?.message || t('common.saveFailed'))
+    ElMessage.error(pickHttpErrorBodyMessage(e?.response?.data) || e?.message || t('common.saveFailed'))
   }
 }
 

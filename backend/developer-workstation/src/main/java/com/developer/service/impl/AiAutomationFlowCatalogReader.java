@@ -33,7 +33,7 @@ public class AiAutomationFlowCatalogReader {
     /** 与 admin-center {@code service-task.managed.project-external-id} 默认值一致 */
     public static final String PUBLIC_PROJECT_EXTERNAL_ID = "hermes-main";
     /** 与 admin-center {@code service-task.managed.public-group-id} 默认值一致 */
-    public static final String PUBLIC_GROUP_ID = "vg-dev-public";
+    public static final String PUBLIC_GROUP_ID = com.developer.security.DevGroupConstants.PUBLIC_GROUP_ID;
     /** 与 admin-center {@code service-task.managed.team-project-external-id-prefix} 默认值一致 */
     public static final String TEAM_PROJECT_EXTERNAL_ID_PREFIX = "hermes-dg-";
 

@@ -61,7 +61,7 @@ class ChangeHistoryBatchTest {
         var recorder = new TaskAssignmentHistoryRecorder(repository, PortalTransactionTestSupport.noopPlatformTransactionManager());
         var task = com.portal.dto.TaskInfo.builder().taskId("task").processInstanceId("process")
                 .taskDefinitionKey("stage").assignee("old-holder").build();
-        recorder.record(task, "leader", com.portal.enums.ChangeType.REASSIGN, "new-holder");
+        recorder.record(task, task, "leader", com.portal.enums.ChangeType.REASSIGN, "new-holder");
         assertEquals(3, rows.size());
         assertEquals(3, rows.stream().map(ChangeHistory::getBatchId).distinct().count());
         assertTrue(rows.stream().allMatch(row -> row.getBatchId() != null && row.getBatchTime() != null));

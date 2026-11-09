@@ -73,6 +73,21 @@
                 >
                   {{ t(functionUnitStatusKey(row.status)) }}
                 </el-tag>
+                <template v-else-if="col.field === 'team'">
+                  <template v-if="row.teamName">
+                    {{ row.teamName }}
+                  </template>
+                  <el-tag
+                    v-else-if="row.teamCode"
+                    type="warning"
+                    size="small"
+                  >
+                    {{ t('functionUnit.teamDeleted', { code: row.teamCode }) }}
+                  </el-tag>
+                  <template v-else>
+                    -
+                  </template>
+                </template>
                 <template v-else>
                   {{ row[col.field as keyof typeof row] ?? '-' }}
                 </template>
@@ -88,6 +103,7 @@
               </template>
               <template #default="{ row }">
                 <el-button
+                  v-if="row.canManage"
                   
                   link
                   type="primary"

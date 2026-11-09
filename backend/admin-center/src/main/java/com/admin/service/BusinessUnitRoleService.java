@@ -117,7 +117,7 @@ public class BusinessUnitRoleService {
     }
     
     /**
-     * 验证角色是否为业务角色（BU_BOUNDED 或 BU_UNBOUNDED）
+     * 验证角色是否为业务角色（BU_BOUNDED）
      */
     public void validateBusinessRole(Role role) {
         if (!roleHelper.isBusinessRole(role)) {

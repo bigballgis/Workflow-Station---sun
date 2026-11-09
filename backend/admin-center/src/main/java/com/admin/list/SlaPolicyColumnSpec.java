@@ -10,7 +10,8 @@ import java.util.Map;
 
 /**
  * SLA policy list columns: one row per Function Unit whose main table declares an SLA due date
- * mapping. Outer aliases: {@code fu} (dw_function_units), {@code p} (ac_sla_policies, may be null).
+ * mapping. Outer aliases: {@code fu} (sys_function_units, the unit's active release), {@code p} (ac_sla_policies,
+ * may be null).
  */
 public final class SlaPolicyColumnSpec {
 

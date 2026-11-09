@@ -4,6 +4,7 @@ import com.admin.dto.request.FunctionUnitImportRequest;
 import com.admin.dto.response.DeletePreviewResponse;
 import com.admin.dto.response.FunctionUnitContentItemDTO;
 import com.admin.dto.response.FunctionUnitContentResponse;
+import com.admin.dto.response.FunctionUnitImportPreview;
 import com.admin.dto.response.ImportResult;
 import com.admin.dto.response.ValidationResult;
 import com.admin.dto.response.VersionHistoryEntry;
@@ -11,6 +12,7 @@ import com.admin.entity.FunctionUnit;
 import com.admin.entity.FunctionUnitContent;
 import com.admin.enums.ContentType;
 import com.admin.enums.FunctionUnitStatus;
+import com.admin.service.FunctionUnitTeamService;
 import com.admin.util.ChecksumUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,9 +57,15 @@ public class FunctionUnitManagerComponent {
 
     // ==================== Import and package validation ====================
 
-    /** Import function package */
-    public ImportResult importFunctionPackage(FunctionUnitImportRequest request, String importerId) {
-        return importComponent.importFunctionPackage(request, importerId);
+    /** Import function package: a DW deployment lands in the package's team, the import dialog in the chosen one. */
+    public ImportResult importFunctionPackage(FunctionUnitImportRequest request, String importerId,
+                                              FunctionUnitTeamService.ImportChannel channel) {
+        return importComponent.importFunctionPackage(request, importerId, channel);
+    }
+
+    /** What the import dialog shows before the team is chosen. */
+    public FunctionUnitImportPreview previewImport(FunctionUnitImportRequest request, String operatorId) {
+        return importComponent.previewImport(request, operatorId);
     }
 
     /** Validate function package */

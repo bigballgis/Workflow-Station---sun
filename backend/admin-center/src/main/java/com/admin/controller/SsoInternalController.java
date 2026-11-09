@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 集群内服务调用：用内部密钥换取 SSO code 对应的用户标识。
@@ -32,6 +34,7 @@ public class SsoInternalController {
     private final PlatformSsoProperties ssoProperties;
     private final PlatformSsoService platformSsoService;
 
+    @AdminAccess(AdminAudience.PUBLIC)
     @PostMapping("/redeem")
     public ResponseEntity<SsoRedeemResponse> redeem(
             @RequestHeader(value = HEADER_INTERNAL, required = false) String internalToken,

@@ -19,6 +19,7 @@ import com.platform.security.entity.Role;
 import com.platform.security.entity.VirtualGroup;
 import com.platform.security.entity.VirtualGroupMember;
 import com.admin.enums.RoleType;
+import com.admin.exception.AdminBusinessException;
 import com.admin.helper.RoleHelper;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
@@ -27,6 +28,7 @@ import com.admin.service.UserImportService;
 import com.admin.service.UserPermissionService;
 import com.admin.service.UserPortalMembershipService;
 import com.admin.util.EntityTypeConverter;
+import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -36,10 +38,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
 
 /**
  * 用户管理控制器
@@ -48,8 +55,12 @@ import java.util.stream.Collectors;
 @RequestMapping("/users")
 @RequiredArgsConstructor
 @Tag(name = "用户管理", description = "用户的创建、查询、更新、删除等操作")
+@AdminAccess(value = AdminAudience.WORKSTATION, services = true)
 public class UserController {
-    
+
+    /** {@code type} filter value of {@code GET /users/{id}/roles} that selects every business role. */
+    private static final String BUSINESS_ROLE_FILTER = "BUSINESS";
+
     private final UserManagerComponent userManager;
     private final UserImportService userImportService;
     private final RolePermissionManagerComponent rolePermissionManager;
@@ -60,7 +71,8 @@ public class UserController {
     private final RoleHelper roleHelper;
     private final UserPortalMembershipService userPortalMembershipService;
     private final UserListQueryComponent userListQueryComponent;
-    
+    private final I18nService i18nService;
+
     @PostMapping
     @Operation(summary = "创建用户", description = "创建新用户，立即激活")
     public ResponseEntity<UserCreateResult> createUser(
@@ -104,6 +116,7 @@ public class UserController {
         return ResponseEntity.ok(result);
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @PostMapping("/query")
     @Operation(summary = "Query users (true paging; column filters and sort)")
     public ResponseEntity<AdminListPage<UserInfo>> queryUsers(
@@ -163,13 +176,13 @@ public class UserController {
         
         // 按类型筛选
         if (type != null && !type.isEmpty()) {
-            // 支持 BUSINESS 作为特殊值，返回所有业务角色（BU_BOUNDED 和 BU_UNBOUNDED）
-            if ("BUSINESS".equalsIgnoreCase(type)) {
+            // 支持 BUSINESS 作为特殊值，返回所有业务角色（BU_BOUNDED）
+            if (BUSINESS_ROLE_FILTER.equalsIgnoreCase(type)) {
                 roles = roles.stream()
                         .filter(roleHelper::isBusinessRole)
                         .collect(Collectors.toList());
             } else {
-                String roleTypeStr = EntityTypeConverter.fromRoleType(RoleType.valueOf(type));
+                String roleTypeStr = EntityTypeConverter.fromRoleType(roleTypeFilter(type));
                 roles = roles.stream()
                         .filter(r -> roleTypeStr.equals(r.getType()))
                         .collect(Collectors.toList());
@@ -190,9 +203,20 @@ public class UserController {
         
         return ResponseEntity.ok(result);
     }
-    
+
+    /** The role type named by the {@code type} filter; an unknown name is a business error that lists the accepted ones. */
+    private RoleType roleTypeFilter(String type) {
+        return Arrays.stream(RoleType.values())
+                .filter(roleType -> roleType.name().equals(type))
+                .findFirst()
+                .orElseThrow(() -> new AdminBusinessException("ROLE_TYPE_INVALID",
+                        i18nService.getMessage("admin.role.type_filter_invalid", type,
+                                Stream.concat(Stream.of(BUSINESS_ROLE_FILTER), Arrays.stream(RoleType.values()).map(Enum::name))
+                                        .collect(Collectors.joining(", ")))));
+    }
+
     @GetMapping("/{userId}/virtual-groups")
-    @Operation(summary = "获取用户虚拟组列表", description = "获取用户所属的虚拟组列表；可选 profileContext 仅返回该前端场景相关的组（按组绑定角色类型）")
+    @Operation(summary = "获取用户虚拟组列表", description = "获取用户所属的虚拟组列表，每个组一项，带所在名单与来源；可选 profileContext 仅返回该前端场景相关的组（按组类型：Portal 看 CUSTOM、Admin 看 SYSTEM、DW 看团队）")
     public ResponseEntity<List<Map<String, Object>>> getUserVirtualGroups(
             @PathVariable String userId,
             @RequestParam(required = false) String profileContext) {
@@ -207,19 +231,23 @@ public class UserController {
         Map<String, VirtualGroup> groupMap = virtualGroupRepository.findAllById(groupIds).stream()
                 .collect(Collectors.toMap(VirtualGroup::getId, g -> g));
         
-        // 转换为简单的Map格式
-        List<Map<String, Object>> result = memberships.stream()
-                .filter(m -> userPermissionService.isVirtualGroupVisibleForProfile(m.getGroupId(), profileContext))
-                .map(m -> {
-                    VirtualGroup group = groupMap.get(m.getGroupId());
-                    if (group == null) {
+        // 一个组一项：一人可在多份名单、两种来源下各有一行；lists、sources 列出所在名单与来源，joinedAt 取最早一行
+        Map<String, List<VirtualGroupMember>> rowsByGroup = memberships.stream()
+                .collect(Collectors.groupingBy(VirtualGroupMember::getGroupId, LinkedHashMap::new, Collectors.toList()));
+        List<Map<String, Object>> result = rowsByGroup.entrySet().stream()
+                .map(entry -> {
+                    VirtualGroup group = groupMap.get(entry.getKey());
+                    if (group == null || !userPermissionService.isVirtualGroupVisibleForProfile(group, profileContext)) {
                         return null;
                     }
                     Map<String, Object> groupInfo = new HashMap<>();
                     groupInfo.put("groupId", group.getId());
                     groupInfo.put("groupName", group.getName());
                     groupInfo.put("groupDescription", group.getDisplayName());
-                    groupInfo.put("joinedAt", m.getJoinedAt());
+                    groupInfo.put("lists", entry.getValue().stream().map(VirtualGroupMember::getListType).distinct().toList());
+                    groupInfo.put("sources", entry.getValue().stream().map(VirtualGroupMember::getSource).distinct().sorted().toList());
+                    groupInfo.put("joinedAt", entry.getValue().stream().map(VirtualGroupMember::getJoinedAt)
+                            .filter(java.util.Objects::nonNull).min(java.util.Comparator.naturalOrder()).orElse(null));
                     return groupInfo;
                 })
                 .filter(m -> m != null)

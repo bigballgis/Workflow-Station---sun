@@ -4,7 +4,6 @@ import com.admin.enums.DeveloperPermission;
 import com.admin.repository.DeveloperRolePermissionRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
-import com.admin.repository.UserRoleRepository;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.User;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +25,7 @@ import static org.mockito.Mockito.when;
 class DeveloperPermissionServiceTest {
 
     @Mock private DeveloperRolePermissionRepository permissionRepository;
-    @Mock private UserRoleRepository userRoleRepository;
+    @Mock private UserRoleIdResolver userRoleIdResolver;
     @Mock private RoleRepository roleRepository;
     @Mock private UserRepository userRepository;
 
@@ -35,14 +34,14 @@ class DeveloperPermissionServiceTest {
     @BeforeEach
     void setUp() {
         service = new DeveloperPermissionService(
-                permissionRepository, userRoleRepository, roleRepository, userRepository);
+                permissionRepository, userRoleIdResolver, roleRepository, userRepository);
     }
 
     @Test
     void auditorDefaultsToFunctionUnitViewOnly() {
         stubUser("u-auditor");
         Role auditor = role("role-auditor", "AUDITOR", "AUDITOR");
-        when(userRoleRepository.findAllRoleIdsByUserId("u-auditor")).thenReturn(List.of("role-auditor"));
+        when(userRoleIdResolver.allRoleIds("u-auditor")).thenReturn(List.of("role-auditor"));
         when(roleRepository.findById("role-auditor")).thenReturn(Optional.of(auditor));
         when(permissionRepository.findPermissionsByRoleIds(List.of("role-auditor")))
                 .thenReturn(Set.of());
@@ -55,7 +54,7 @@ class DeveloperPermissionServiceTest {
     void auditorMisconfiguredWritePermissionsAreClamped() {
         stubUser("u-auditor");
         Role auditor = role("role-auditor", "AUDITOR", "AUDITOR");
-        when(userRoleRepository.findAllRoleIdsByUserId("u-auditor")).thenReturn(List.of("role-auditor"));
+        when(userRoleIdResolver.allRoleIds("u-auditor")).thenReturn(List.of("role-auditor"));
         when(roleRepository.findById("role-auditor")).thenReturn(Optional.of(auditor));
         when(permissionRepository.findPermissionsByRoleIds(List.of("role-auditor")))
                 .thenReturn(EnumSet.of(
@@ -72,7 +71,7 @@ class DeveloperPermissionServiceTest {
         stubUser("u-both");
         Role auditor = role("role-auditor", "AUDITOR", "AUDITOR");
         Role developer = role("role-developer", "DEVELOPER", "DEVELOPER");
-        when(userRoleRepository.findAllRoleIdsByUserId("u-both"))
+        when(userRoleIdResolver.allRoleIds("u-both"))
                 .thenReturn(List.of("role-auditor", "role-developer"));
         when(roleRepository.findById("role-auditor")).thenReturn(Optional.of(auditor));
         when(roleRepository.findById("role-developer")).thenReturn(Optional.of(developer));
@@ -90,7 +89,7 @@ class DeveloperPermissionServiceTest {
     void sysAdminGetsAllPermissionsEvenIfTypeIsAdmin() {
         stubUser("u-admin");
         Role sysAdmin = role("role-sys-admin", "SYS_ADMIN", "ADMIN");
-        when(userRoleRepository.findAllRoleIdsByUserId("u-admin")).thenReturn(List.of("role-sys-admin"));
+        when(userRoleIdResolver.allRoleIds("u-admin")).thenReturn(List.of("role-sys-admin"));
         when(roleRepository.findById("role-sys-admin")).thenReturn(Optional.of(sysAdmin));
 
         assertEquals(EnumSet.allOf(DeveloperPermission.class), service.getUserPermissions("u-admin"));

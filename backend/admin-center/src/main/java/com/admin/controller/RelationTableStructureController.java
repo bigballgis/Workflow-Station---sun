@@ -23,8 +23,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import com.admin.security.AdminOwner;
+import com.admin.security.AdminAccess;
+import com.admin.security.AdminAudience;
+import com.admin.security.AdminTeamScope;
 
 /**
  * Relation Table 表结构管理 RESTful API
@@ -34,32 +39,48 @@ import java.util.Map;
 @RequestMapping("/relation-tables/structures")
 @RequiredArgsConstructor
 @Tag(name = "Relation Table 表结构管理", description = "表结构的创建、查询、更新、删除及启用/门户可见性控制")
+@AdminAccess(AdminAudience.TEAM_READ)
 public class RelationTableStructureController {
 
     private final RelationTableStructureService structureService;
     private final RelationTableDeployService deployService;
     private final RelationTableAccessService accessService;
     private final RelationTableStructureListQueryComponent structureListQueryComponent;
+    private final AdminTeamScope teamScope;
 
     // ==================== 表结构 CRUD ====================
 
+    @AdminAccess(AdminAudience.TEAM_WRITE)
     @PostMapping
     @Operation(summary = "创建表定义", description = "创建新的 Relation Table 表定义")
     public ResponseEntity<RelationTableResponse> createTable(
             @Valid @RequestBody CreateRelationTableRequest request) {
         log.info("Creating relation table: {}", request.getTableName());
+        // A Technical Lead links the new table to units of the teams they lead, at least one (D-47, §8.2).
+        teamScope.requireLinkableFunctionUnits(request.getFunctionUnitIds());
         RelationTableResponse response = structureService.createTable(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @GetMapping
     @Operation(summary = "获取表定义列表", description = "获取所有 Relation Table 表定义列表")
     public ResponseEntity<List<RelationTableResponse>> getTableList() {
         log.info("Getting relation table list");
-        List<RelationTableResponse> list = structureService.getTableList();
+        // The ER diagram draws only the tables the caller may see (D-47).
+        List<RelationTableResponse> list = new ArrayList<>();
+        for (RelationTableResponse table : structureService.getTableList()) {
+            List<String> codes = table.getFunctionUnits().stream()
+                    .map(RelationTableResponse.FunctionUnitBrief::getCode).toList();
+            if (teamScope.mayReadRelationTableLinkedTo(codes)) {
+                table.setCanWrite(teamScope.mayWriteRelationTableLinkedTo(codes));
+                list.add(table);
+            }
+        }
         return ResponseEntity.ok(list);
     }
 
+    @AdminAccess(AdminAudience.TEAM_READ)
     @PostMapping("/query")
     @Operation(summary = "分页查询表定义", description = "共享列表：COUNT(*) 与页数据共用同一谓词")
     public ResponseEntity<RelationTableStructureListPage> queryTables(
@@ -67,6 +88,7 @@ public class RelationTableStructureController {
         return ResponseEntity.ok(structureListQueryComponent.query(request));
     }
 
+    @AdminAccess(AdminAudience.SHARED_READ)
     @GetMapping("/name-available")
     @Operation(summary = "检查表名是否可用", description = "全平台校验：Relation Table 与 Table Design 表名不可重复")
     public ResponseEntity<TableNameAvailabilityResponse> checkTableNameAvailable(
@@ -78,25 +100,33 @@ public class RelationTableStructureController {
                 .build());
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @GetMapping("/{id}")
     @Operation(summary = "获取表定义详情", description = "根据 ID 获取 Relation Table 表定义详情")
     public ResponseEntity<RelationTableResponse> getTableById(
             @Parameter(description = "表定义ID") @PathVariable Long id) {
         log.info("Getting relation table: id={}", id);
         RelationTableResponse response = structureService.getTableById(id);
+        response.setCanWrite(teamScope.mayWrite(AdminOwner.RELATION_TABLE_ID, String.valueOf(id)));
         return ResponseEntity.ok(response);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @PutMapping("/{id}")
     @Operation(summary = "更新表定义", description = "更新 Relation Table 表定义的基本信息和字段定义")
     public ResponseEntity<RelationTableResponse> updateTable(
             @Parameter(description = "表定义ID") @PathVariable Long id,
             @Valid @RequestBody UpdateRelationTableRequest request) {
         log.info("Updating relation table: id={}", id);
+        if (request.getFunctionUnitIds() != null) {
+            // Relinking stays within the caller's teams; sharing with another team is SYS_ADMIN's (D-47).
+            teamScope.requireLinkableFunctionUnits(request.getFunctionUnitIds());
+        }
         RelationTableResponse response = structureService.updateTable(id, request);
         return ResponseEntity.ok(response);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @DeleteMapping("/{id}")
     @Operation(summary = "删除表定义", description = "删除 Relation Table 表定义，如有绑定关系则拒绝删除")
     public ResponseEntity<Void> deleteTable(
@@ -108,6 +138,7 @@ public class RelationTableStructureController {
 
     // ==================== 启用/禁用 & 门户可见性 ====================
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @PutMapping("/{id}/enabled")
     @Operation(summary = "启用/禁用表", description = "切换 Relation Table 的启用/禁用状态")
     public ResponseEntity<RelationTableResponse> toggleEnabled(
@@ -122,6 +153,7 @@ public class RelationTableStructureController {
         return ResponseEntity.ok(response);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @PutMapping("/{id}/portal-visibility")
     @Operation(summary = "门户可见性开关", description = "切换 Relation Table 在 User Portal 中的可见性")
     public ResponseEntity<RelationTableResponse> togglePortalVisibility(
@@ -138,6 +170,7 @@ public class RelationTableStructureController {
 
     // ==================== 部署与回滚 ====================
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @PostMapping("/{id}/deploy")
     @Operation(summary = "部署表结构", description = "将当前表结构修改应用到实际数据库")
     public ResponseEntity<RelationTableResponse> deploy(
@@ -147,6 +180,7 @@ public class RelationTableStructureController {
         return ResponseEntity.ok(response);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @PostMapping("/{id}/rollback")
     @Operation(summary = "回滚到指定版本", description = "将表结构内容切换为所选历史版本的内容，需重新部署")
     public ResponseEntity<RelationTableResponse> rollback(
@@ -157,6 +191,7 @@ public class RelationTableStructureController {
         return ResponseEntity.ok(response);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @GetMapping("/{id}/versions")
     @Operation(summary = "获取版本历史", description = "获取 Relation Table 的所有历史版本列表")
     public ResponseEntity<List<RelationTableVersionResponse>> getVersionHistory(
@@ -168,6 +203,7 @@ public class RelationTableStructureController {
 
     // ==================== 权限配置 ====================
 
+    @AdminAccess(value = AdminAudience.TEAM_READ, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @GetMapping("/{id}/access")
     @Operation(summary = "获取访问配置", description = "获取 Relation Table 的 Business Role 访问配置列表")
     public ResponseEntity<List<RelationTableAccess>> getAccessConfig(
@@ -177,6 +213,7 @@ public class RelationTableStructureController {
         return ResponseEntity.ok(configs);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @PostMapping("/{id}/access")
     @Operation(summary = "添加访问配置", description = "为 Relation Table 添加 Business Role 访问权限")
     public ResponseEntity<RelationTableAccess> addAccess(
@@ -194,6 +231,7 @@ public class RelationTableStructureController {
         return ResponseEntity.status(HttpStatus.CREATED).body(access);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @PutMapping("/{id}/access")
     @Operation(summary = "批量设置访问配置", description = "替换 Relation Table 的所有 Business Role 访问配置")
     @SuppressWarnings("unchecked")
@@ -212,6 +250,7 @@ public class RelationTableStructureController {
         return ResponseEntity.ok().build();
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @PutMapping("/{id}/access/{accessId}")
     @Operation(summary = "修改授权权限级别", description = "原地切换某条角色授权的 READONLY / READ_WRITE")
     public ResponseEntity<RelationTableAccess> updatePermissionLevel(
@@ -223,17 +262,18 @@ public class RelationTableStructureController {
             return ResponseEntity.badRequest().build();
         }
         log.info("Updating access permission level: id={}, accessId={}, level={}", id, accessId, permissionLevel);
-        RelationTableAccess access = accessService.updatePermissionLevel(accessId, permissionLevel);
+        RelationTableAccess access = accessService.updatePermissionLevel(id, accessId, permissionLevel);
         return ResponseEntity.ok(access);
     }
 
+    @AdminAccess(value = AdminAudience.TEAM_WRITE, owner = AdminOwner.RELATION_TABLE_ID, ownerVariable = "id")
     @DeleteMapping("/{id}/access/{accessId}")
     @Operation(summary = "删除访问配置", description = "删除 Relation Table 的某个 Business Role 访问配置")
     public ResponseEntity<Void> removeAccess(
             @Parameter(description = "表定义ID") @PathVariable Long id,
             @Parameter(description = "访问配置ID") @PathVariable String accessId) {
         log.info("Removing access config for relation table: id={}, accessId={}", id, accessId);
-        accessService.removeAccess(accessId);
+        accessService.removeAccess(id, accessId);
         return ResponseEntity.noContent().build();
     }
 }

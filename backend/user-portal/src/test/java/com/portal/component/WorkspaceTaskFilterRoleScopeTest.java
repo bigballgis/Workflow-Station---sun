@@ -26,7 +26,7 @@ import static org.mockito.Mockito.when;
  * MI「按角色分派」任务的 workspace 可见性收敛：
  * <ul>
  *   <li>按人分派（无 miAssigneeMode）→ 任何 workspace 都可见（沿用 assignee/candidate 放行）；</li>
- *   <li>按角色分派（miAssigneeMode=role）→ 仅当用户切到该 role 的 workspace（active role code 匹配 miRoleCode）才可见，
+ *   <li>按角色分派（miAssigneeMode=role）→ 仅当用户切到该 role 的 workspace（active role code 匹配 miRoleCodes 之一）才可见，
  *       即便当前用户是该任务的 assignee（单持有者角色也遵循此规则）。</li>
  * </ul>
  */
@@ -91,7 +91,7 @@ class WorkspaceTaskFilterRoleScopeTest {
                 .taskId(taskId)
                 .assignee(assignee)
                 .miAssigneeMode("role")
-                .miRoleCode(roleCode)
+                .miRoleCodes(roleCode == null ? null : List.of(roleCode))
                 .build();
     }
 

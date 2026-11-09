@@ -88,6 +88,7 @@ public class PortalRelationTableController {
     @Operation(summary = "Lookup 搜索")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> searchForLookup(
             @PathVariable Long tableId,
+            @CurrentUserId String userId, // signed-in users only (platform access model §7.2)
             @RequestParam(required = false, defaultValue = "") String keyword,
             @RequestParam(required = false) List<String> searchFields,
             @RequestParam(required = false, defaultValue = "") String displayField,
@@ -107,7 +108,8 @@ public class PortalRelationTableController {
     @GetMapping("/{tableId}/view-fields")
     @Operation(summary = "获取 Relation Table 的 View 字段配置")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getViewFields(
-            @PathVariable Long tableId) {
+            @PathVariable Long tableId,
+            @CurrentUserId String userId) { // signed-in users only (platform access model §7.2)
         try {
             List<Map<String, Object>> result = service.getViewFieldsByTableId(tableId);
             return ResponseEntity.ok(ApiResponse.success(result));

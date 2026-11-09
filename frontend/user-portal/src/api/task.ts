@@ -132,6 +132,10 @@ export interface TaskInfo {
   delegatedTo?: string
   delegatedBuCode?: string
   delegatedRoleCode?: string
+  /** Display names of the single-task delegate (task page only); absent when unknown. */
+  delegatedToName?: string
+  delegatedBuName?: string
+  delegatedRoleName?: string
   delegated?: boolean
   initiatorId: string
   initiatorName?: string
@@ -171,10 +175,19 @@ export interface TaskInfo {
   claimedByCurrentUser?: boolean
   /** Claim pool row free to claim by the signed-in user. */
   claimable?: boolean
-  /** Leader / BU Approver / SYS_ADMIN may release someone else's hold. */
+  /** May release someone else's hold: BU Approver / Leader while the holder has entry; pool members once it is lost. */
   canForceUnclaim?: boolean
-  /** Leader / BU Approver / SYS_ADMIN may assign this pool task to a specified member. */
+  /** May assign this pool task to one of reassignTargetUserIds; same rule as canForceUnclaim. */
   canReassign?: boolean
+  assigneeLostPortalEntry?: boolean // the current holder has lost Portal entry
+  /** The current user may take over a task whose holder lost Portal entry (pool member with entry). */
+  canTakeOver?: boolean
+  /** Reassign targets: pool members with Portal entry, holder excluded. */
+  reassignTargetUserIds?: string[]
+  delegationInactiveReason?: 'DELEGATOR_LOST_PORTAL_ENTRY' | 'DELEGATE_LOST_PORTAL_ENTRY' // D-55: why not in effect
+  delegable?: boolean // D-56: the engine can keep a single-task delegation on this task; only then "Delegate" shows
+  canTransfer?: boolean // D-60: nobody holds the task, or the signed-in user does; only then "Transfer" shows
+  canDelegate?: boolean // D-60, same rule for "Delegate"; delegable (D-56) says whether the task can be delegated at all
 }
 
 export interface PageResponse<T> {
@@ -257,8 +270,8 @@ export function queryTasks(params: TaskQueryRequest) {
 }
 
 // Get task details
-export function getTaskDetail(taskId: string) {
-  return request.get<{ data: TaskInfo }>(`/tasks/${taskId}`)
+export function getTaskDetail(taskId: string, config?: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean }) {
+  return request.get<{ data: TaskInfo }>(`/tasks/${taskId}`, config)
 }
 
 // Get task flow history (pass processInstanceId when already loaded from task detail — avoids extra engine lookup)
