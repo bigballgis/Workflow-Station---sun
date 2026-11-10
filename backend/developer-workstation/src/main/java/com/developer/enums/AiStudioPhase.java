@@ -1,20 +1,25 @@
 package com.developer.enums;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * AI Studio 引导阶段（11 个），声明顺序 = 设计器 Tab 顺序，与前端
- * {@code utils/aiStudioDraft.ts} 的 {@code AI_STUDIO_PHASES} 一致。
+ * AI Studio 引导阶段（12 个）：开头的需求访谈 + 11 个设计阶段。设计阶段的声明顺序 = 设计器 Tab 顺序，
+ * 整体与前端 {@code utils/aiStudioDraft.ts} 的 {@code AI_STUDIO_PHASES} 一致。
  *
  * <p>常量名就是落库（dw_ai_studio_messages.phase、线程状态、提案作业）和 API 里的阶段 key，
  * 不能改名。与 AI Generate 的三阶段 {@link AiPhase} 无关。</p>
  */
 public enum AiStudioPhase {
 
+    /** 设计开始前的需求访谈：产物是 Requirements 文档，不是设计切片，所以不支持提案，也不是 Design 文档的一节 */
+    REQUIREMENTS("Requirements", null,
+            "interview the user about the business requirements before any design starts: ask focused "
+                    + "questions, a few at a time, and say which parts of the requirements are still unclear"),
     PROCESS_DESIGN("Process Design", "PROCESS", "review the BPMN flow, roles and conditions"),
     TABLE_DESIGN("Table Design", "TABLES", "define main and sub tables, fields and keys"),
     FORM_DESIGN("Form Design", "FORMS", "bind forms to tables and lay out fields"),
@@ -31,11 +36,15 @@ public enum AiStudioPhase {
     /**
      * {@code @Pattern} 需要编译期常量，只能手写；{@code AiStudioPhaseTest} 断言它与 {@link #values()} 完全一致。
      */
-    public static final String KEY_PATTERN = "PROCESS_DESIGN|TABLE_DESIGN|FORM_DESIGN|VIEW_DESIGN|ACTION_DESIGN"
+    public static final String KEY_PATTERN = "REQUIREMENTS|PROCESS_DESIGN|TABLE_DESIGN|FORM_DESIGN|VIEW_DESIGN|ACTION_DESIGN"
             + "|AUTOMATION|CONNECTIONS|EMAIL_TEMPLATES|EMAIL_MONITORS|DECISION_DESIGN|VALIDATION";
 
     private static final Map<String, AiStudioPhase> BY_KEY = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(Enum::name, Function.identity()));
+
+    /** 设计阶段（不含需求访谈）：Function Unit Design 文档按这份清单分节，文档同步按它核对。 */
+    private static final List<AiStudioPhase> DESIGN_PHASES = Arrays.stream(values())
+            .filter(phase -> phase != REQUIREMENTS).toList();
 
     private final String label;
     private final String proposalScope;
@@ -45,6 +54,10 @@ public enum AiStudioPhase {
         this.label = label;
         this.proposalScope = proposalScope;
         this.advisoryHint = advisoryHint;
+    }
+
+    public static List<AiStudioPhase> designPhases() {
+        return DESIGN_PHASES;
     }
 
     /** 英文名：模型提示词、Design 文档二级标题（不是 UI 文案） */

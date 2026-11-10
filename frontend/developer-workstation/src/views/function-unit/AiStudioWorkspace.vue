@@ -230,6 +230,21 @@
         </div>
         <!-- Automation 阶段不内嵌流程编排器（FR-B01/B2）：流程在独立的 Automation 页设计；
              这里只读展示 BPMN 里各 service task 的 flow 绑定，Apply 提案后随 stageReloadKey 重载 -->
+        <!-- 需求访谈：中间是 Requirements 文档本身，不是设计器 -->
+        <AiStudioRequirementsStage
+          v-else-if="currentPhase === 'REQUIREMENTS'"
+          ref="requirementsStageRef"
+          :function-unit-id="fuId"
+          :function-unit-name="store.current?.name"
+          :readonly="isStageReadOnly"
+          :syncing="docSyncRunning"
+          :refresh-key="docsRefreshKey"
+          :available="sharedThreads"
+          :has-conversation="requirementsHasConversation"
+          :pending="requirementsPending"
+          :replying="copilotReplying && copilotReplyingPhase === 'REQUIREMENTS'"
+          @draft="draftRequirementsNow"
+        />
         <ServiceTaskBindingsPanel
           v-else-if="currentPhase === 'AUTOMATION'"
           :key="`automation-${stageReloadKey}`"
@@ -260,6 +275,13 @@
           @click="saveDraftNow"
         >
           {{ t('ai.studio.workspace.saveDraft') }}
+        </el-button>
+        <el-button
+          v-if="currentPhase === 'REQUIREMENTS' && !completedPhases.includes('REQUIREMENTS')"
+          data-testid="ai-studio-requirements-skip"
+          @click="skipRequirements"
+        >
+          {{ t('ai.studio.workspace.requirements.skip') }}
         </el-button>
         <el-button
           type="primary"
@@ -361,7 +383,7 @@
             :function-unit-id="fuId"
             :can-modify="canModifyThread"
             :syncing="docSyncRunning"
-            @retry="checkDocumentsNow"
+            @retry="retryDocSync(msg.docSync)"
             @open-documents="docsDrawerOpen = true"
             @restored="docsRefreshKey++"
           />
@@ -601,7 +623,9 @@
       <div class="copilot__input">
         <el-input
           v-model="copilotInput"
-          :placeholder="t('ai.studio.workspace.copilotPlaceholder')"
+          :placeholder="currentPhase === 'REQUIREMENTS'
+            ? t('ai.studio.workspace.requirements.inputPlaceholder')
+            : t('ai.studio.workspace.copilotPlaceholder')"
           :disabled="copilotReplying || !canModifyThread"
           @keydown.enter.prevent="sendCopilotMessage()"
         >
@@ -688,11 +712,13 @@ import MarkdownRenderer from '@/components/ai/MarkdownRenderer.vue'
 import ServiceTaskBindingsPanel from '@/components/ai/ServiceTaskBindingsPanel.vue'
 import AiStudioDocSyncCard from '@/components/ai/AiStudioDocSyncCard.vue'
 import AiStudioDocumentsDrawer from '@/components/ai/AiStudioDocumentsDrawer.vue'
+import AiStudioRequirementsStage from '@/components/ai/AiStudioRequirementsStage.vue'
 import {
   AI_STUDIO_ONE_CLICK_PHASE,
   AI_STUDIO_ONE_CLICK_SCOPE,
   AI_STUDIO_PHASES,
   aiStudioPhaseLabel,
+  firstUnconfirmedAiStudioPhase,
   loadAiStudioDraft,
   saveAiStudioDraft,
   loadAiStudioChatThreads,
@@ -729,7 +755,8 @@ const PHASE_COMPONENT: Partial<Record<AiStudioPhase, Component>> = {
   DECISION_DESIGN: markRaw(DecisionList)
 }
 
-const currentPhase = ref<AiStudioPhase>('PROCESS_DESIGN')
+/** 没有草稿的全新进入从需求访谈开始 */
+const currentPhase = ref<AiStudioPhase>(AI_STUDIO_PHASES[0])
 const completedPhases = ref<AiStudioPhase[]>([])
 const lastSavedAt = ref('')
 
@@ -756,6 +783,7 @@ function phaseStatusText(phase: AiStudioPhase): string {
 }
 
 const PHASE_DESC_KEY: Record<AiStudioPhase, string> = {
+  REQUIREMENTS: 'ai.studio.workspace.phaseDesc.requirements',
   PROCESS_DESIGN: 'ai.studio.workspace.phaseDesc.processDesign',
   TABLE_DESIGN: 'ai.studio.workspace.phaseDesc.tableDesign',
   FORM_DESIGN: 'ai.studio.workspace.phaseDesc.formDesign',
@@ -783,7 +811,8 @@ function persistDraft() {
   lastSavedAt.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function goToPhase(phase: AiStudioPhase) {
+async function goToPhase(phase: AiStudioPhase) {
+  if (phase === currentPhase.value || !(await canLeaveRequirements())) return
   currentPhase.value = phase
 }
 
@@ -793,8 +822,30 @@ function saveDraftNow() {
   ElMessage.success(t('ai.studio.workspace.draftSaved'))
 }
 
-function confirmPhase() {
+async function confirmPhase() {
   if (isStageReadOnly.value) return
+  if (currentPhase.value === 'REQUIREMENTS') {
+    if (!(await canLeaveRequirements())) return
+    // 后面的阶段读的是文档而不是这段对话：还有没成稿的发言时让用户选，而不是悄悄带着旧文档往下走
+    if (requirementsPending.value && sharedThreads.value) {
+      try {
+        await ElMessageBox.confirm(
+          t('ai.studio.workspace.requirements.pendingConfirmMsg'),
+          t('ai.studio.workspace.requirements.pendingConfirmTitle'),
+          {
+            type: 'warning',
+            distinguishCancelAndClose: true,
+            confirmButtonText: t('ai.studio.workspace.requirements.pendingConfirmGenerate'),
+            cancelButtonText: t('ai.studio.workspace.requirements.pendingConfirmContinue')
+          }
+        )
+        void draftRequirementsNow()
+        return
+      } catch (reason) {
+        if (reason !== 'cancel') return
+      }
+    }
+  }
   if (!completedPhases.value.includes(currentPhase.value)) {
     completedPhases.value.push(currentPhase.value)
     void saveSharedCompletedPhases()
@@ -812,8 +863,14 @@ function confirmPhase() {
   }
 }
 
-/** Validation 阶段左侧清单 = 除自身外的 10 个设计阶段 */
-const designPhases = AI_STUDIO_PHASES.filter(p => p !== 'VALIDATION')
+/** 跳过需求访谈：不算确认，随时可以点回来 */
+async function skipRequirements() {
+  if (!(await canLeaveRequirements())) return
+  currentPhase.value = AI_STUDIO_PHASES[AI_STUDIO_PHASES.indexOf('REQUIREMENTS') + 1]
+}
+
+/** Validation 阶段左侧清单 = 10 个设计阶段（不含需求访谈与 Validation 自身） */
+const designPhases = AI_STUDIO_PHASES.filter(p => p !== 'VALIDATION' && p !== 'REQUIREMENTS')
 const confirmedDesignPhaseCount = computed(
   () => designPhases.filter(p => completedPhases.value.includes(p)).length
 )
@@ -882,6 +939,40 @@ async function checkDocumentsNow() {
     console.warn('[ai-studio] document check could not be started', e)
   }
 }
+// ---- 需求访谈阶段：根据对话成稿 ----
+const requirementsStageRef = ref<{ isDirty: boolean } | null>(null)
+
+async function draftRequirementsNow() {
+  docSyncRunning.value = true
+  try {
+    await aiStudioThreadApi.draftRequirements(fuId.value)
+  } catch (e) {
+    docSyncRunning.value = false
+    console.warn('[ai-studio] requirements draft could not be started', e)
+  }
+}
+
+/** 结果卡上的重试：成稿卡重新成稿，其余是全量核对 */
+function retryDocSync(docSync: AiStudioChatMessage['docSync']) {
+  if (docSync?.phases?.length === 1 && docSync.phases[0] === 'REQUIREMENTS') void draftRequirementsNow()
+  else void checkDocumentsNow()
+}
+
+/** 文档编辑器里有未保存的手动修改时，离开需求阶段会卸载编辑器：先确认丢弃 */
+async function canLeaveRequirements(): Promise<boolean> {
+  if (currentPhase.value !== 'REQUIREMENTS' || !requirementsStageRef.value?.isDirty) return true
+  try {
+    await ElMessageBox.confirm(
+      t('functionUnit.documents.unsavedConfirm'),
+      t('functionUnit.documents.unsavedTitle'),
+      { type: 'warning', confirmButtonText: t('functionUnit.documents.discard') }
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** 中间设计区与阶段页脚是否只读（线程 canModify，线程不可用时回落到功能单元 canModify） */
 const isStageReadOnly = computed(() =>
   isStudioStageReadOnly(sharedThreads.value, canModifyThread.value, store.current)
@@ -1191,8 +1282,24 @@ function copilotHistory(phase: AiStudioPhase) {
 }
 
 /** 结构化提案仅在有 generatedData 切片的阶段可用：除 Validation 外全部（与后端 AiStudioPhase.proposalScope 一致）。 */
-const PROPOSAL_PHASES: readonly AiStudioPhase[] = AI_STUDIO_PHASES.filter(p => p !== 'VALIDATION')
+const PROPOSAL_PHASES: readonly AiStudioPhase[] = AI_STUDIO_PHASES
+  .filter(p => p !== 'VALIDATION' && p !== 'REQUIREMENTS')
 const proposalSupported = computed(() => PROPOSAL_PHASES.includes(currentPhase.value))
+
+/**
+ * 需求访谈里已经落库的用户发言，以及其中有没有排在最后一次成功成稿之后的。
+ * 只认有 serverId 的：成稿读的是后端线程，而一轮对话要等回复回来才整轮落库——还在等回复的提问成稿时看不到。
+ */
+const requirementsUserTurns = computed(() => {
+  const thread = copilotThreads.value.REQUIREMENTS ?? []
+  const lastDraftId = Math.max(0, ...thread
+    .filter(m => m.docSync && m.docSync.status !== 'FAILED')
+    .map(m => m.serverId ?? 0))
+  const turnIds = thread.filter(m => m.role === 'user' && m.serverId).map(m => m.serverId as number)
+  return { any: turnIds.length > 0, afterDraft: turnIds.some(id => id > lastDraftId) }
+})
+const requirementsHasConversation = computed(() => requirementsUserTurns.value.any)
+const requirementsPending = computed(() => requirementsUserTurns.value.afterDraft)
 
 /**
  * @param overrideText 由按钮（如"让 AI 修正"）发起时用它当消息，输入框里的草稿原样保留
@@ -1709,7 +1816,8 @@ onMounted(async () => {
     // 旧进度对新设计不再成立，从第一个阶段开始逐项复核；讨论线程保留
     const hadProgress = draftCompleted().length > 0
     completedPhases.value = []
-    currentPhase.value = AI_STUDIO_PHASES[0]
+    // 结果卡在这个阶段的线程里；需求已经随作业交上去了，不再回到需求访谈
+    currentPhase.value = AI_STUDIO_ONE_CLICK_PHASE
     if (hadProgress) {
       void saveSharedCompletedPhases()
       // 新一轮设计：两份文档的下一次保存进入新的主版本
@@ -1726,7 +1834,7 @@ onMounted(async () => {
     // 本浏览器没来过，但队友已经推进过：沿用共享进度；选了"继续"就停在第一个未确认的阶段
     completedPhases.value = sharedCompleted
     if (mode === 'continue') {
-      currentPhase.value = AI_STUDIO_PHASES.find(p => !sharedCompleted.includes(p)) ?? AI_STUDIO_PHASES[0]
+      currentPhase.value = firstUnconfirmedAiStudioPhase(sharedCompleted) ?? AI_STUDIO_PHASES[0]
     }
   }
 

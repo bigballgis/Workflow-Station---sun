@@ -42,6 +42,12 @@ updated Requirements / Function Unit Design documents in their own blocks (instr
 have that 13th agent and the orchestrator's DOC_SYNC route; without them the orchestrator refuses the request and the
 thread shows a failed documents check. `AI_STUDIO_PROVIDER=GAIP` keeps document sync on the gateway as before.
 
+**Requirements interview** (the first AI Studio phase, before Process Design) uses the same flow as well. The chat is
+an ordinary `MODE ADVISORY` request with `PHASE REQUIREMENTS`; *Generate / Update document from conversation* sends a
+`## MODE: REQUIREMENTS_DRAFT` request whose answer is the Requirements document in the same block format as document
+sync. Both go to the specialist `requirements_agent` (instructions §14), so the CO agent setting needs that 14th agent
+and the orchestrator's two routes for it. The phase can be skipped; later phases read the document, not the chat.
+
 **One-click generation (Build with AI)** goes through the same flow. Content Organizer answers every request with a
 single specialist, so DW (`AiStudioOneClickOrchestrator`) asks five PROPOSE requests in turn — Process → Tables → Forms →
 Decisions → Actions — feeding each step's output into the next step's CURRENT DESIGN, and applies the merged design once

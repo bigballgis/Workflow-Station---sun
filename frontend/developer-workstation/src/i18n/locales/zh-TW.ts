@@ -2753,6 +2753,7 @@ export default {
       AI_WEBHOOK_CALL_FAILED: 'AI 服務呼叫失敗，請重試',
       AI_GATEWAY_NOT_CONFIGURED: 'AI 服務未設定，請聯絡管理員',
       AI_STUDIO_ONE_CLICK_NO_INPUT: '請填寫需求描述，或先新增 Requirements 文件',
+      AI_STUDIO_DOC_SYNC_BUSY: '該功能單元已有文件更新在進行，請等它結束後再試',
       AI_STUDIO_DOC_SYNC_QUEUE_FULL: '正在更新的文件過多，請稍後重試',
       AI_STUDIO_DOC_SYNC_BAD_OUTPUT: 'AI 未依約定格式傳回文件，請重試',
       AI_STUDIO_DOC_SYNC_DOCUMENT_TOO_LARGE: '文件過長，AI 無法更新；請先在設定中精簡',
@@ -2968,6 +2969,7 @@ export default {
       guideTitle: 'AI Studio 將引導你完成',
       // 其餘步驟文案複用設計器 Tab 的 key（見 utils/aiStudioDraft.ts），只有 Validation 是 AI Studio 獨有
       step: {
+        requirements: '需求',
         validation: '校驗'
       },
       overwriteNote: '未經確認，你現有的設計不會被覆蓋。',
@@ -3073,7 +3075,23 @@ export default {
           noProcess: '還沒有流程定義，請先設計流程。',
           loadFailed: '載入流程定義失敗。'
         },
+        requirements: {
+          hintEmpty: '在右側向 Copilot 描述業務需求並回答它的追問。需求清楚後在這裡產生需求文件；也可以自己寫或匯入。',
+          hintPending: '對話裡有內容還沒有寫進文件。',
+          hintUpToDate: '文件已包含對話內容。可以直接編輯，也可以繼續和 Copilot 討論後再次更新。',
+          generate: '根據對話產生文件',
+          update: '根據對話更新文件',
+          needConversation: '請先和 Copilot 討論，文件是根據這段對話寫的。',
+          unavailable: '共享討論串暫時無法使用，現在無法產生文件。',
+          skip: '跳過',
+          pendingConfirmTitle: '對話內容還沒寫進文件',
+          pendingConfirmMsg: '最新的回答還沒有寫進需求文件。後面的階段讀的是文件，不是這段對話。',
+          pendingConfirmGenerate: '先更新文件',
+          pendingConfirmContinue: '直接繼續',
+          inputPlaceholder: '描述業務需求，或回答上面的問題…'
+        },
         phaseDesc: {
+          requirements: '告訴 Copilot 這個功能單元要解決什麼問題。它會一直追問到需求清楚，再寫成需求文件，後面每個階段都會讀這份文件。',
           processDesign: '審閱 BPMN 流程、角色與條件。',
           tableDesign: '定義主表、子表、欄位與主外鍵。',
           formDesign: '將表單綁定到資料表並編排欄位。',

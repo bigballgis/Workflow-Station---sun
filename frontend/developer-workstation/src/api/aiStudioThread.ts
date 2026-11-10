@@ -113,6 +113,11 @@ export const aiStudioThreadApi = {
     api.post<unknown, { data: null }>(`${base(functionUnitId)}/documents/check`,
       { phase }, { headers: amTokenHeaders() }),
 
+  /** 把 Requirements 阶段的访谈整理进 Requirements 文档（后台），结果写进该阶段的线程 */
+  draftRequirements: (functionUnitId: number) =>
+    api.post<unknown, { data: null }>(`${base(functionUnitId)}/documents/draft-requirements`,
+      {}, { headers: amTokenHeaders() }),
+
   markApplied: (functionUnitId: number, messageId: number, applied: boolean) =>
     api.patch<unknown, { data: AiStudioThreadMessage }>(`${base(functionUnitId)}/messages/${messageId}/applied`,
       { applied }, { silentError: true }),

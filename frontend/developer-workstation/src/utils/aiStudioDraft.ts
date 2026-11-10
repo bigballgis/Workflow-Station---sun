@@ -9,10 +9,12 @@ import type { ComposerTranslation } from 'vue-i18n'
  */
 
 /**
- * AI Studio 引导阶段，顺序即 UI 展示顺序 = FunctionUnitEdit 设计器 Tab 顺序，
- * 末尾追加 Validation（最终校验门禁）。Tab 顺序变了这里要跟着调。
+ * AI Studio 引导阶段，顺序即 UI 展示顺序：开头是需求访谈（产物是 Requirements 文档，可跳过），
+ * 中间 = FunctionUnitEdit 设计器 Tab 顺序，末尾追加 Validation（最终校验门禁）。Tab 顺序变了这里要跟着调。
+ * 与后端 enums/AiStudioPhase 一致。
  */
 export const AI_STUDIO_PHASES = [
+  'REQUIREMENTS',
   'PROCESS_DESIGN',
   'TABLE_DESIGN',
   'FORM_DESIGN',
@@ -27,6 +29,14 @@ export const AI_STUDIO_PHASES = [
 ] as const
 
 export type AiStudioPhase = (typeof AI_STUDIO_PHASES)[number]
+
+/**
+ * 按共享进度续做时停在哪：第一个未确认的阶段；全部确认过返回 undefined。
+ * 需求访谈可跳过——已经有设计阶段被确认时不把人拉回去。
+ */
+export function firstUnconfirmedAiStudioPhase(completed: readonly AiStudioPhase[]): AiStudioPhase | undefined {
+  return AI_STUDIO_PHASES.find(p => !completed.includes(p) && (p !== 'REQUIREMENTS' || !completed.length))
+}
 
 export interface AiStudioDraft {
   /** 草稿名称，取功能单元名 */
@@ -271,6 +281,7 @@ export function clearAiStudioPendingProposal(functionUnitId: number): void {
  */
 export function aiStudioPhaseLabel(t: ComposerTranslation, phase: AiStudioPhase): string {
   const keyByPhase: Record<AiStudioPhase, string> = {
+    REQUIREMENTS: 'ai.studio.step.requirements',
     PROCESS_DESIGN: 'functionUnit.process',
     TABLE_DESIGN: 'functionUnit.tables',
     FORM_DESIGN: 'functionUnit.forms',

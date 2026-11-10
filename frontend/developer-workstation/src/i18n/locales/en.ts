@@ -2759,6 +2759,7 @@ export default {
       AI_WEBHOOK_CALL_FAILED: 'AI service call failed, please retry',
       AI_GATEWAY_NOT_CONFIGURED: 'AI service is not configured, please contact your administrator',
       AI_STUDIO_ONE_CLICK_NO_INPUT: 'Describe the requirements, or add a Requirements document first',
+      AI_STUDIO_DOC_SYNC_BUSY: 'A document update is already running for this function unit; try again when it finishes',
       AI_STUDIO_DOC_SYNC_QUEUE_FULL: 'Too many document updates are running, please try again later',
       AI_STUDIO_DOC_SYNC_BAD_OUTPUT: 'AI did not return the documents in the expected format, please retry',
       AI_STUDIO_DOC_SYNC_DOCUMENT_TOO_LARGE: 'A document is too long for AI to update; shorten it in Settings first',
@@ -2974,6 +2975,7 @@ export default {
       guideTitle: 'AI Studio guides you through',
       // 其余步骤文案复用设计器 Tab 的 key（见 utils/aiStudioDraft.ts），只有 Validation 是 AI Studio 独有
       step: {
+        requirements: 'Requirements',
         validation: 'Validation'
       },
       overwriteNote: 'Your existing design will not be overwritten without confirmation.',
@@ -3079,7 +3081,23 @@ export default {
           noProcess: 'No process definition yet — design the process first.',
           loadFailed: 'Could not load the process definition.'
         },
+        requirements: {
+          hintEmpty: 'Describe the business need to Copilot on the right and answer its questions. When the picture is clear, generate the Requirements document here; you can also write or import it yourself.',
+          hintPending: 'The conversation has answers that are not in the document yet.',
+          hintUpToDate: 'The document reflects the conversation. Edit it directly, or keep talking to Copilot and update it again.',
+          generate: 'Generate document from conversation',
+          update: 'Update document from conversation',
+          needConversation: 'Talk to Copilot first; the document is written from that conversation.',
+          unavailable: 'The shared thread is unavailable, so the document cannot be generated right now.',
+          skip: 'Skip',
+          pendingConfirmTitle: 'Conversation not in the document yet',
+          pendingConfirmMsg: 'The latest answers have not been written into the Requirements document. Later phases read the document, not this conversation.',
+          pendingConfirmGenerate: 'Update document first',
+          pendingConfirmContinue: 'Continue anyway',
+          inputPlaceholder: 'Describe the business need, or answer the questions…'
+        },
         phaseDesc: {
+          requirements: 'Tell Copilot what this function unit is for. It asks until the requirements are clear, then writes them into the Requirements document that every later phase reads.',
           processDesign: 'Review the BPMN flow, roles and conditions.',
           tableDesign: 'Define main and sub tables, fields and keys.',
           formDesign: 'Bind forms to tables and lay out fields.',

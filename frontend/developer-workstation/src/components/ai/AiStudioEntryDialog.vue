@@ -214,6 +214,7 @@ import {
   AI_STUDIO_ONE_CLICK_PHASE,
   AI_STUDIO_PHASES,
   aiStudioPhaseLabel,
+  firstUnconfirmedAiStudioPhase,
   loadAiStudioDraft,
   saveAiStudioPendingProposal,
   type AiStudioDraft,
@@ -285,7 +286,7 @@ async function loadSharedDraft() {
     if (!completed.length && !hasMessages) return
     draft.value = {
       name: props.functionUnitName || `#${functionUnitId}`,
-      phase: AI_STUDIO_PHASES.find(p => !completed.includes(p)) ?? AI_STUDIO_PHASES[AI_STUDIO_PHASES.length - 1],
+      phase: firstUnconfirmedAiStudioPhase(completed) ?? AI_STUDIO_PHASES[AI_STUDIO_PHASES.length - 1],
       completedPhases: completed,
       updatedAt: data.updatedAt ?? undefined
     }

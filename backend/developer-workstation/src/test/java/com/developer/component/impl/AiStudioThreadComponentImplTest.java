@@ -74,6 +74,25 @@ class AiStudioThreadComponentImplTest {
     }
 
     @Test
+    void confirmingTheRequirementsInterviewAloneStartsNoSync() {
+        givenConfirmed(List.of(), List.of("REQUIREMENTS"));
+        component.saveCompletedPhases(1L, List.of("REQUIREMENTS"), "tok");
+        verify(sync, never()).submit(any(), anyList(), anyString(), any(), any());
+
+        givenConfirmed(List.of(), List.of("REQUIREMENTS", "PROCESS_DESIGN"));
+        component.saveCompletedPhases(1L, List.of("REQUIREMENTS", "PROCESS_DESIGN"), "tok");
+        verify(sync).submit(eq(1L), eq(List.of("PROCESS_DESIGN")), eq("PROCESS_DESIGN"), eq("tok"), any());
+    }
+
+    @Test
+    void draftRequirementsNeedsModifyAccessAndStartsTheDraft() {
+        component.draftRequirements(1L, "tok");
+
+        verify(access).assertCanAccess(1L, WorkspaceAccessAction.MODIFY);
+        verify(sync).submitRequirementsDraft(eq(1L), eq("tok"), any());
+    }
+
+    @Test
     void checkNowIsAFullCheckIntoTheCallersPhase() {
         component.checkDocuments(1L, "FORM_DESIGN", "tok");
 

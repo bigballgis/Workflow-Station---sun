@@ -127,6 +127,12 @@ public class AiStudioThreadService {
         return toHistory(latest(functionUnitId, phase, HISTORY_WINDOW));
     }
 
+    /** 比 {@link #recentHistory} 更长的一段：需求成稿要看整段访谈，而不只是顾问轮带的最近几条。 */
+    @Transactional(readOnly = true)
+    public List<AiStudioChatRequest.HistoryMessage> history(Long functionUnitId, String phase, int limit) {
+        return toHistory(latest(functionUnitId, phase, limit));
+    }
+
     /**
      * 全新一键生成（不是"让 AI 修正"轮）用的历史：{@link #recentHistory} 去掉上一轮一键生成留下的东西——
      * 没应用的 ALL 结果卡和它的提问，以及没有任何回复落库的提问（失败/取消的作业只留下提问）。

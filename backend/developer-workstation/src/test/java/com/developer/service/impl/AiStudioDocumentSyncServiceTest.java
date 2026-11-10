@@ -146,6 +146,99 @@ class AiStudioDocumentSyncServiceTest {
         assertEquals("v1.1", design.get("toLabel"), "the card shows the version the manual save produced");
     }
 
+    private static com.developer.dto.AiStudioChatRequest.HistoryMessage turn(String role, String content) {
+        var m = new com.developer.dto.AiStudioChatRequest.HistoryMessage();
+        m.setRole(role);
+        m.setContent(content);
+        return m;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void requirementsDraftWritesOnlyTheRequirementsDocumentFromTheInterview() {
+        when(threads.history(1L, "REQUIREMENTS", AiStudioDocumentSyncService.DRAFT_HISTORY_WINDOW))
+                .thenReturn(List.of(turn("USER", "Staff request leave"), turn("ASSISTANT", "Who approves?"),
+                        turn("USER", "The line manager")));
+        when(documents.latest(1L, AiDocumentType.REQUIREMENTS))
+                .thenReturn(Optional.of(doc(AiDocumentType.REQUIREMENTS, 1, "## Roles\nStaff", "u-bob")));
+        // 成稿只要 Requirements 一份：没有 Design 的块也没有 DESIGN_UNCHANGED，照样是合格输出
+        when(parser.assistantText(HTTP)).thenReturn("""
+                ---REQUIREMENTS_DOC_START---
+                ## Roles
+                Staff, line manager
+                ---REQUIREMENTS_DOC_END---
+                ---CHANGE_SUMMARY---
+                Added the approver.""");
+        when(documents.append(eq(1L), eq(AiDocumentType.REQUIREMENTS), anyString(), eq(1), anyString(), anyString()))
+                .thenReturn(doc(AiDocumentType.REQUIREMENTS, 2, "x", "u-alice"));
+
+        service.submitRequirementsDraft(1L, "tok", ALICE);
+        executor.runAll();
+
+        ArgumentCaptor<AiPromptBuilder.RenderedPrompt> prompt =
+                ArgumentCaptor.forClass(AiPromptBuilder.RenderedPrompt.class);
+        verify(gateway).chat(prompt.capture(), eq("tok"));
+        String user = prompt.getValue().user();
+        assertTrue(user.contains("## Current Requirements document (v1)\n## Roles\nStaff"), user);
+        assertTrue(user.contains("## Requirements conversation\nUSER: Staff request leave\n"
+                + "ASSISTANT: Who approves?\nUSER: The line manager\n"), user);
+        assertFalse(user.contains("Current design"), "a draft is written from the interview, not from the design");
+        assertTrue(prompt.getValue().system().contains("Background & Goals"));
+        verify(generation, never()).serializeFunctionUnitContext(any());
+        verify(documents, never()).latest(1L, AiDocumentType.DESIGN);
+
+        verify(documents).append(1L, AiDocumentType.REQUIREMENTS, "## Roles\nStaff, line manager", 1,
+                "AI_SYNC:REQUIREMENTS", "u-alice");
+        ArgumentCaptor<Map<String, Object>> card = ArgumentCaptor.forClass(Map.class);
+        verify(threads).appendDocSyncMessage(eq(1L), eq("REQUIREMENTS"), anyString(), card.capture(), eq(ALICE));
+        assertEquals("UPDATED", card.getValue().get("status"));
+        assertEquals(List.of("REQUIREMENTS"), card.getValue().get("phases"));
+        assertEquals(java.util.Set.of("REQUIREMENTS"),
+                ((Map<String, Object>) card.getValue().get("documents")).keySet());
+    }
+
+    @Test
+    void requirementsDraftThroughContentOrganizerIsRoutedByItsOwnMode() {
+        aliceHasEmployeeId("44027893");
+        when(threads.history(eq(1L), eq("REQUIREMENTS"), anyInt())).thenReturn(List.of(turn("USER", "hello")));
+        when(automation.chat(anyString(), eq("44027893"))).thenReturn("---REQUIREMENTS_UNCHANGED---");
+
+        service(AiStudioChatServiceImpl.Provider.AUTOMATION).submitRequirementsDraft(1L, null, ALICE);
+        executor.runAll();
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(automation).chat(message.capture(), eq("44027893"));
+        assertTrue(message.getValue().startsWith("## MODE: REQUIREMENTS_DRAFT\n## DOCUMENT STRUCTURE\n"
+                + "Requirements headings, in order: Background & Goals, Roles,"), message.getValue());
+        assertFalse(message.getValue().contains("Function Unit Design phases"));
+        assertTrue(message.getValue().contains("## Requirements conversation\nUSER: hello\n"));
+        verify(gateway, never()).chat(any(), any());
+        assertEquals("UNCHANGED", recordedDocSync().get("status"));
+    }
+
+    @Test
+    void aRequirementsDraftIsRefusedWhileADocumentUpdateIsRunningInsteadOfQueued() {
+        when(parser.assistantText(HTTP)).thenReturn("---REQUIREMENTS_UNCHANGED---\n---DESIGN_UNCHANGED---");
+        service.submit(1L, List.of("TABLE_DESIGN"), "TABLE_DESIGN", "tok", ALICE);
+
+        service.submitRequirementsDraft(1L, "tok", ALICE);
+
+        ArgumentCaptor<Map<String, Object>> card = ArgumentCaptor.forClass(Map.class);
+        verify(threads).appendDocSyncMessage(eq(1L), eq("REQUIREMENTS"), anyString(), card.capture(), eq(ALICE));
+        assertEquals("FAILED", card.getValue().get("status"));
+        assertEquals("AI_STUDIO_DOC_SYNC_BUSY", card.getValue().get("errorCode"));
+
+        executor.runAll();
+        verify(gateway, times(1)).chat(any(), eq("tok"));
+        assertFalse(service.isRunning(1L));
+    }
+
+    @Test
+    void theDesignDocumentIsStructuredByDesignPhasesOnly() {
+        String message = AiStudioDocumentSyncService.agentMessage("body");
+        assertTrue(message.contains("Function Unit Design phases, in order: Process Design, Table Design,"), message);
+    }
+
     @Test
     void identicalContentIsNotANewVersion() {
         when(documents.latest(1L, AiDocumentType.DESIGN))

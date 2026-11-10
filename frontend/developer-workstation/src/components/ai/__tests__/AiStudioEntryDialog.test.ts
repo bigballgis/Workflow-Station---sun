@@ -60,6 +60,7 @@ const i18n = createI18n({
           noDraft: 'No AI draft to resume for this Function Unit yet.',
           guideTitle: 'AI Studio guides you through',
           step: {
+            requirements: 'Requirements',
             validation: 'Validation'
           },
           overwriteNote: 'Your existing design will not be overwritten without confirmation.',
@@ -193,24 +194,25 @@ describe('AiStudioEntryDialog', () => {
     expect(wrapper.findAll('.mode-card')[0].classes()).toContain('is-selected')
   })
 
-  it('renders title, both mode cards and guide steps in designer-tab order plus Review', () => {
+  it('renders title, both mode cards and guide steps: requirements, designer-tab order, validation', () => {
     const wrapper = mountDialog()
     expect(wrapper.text()).toContain('Build with AI')
     expect(wrapper.text()).toContain('Start a new AI design')
     expect(wrapper.text()).toContain('Continue AI draft')
     const steps = wrapper.findAll('.guide-step')
     expect(steps.map(s => s.text())).toEqual([
-      '1Process Design',
-      '2Table Design',
-      '3Form Design',
-      '4View Design',
-      '5Action Design',
-      '6Automation',
-      '7Connections',
-      '8Email Templates',
-      '9Email Monitors',
-      '10Decision Design',
-      '11Validation'
+      '1Requirements',
+      '2Process Design',
+      '3Table Design',
+      '4Form Design',
+      '5View Design',
+      '6Action Design',
+      '7Automation',
+      '8Connections',
+      '9Email Templates',
+      '10Email Monitors',
+      '11Decision Design',
+      '12Validation'
     ])
   })
 

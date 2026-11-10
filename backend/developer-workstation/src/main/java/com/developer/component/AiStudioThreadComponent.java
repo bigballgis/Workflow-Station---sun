@@ -32,6 +32,9 @@ public interface AiStudioThreadComponent {
     /** "立即检查"：对两份文档做一次全量核对，结果写进 {@code phase} 的线程。 */
     void checkDocuments(Long functionUnitId, String phase, String amToken);
 
+    /** 把 Requirements 阶段的访谈整理进 Requirements 文档（后台；结果写进该阶段的线程）。 */
+    void draftRequirements(Long functionUnitId, String amToken);
+
     AiStudioThreadMessageDTO markApplied(Long functionUnitId, Long messageId, boolean applied);
 
     /** @return 实际导入的阶段 */

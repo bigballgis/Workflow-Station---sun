@@ -116,7 +116,7 @@ public class AiStudioContextDigest {
             case DECISION_DESIGN -> List.of(
                     new Section("Decision tables", decisions(c)),
                     new Section("Tables", tableNames(c)));
-            case VALIDATION -> List.of(new Section("Design overview", overview(c)));
+            case REQUIREMENTS, VALIDATION -> List.of(new Section("Design overview", overview(c)));
         };
     }
 

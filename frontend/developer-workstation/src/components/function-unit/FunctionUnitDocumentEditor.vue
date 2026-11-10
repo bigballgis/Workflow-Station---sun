@@ -152,6 +152,8 @@ const props = defineProps<{
   functionUnitName?: string
   type: FunctionUnitDocumentType
   readonly: boolean
+  /** 打开时先显示哪种视图；默认 edit（Settings 里是来编辑的） */
+  initialMode?: 'edit' | 'preview'
 }>()
 
 const { t } = useI18n()
@@ -160,7 +162,7 @@ const loading = ref(false)
 const saving = ref(false)
 const saved = ref<FunctionUnitDocument | null>(null)
 const draft = ref('')
-const mode = ref<'edit' | 'preview'>('edit')
+const mode = ref<'edit' | 'preview'>(props.initialMode ?? 'edit')
 const historyVisible = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -282,7 +284,7 @@ async function onFileSelected(event: Event) {
 
 onMounted(load)
 
-defineExpose({ isDirty, reload: load })
+defineExpose({ isDirty, reload: load, hasSaved: computed(() => !!saved.value) })
 </script>
 
 <style lang="scss" scoped>

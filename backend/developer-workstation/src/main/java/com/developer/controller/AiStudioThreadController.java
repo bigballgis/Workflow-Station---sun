@@ -112,6 +112,18 @@ public class AiStudioThreadController extends BaseController {
         });
     }
 
+    @PostMapping("/documents/draft-requirements")
+    @Operation(summary = "Write the Requirements phase conversation into the Requirements document (background)")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<Void>> draftRequirements(
+            @PathVariable Long functionUnitId, HttpServletRequest httpRequest) {
+        String amToken = amTokenResolver.resolve(httpRequest);
+        return handleRequest(() -> {
+            threadComponent.draftRequirements(functionUnitId, amToken);
+            return null;
+        });
+    }
+
     @PatchMapping("/messages/{messageId}/applied")
     @Operation(summary = "Mark a proposal message as applied (or revert after undo)")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
@@ -132,7 +144,7 @@ public class AiStudioThreadController extends BaseController {
     @Data
     public static class CompletedPhasesRequest {
         @NotNull
-        @Size(max = 11)
+        @Size(max = 12)
         private List<String> completedPhases;
     }
 

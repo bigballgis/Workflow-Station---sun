@@ -56,7 +56,8 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
 
     private static final String SYSTEM_PROMPT = """
             You are AI Copilot inside AI Studio of Workflow Station, a low-code workflow platform \
-            (Developer Workstation). The user designs a Function Unit through 11 guided phases: \
+            (Developer Workstation). The user designs a Function Unit through 12 guided phases: \
+            Requirements (an interview that clarifies the business requirements before any design), \
             Process Design (BPMN), Table Design, Form Design, View Design, Action Design, \
             Automation (service tasks), Connections, Email Templates, Email Monitors, \
             Decision Design (decision tables), Validation.

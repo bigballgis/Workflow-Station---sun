@@ -21,7 +21,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -51,6 +50,9 @@ import java.util.regex.Pattern;
  * {@code ## MODE: DOC_SYNC} 请求经 {@link AiStudioAutomationClient} 发给 CO agent setting「Function Unit」，由专家
  * {@code document_sync_agent} 按它自己的 Instruction（即 {@link #SYSTEM_PROMPT} 的 CO 版）回答；GAIP 直连网关。
  * 两条链路的请求正文与输出格式相同。</p>
+ *
+ * <p>需求成稿（{@link #submitRequirementsDraft}）是同一套作业的另一种输入：把 Requirements 阶段的访谈整理进
+ * Requirements 文档，只写这一份，不看设计。它不排队也不与别的同步合并——该功能单元有作业在跑时直接记一条失败。</p>
  */
 @Slf4j
 @Service
@@ -82,6 +84,14 @@ public class AiStudioDocumentSyncService {
     private static final String CHANGE_SUMMARY_MARKER = "---CHANGE_SUMMARY---";
     /** CO 主管按这一行把请求交给 document_sync_agent（docs/design/developer-workstation-ai-studio-co-agent-instructions.md） */
     static final String AGENT_MODE_LINE = "## MODE: DOC_SYNC";
+    /** CO 主管按这一行把需求成稿交给 requirements_agent */
+    static final String AGENT_DRAFT_MODE_LINE = "## MODE: REQUIREMENTS_DRAFT";
+
+    /** 需求成稿的 phases 取值：结果卡片、版本摘要与日志都按它显示成 Requirements 阶段。 */
+    static final List<String> DRAFT_PHASES = List.of(AiStudioPhase.REQUIREMENTS.name());
+    /** 成稿要看整段访谈；顾问轮的 10 条窗口太短。 */
+    static final int DRAFT_HISTORY_WINDOW = 80;
+    static final int DRAFT_CONVERSATION_CHAR_BUDGET = 40_000;
 
     private static final String SYSTEM_PROMPT = """
             You maintain two living Markdown documents for a Function Unit designed in the Workflow Station \
@@ -120,6 +130,31 @@ public class AiStudioDocumentSyncService {
             ---CHANGE_SUMMARY---
             <one or two sentences on what changed, in the documents' language>""";
 
+    private static final String DRAFT_SYSTEM_PROMPT = """
+            You write the Requirements document of a Function Unit (a workflow business application designed in \
+            the Workflow Station Developer Workstation) from a requirements interview held before any design work.
+
+            Rules:
+            1. Fixed structure: these level-2 headings in this order: %s.
+            2. Fold everything the conversation settled into the matching section. State the business intent \
+            (who, what, when, which data, which rules); do not design the solution and do not invent BPMN nodes, \
+            table or field names.
+            3. Keep the text the current document already has unless the conversation corrects it. Text written \
+            by people is never deleted or reworded.
+            4. Never invent requirements. What the conversation left unanswered, contradictory or vague goes \
+            under "Open Questions" as one item each; a section nothing is known about says so in one line.
+            5. Write in the language the existing document uses. If it is empty, use the language of the \
+            conversation.
+
+            Output exactly these blocks and nothing else:
+            ---REQUIREMENTS_DOC_START---
+            <the complete updated Requirements document>
+            ---REQUIREMENTS_DOC_END---
+            or, when the conversation adds nothing to the current document, the single line \
+            ---REQUIREMENTS_UNCHANGED---
+            ---CHANGE_SUMMARY---
+            <one or two sentences on what changed, in the document's language>""";
+
     /**
      * 一次同步的输入。{@code phases} 为空表示全量核对（"立即检查"）。
      *
@@ -133,6 +168,16 @@ public class AiStudioDocumentSyncService {
 
         boolean fullCheck() {
             return phases.isEmpty();
+        }
+
+        /** 需求成稿：只写 Requirements 文档，输入是访谈而不是设计。 */
+        boolean draft() {
+            return DRAFT_PHASES.equals(phases);
+        }
+
+        /** 本次作业会写哪几份文档 */
+        List<AiDocumentType> documentTypes() {
+            return draft() ? List.of(AiDocumentType.REQUIREMENTS) : List.of(AiDocumentType.values());
         }
 
         /** 不带 amToken / 工号 / 上下文：record 默认的 toString 会把令牌带进日志。 */
@@ -235,6 +280,21 @@ public class AiStudioDocumentSyncService {
      */
     public void submit(Long functionUnitId, List<String> phases, String messagePhase, String amToken,
                        AiStudioThreadService.Author author) {
+        if (DRAFT_PHASES.equals(phases)) {
+            throw new IllegalArgumentException("A requirements draft goes through submitRequirementsDraft");
+        }
+        submitRequest(functionUnitId, phases, messagePhase, amToken, author);
+    }
+
+    /**
+     * 把 Requirements 阶段的访谈整理进 Requirements 文档。结果（含失败）写进 Requirements 阶段的线程。
+     */
+    public void submitRequirementsDraft(Long functionUnitId, String amToken, AiStudioThreadService.Author author) {
+        submitRequest(functionUnitId, DRAFT_PHASES, AiStudioPhase.REQUIREMENTS.name(), amToken, author);
+    }
+
+    private void submitRequest(Long functionUnitId, List<String> phases, String messagePhase, String amToken,
+                               AiStudioThreadService.Author author) {
         Request request;
         try {
             request = prepare(functionUnitId, phases, messagePhase, amToken, author);
@@ -245,6 +305,16 @@ public class AiStudioDocumentSyncService {
             return;
         }
         synchronized (running) {
+            if (running.containsKey(functionUnitId) && request.draft()) {
+                // 成稿不排队：排到后面时访谈可能已经继续，用户再点一次拿到的才是他看到的那段对话
+                log.info("AI Studio requirements draft refused, a document update is running: functionUnitId={}",
+                        functionUnitId);
+                recordFailure(functionUnitId, phases, messagePhase, author,
+                        new AiGenerationException("AI_STUDIO_DOC_SYNC_BUSY",
+                                "A document update is already running for this function unit; "
+                                        + "try again when it finishes"));
+                return;
+            }
             if (running.containsKey(functionUnitId)) {
                 Request pending = running.get(functionUnitId).map(p -> p.mergedWith(request)).orElse(request);
                 running.put(functionUnitId, Optional.of(pending));
@@ -271,10 +341,15 @@ public class AiStudioDocumentSyncService {
 
     private Request prepare(Long functionUnitId, List<String> phases, String messagePhase, String amToken,
                             AiStudioThreadService.Author author) {
-        FunctionUnitContextDTO context = aiGenerationService.serializeFunctionUnitContext(functionUnitId);
+        boolean draft = DRAFT_PHASES.equals(phases);
+        // 成稿只看访谈，不读设计
+        FunctionUnitContextDTO context = draft ? null
+                : aiGenerationService.serializeFunctionUnitContext(functionUnitId);
         Map<String, List<AiStudioChatRequest.HistoryMessage>> conversation = new LinkedHashMap<>();
         for (String phase : phases.isEmpty() ? List.of(messagePhase) : phases) {
-            conversation.put(phase, threadService.recentHistory(functionUnitId, phase));
+            conversation.put(phase, draft
+                    ? threadService.history(functionUnitId, phase, DRAFT_HISTORY_WINDOW)
+                    : threadService.recentHistory(functionUnitId, phase));
         }
         String staffId = provider == AiStudioChatServiceImpl.Provider.AUTOMATION
                 ? AiStudioStaffIds.resolve(userRepository, author.userId())
@@ -322,7 +397,7 @@ public class AiStudioDocumentSyncService {
         SecurityContextHolder.setContext(request.securityContext());
         try {
             Map<AiDocumentType, Optional<AiDocument>> base = new EnumMap<>(AiDocumentType.class);
-            for (AiDocumentType type : AiDocumentType.values()) {
+            for (AiDocumentType type : request.documentTypes()) {
                 Optional<AiDocument> doc = documentService.latest(request.functionUnitId(), type);
                 if (doc.isPresent() && doc.get().getContent().length() > MAX_DOCUMENT_CHARS_FOR_SYNC) {
                     throw new AiGenerationException("AI_STUDIO_DOC_SYNC_DOCUMENT_TOO_LARGE",
@@ -346,13 +421,15 @@ public class AiStudioDocumentSyncService {
 
     /** 调一次模型；输出里两份文档既没有文档块也没有"不需要修改"标记时重试一次，仍不合格则失败。 */
     private ModelOutput callModel(Request request, Map<AiDocumentType, Optional<AiDocument>> base) {
-        String userMessage = userMessage(request, base);
-        AiPromptBuilder.RenderedPrompt prompt = new AiPromptBuilder.RenderedPrompt(systemPrompt(), userMessage);
+        String userMessage = request.draft() ? draftUserMessage(request, base) : userMessage(request, base);
+        AiPromptBuilder.RenderedPrompt prompt = new AiPromptBuilder.RenderedPrompt(
+                request.draft() ? draftSystemPrompt() : systemPrompt(), userMessage);
+        String agentMessage = request.draft() ? draftAgentMessage(userMessage) : agentMessage(userMessage);
         for (int attempt = 1; ; attempt++) {
             String text = request.staffId() != null
-                    ? automationClient.chat(agentMessage(userMessage), request.staffId())
+                    ? automationClient.chat(agentMessage, request.staffId())
                     : aiResponseParser.assistantText(aiGatewayClient.chat(prompt, request.amToken()));
-            Optional<ModelOutput> output = parseOutput(text);
+            Optional<ModelOutput> output = parseOutput(text, request.documentTypes());
             if (output.isPresent()) {
                 return output.get();
             }
@@ -367,8 +444,12 @@ public class AiStudioDocumentSyncService {
 
     /** 每份文档必须是"文档块"或"不需要修改"之一；返回的 map 只含有文档块的类型。 */
     static Optional<ModelOutput> parseOutput(String text) {
+        return parseOutput(text, List.of(AiDocumentType.values()));
+    }
+
+    static Optional<ModelOutput> parseOutput(String text, List<AiDocumentType> types) {
         Map<AiDocumentType, String> documents = new EnumMap<>(AiDocumentType.class);
-        for (AiDocumentType type : AiDocumentType.values()) {
+        for (AiDocumentType type : types) {
             Matcher m = DOC_BLOCKS.get(type).matcher(text);
             if (m.find()) {
                 documents.put(type, m.group(1).strip());
@@ -394,13 +475,55 @@ public class AiStudioDocumentSyncService {
         return AGENT_MODE_LINE + "\n"
                 + "## DOCUMENT STRUCTURE\n"
                 + "Function Unit Design phases, in order: "
-                + String.join(", ", Arrays.stream(AiStudioPhase.values()).map(AiStudioPhase::label).toList()) + "\n"
+                + String.join(", ", AiStudioPhase.designPhases().stream().map(AiStudioPhase::label).toList()) + "\n"
                 + "Requirements headings, in order: " + String.join(", ", REQUIREMENTS_SECTIONS) + "\n\n"
                 + userMessage;
     }
 
+    /** 需求成稿的 CO 请求：规则在 requirements_agent 的 Instruction 里，标题清单以 DW 为准。 */
+    static String draftAgentMessage(String userMessage) {
+        return AGENT_DRAFT_MODE_LINE + "\n"
+                + "## DOCUMENT STRUCTURE\n"
+                + "Requirements headings, in order: " + String.join(", ", REQUIREMENTS_SECTIONS) + "\n\n"
+                + userMessage;
+    }
+
+    private static String draftSystemPrompt() {
+        return DRAFT_SYSTEM_PROMPT.formatted(String.join(", ", REQUIREMENTS_SECTIONS));
+    }
+
+    /** 当前 Requirements 文档 + 整段访谈；访谈超预算时丢最早的，最新的回答最可能还没进文档。 */
+    private static String draftUserMessage(Request request, Map<AiDocumentType, Optional<AiDocument>> base) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Today: ").append(LocalDate.now()).append("\n\n");
+        appendDocument(sb, "Requirements", base.get(AiDocumentType.REQUIREMENTS));
+
+        List<String> lines = new ArrayList<>();
+        int budget = DRAFT_CONVERSATION_CHAR_BUDGET;
+        boolean truncated = false;
+        List<AiStudioChatRequest.HistoryMessage> history = request.conversation().values().stream()
+                .flatMap(List::stream).toList();
+        for (int i = history.size() - 1; i >= 0; i--) {
+            String line = history.get(i).getRole() + ": " + history.get(i).getContent() + "\n";
+            if (line.length() > budget) {
+                truncated = true;
+                break;
+            }
+            lines.add(0, line);
+            budget -= line.length();
+        }
+        sb.append("## Requirements conversation\n");
+        if (lines.isEmpty()) {
+            sb.append("(none)\n");
+        } else {
+            if (truncated) sb.append("…(earlier conversation omitted)\n");
+            lines.forEach(sb::append);
+        }
+        return sb.toString();
+    }
+
     private static String systemPrompt() {
-        List<String> phaseLabels = Arrays.stream(AiStudioPhase.values()).map(AiStudioPhase::label).toList();
+        List<String> phaseLabels = AiStudioPhase.designPhases().stream().map(AiStudioPhase::label).toList();
         return SYSTEM_PROMPT.formatted(String.join(", ", phaseLabels),
                 String.join(", ", REQUIREMENTS_SECTIONS));
     }
@@ -417,7 +540,7 @@ public class AiStudioDocumentSyncService {
 
         sb.append("## Current design (name-level listing)\n");
         List<String> order = new ArrayList<>(request.phases());
-        Arrays.stream(AiStudioPhase.values()).map(Enum::name).filter(p -> !order.contains(p)).forEach(order::add);
+        AiStudioPhase.designPhases().stream().map(Enum::name).filter(p -> !order.contains(p)).forEach(order::add);
         int listingStart = sb.length();
         for (String phase : order) {
             String digest = contextDigest.digest(phase, request.context());
@@ -463,7 +586,7 @@ public class AiStudioDocumentSyncService {
         Map<String, Object> documents = new LinkedHashMap<>();
         boolean anyUpdated = false;
         boolean anyBlocked = false;
-        for (AiDocumentType type : AiDocumentType.values()) {
+        for (AiDocumentType type : request.documentTypes()) {
             int baseVersion = base.get(type).map(AiDocument::getVersion).orElse(0);
             String baseContent = base.get(type).map(AiDocument::getContent).orElse("");
             Map<String, Object> result = new LinkedHashMap<>();

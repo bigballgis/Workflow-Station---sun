@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.enums.AiStudioPhase;
 import com.developer.component.AiStudioThreadComponent;
 import com.developer.dto.AiStudioThreadImportRequest;
 import com.developer.dto.AiStudioThreadMessageDTO;
@@ -96,7 +97,10 @@ public class AiStudioThreadComponentImpl implements AiStudioThreadComponent {
                 .orElse(List.of());
         List<String> saved = threadService.saveCompletedPhases(functionUnitId, completedPhases, author.userId());
         // 只有新确认的阶段才触发；进度被重置/减少不触发。importThreads 不走这里，批量导入旧进度也不触发。
-        List<String> added = saved.stream().filter(phase -> !before.contains(phase)).toList();
+        // 需求访谈确认时设计没有变化，没有可核对的；它的文档由 draftRequirements 显式成稿。
+        List<String> added = saved.stream()
+                .filter(phase -> !before.contains(phase) && !AiStudioPhase.REQUIREMENTS.name().equals(phase))
+                .toList();
         if (!added.isEmpty()) {
             documentSyncService.submit(functionUnitId, added, added.get(added.size() - 1), amToken, author);
         }
@@ -107,6 +111,12 @@ public class AiStudioThreadComponentImpl implements AiStudioThreadComponent {
     public void checkDocuments(Long functionUnitId, String phase, String amToken) {
         accessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
         documentSyncService.submit(functionUnitId, List.of(), phase, amToken, currentAuthor(null));
+    }
+
+    @Override
+    public void draftRequirements(Long functionUnitId, String amToken) {
+        accessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
+        documentSyncService.submitRequirementsDraft(functionUnitId, amToken, currentAuthor(null));
     }
 
     @Override

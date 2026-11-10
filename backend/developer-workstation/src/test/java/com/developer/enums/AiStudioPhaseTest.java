@@ -20,17 +20,27 @@ class AiStudioPhaseTest {
     /** 常量名是落库 / API 的 key，改名等于数据迁移。 */
     @Test
     void keysAreTheStoredPhaseStringsInDesignerOrder() {
-        assertEquals(List.of("PROCESS_DESIGN", "TABLE_DESIGN", "FORM_DESIGN", "VIEW_DESIGN", "ACTION_DESIGN",
+        assertEquals(List.of("REQUIREMENTS", "PROCESS_DESIGN", "TABLE_DESIGN", "FORM_DESIGN", "VIEW_DESIGN", "ACTION_DESIGN",
                         "AUTOMATION", "CONNECTIONS", "EMAIL_TEMPLATES", "EMAIL_MONITORS", "DECISION_DESIGN",
                         "VALIDATION"),
                 Arrays.stream(AiStudioPhase.values()).map(Enum::name).toList());
     }
 
     @Test
-    void onlyValidationHasNoProposalScope() {
+    void onlyRequirementsAndValidationHaveNoProposalScope() {
         for (AiStudioPhase phase : AiStudioPhase.values()) {
-            assertEquals(phase != AiStudioPhase.VALIDATION, phase.proposalScope().isPresent(), phase.name());
+            assertEquals(phase != AiStudioPhase.REQUIREMENTS && phase != AiStudioPhase.VALIDATION,
+                    phase.proposalScope().isPresent(), phase.name());
         }
+    }
+
+    /** Function Unit Design 文档按设计阶段分节：需求访谈不是其中一节。 */
+    @Test
+    void designPhasesAreEveryPhaseButTheRequirementsInterview() {
+        List<AiStudioPhase> expected = Arrays.stream(AiStudioPhase.values())
+                .filter(phase -> phase != AiStudioPhase.REQUIREMENTS).toList();
+        assertEquals(expected, AiStudioPhase.designPhases());
+        assertEquals(AiStudioPhase.PROCESS_DESIGN, AiStudioPhase.designPhases().get(0));
     }
 
     @Test
